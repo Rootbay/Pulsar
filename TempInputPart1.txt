@@ -1,0 +1,189 @@
+<script lang="ts">
+  import Icon from "../ui/Icon.svelte";
+  import { onMount, tick } from "svelte";
+
+  export let selectedColor: string | undefined = undefined;
+  export let inputValue: string;
+  export let placeholder: string = "";
+  export let initialInput: HTMLInputElement | HTMLTextAreaElement | null = null;
+  export let title: string;
+  export let showTitle: boolean = true;
+  export let selectedIconPath: string | undefined = undefined;
+  export let selectedIconName: string | undefined = undefined;
+  export let readOnly: boolean = false;
+  export let isMultiline: boolean = false;
+  export let type: string = "text";
+  export let isExpandable: boolean = false;
+
+  let expanded: boolean = false;
+
+  function resizeTextarea() {
+    if (!isMultiline) return;
+    const node = initialInput as HTMLTextAreaElement | null;
+    if (!node) return;
+    node.style.height = "auto";
+    node.style.height = node.scrollHeight + "px";
+  }
+
+  onMount(() => {
+    resizeTextarea();
+  });
+
+  $: if (isMultiline) {
+    tick().then(() => resizeTextarea());
+  }
+</script>
+
+<div
+  class="inputContainer"
+  style="color: {selectedColor || '#8aa0ff'}"
+  class:multiline-expanded={expanded && isMultiline}
+  class:multiline-collapsed={!expanded && isMultiline}
+  on:click={() => { if (isExpandable && isMultiline) expanded = !expanded; }}
+  role="button"
+  tabindex="0"
+  on:keydown={(e) => {
+    if (!isExpandable || !isMultiline) return;
+    if (e.target !== e.currentTarget) return;
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      expanded = !expanded;
+    }
+  }}
+>
+  <span class="titleIcon" style="color: {selectedColor || '#fff'}" title={selectedIconName || ''}>
+    <Icon path={selectedIconPath || ''} color="currentColor" size="24" viewBox='0 0 48 48' />
+  </span>
+  <div class="titleAndInputContainer">
+    {#if showTitle}
+      <div class="inputTitle" style="color: {selectedColor || '#fff'}">{title}</div>
+    {/if}
+    {#if isMultiline}
+      <div class="textarea-clip">
+        <textarea
+          bind:this={initialInput}
+          placeholder={placeholder}
+          bind:value={inputValue}
+          on:input={resizeTextarea}
+          readonly={readOnly}
+        ></textarea>
+      </div>
+    {:else}
+      <input
+        bind:this={initialInput}
+        type={type}
+        placeholder={placeholder}
+        bind:value={inputValue}
+        readonly={readOnly}
+      />
+    {/if}
+  </div>
+  <div class="right-icon-wrapper">
+    <slot name="rightIcon"></slot>
+  </div>
+</div>
+
+<style>
+  .inputContainer {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    min-height: 48px;
+    padding: 10px 12px;
+    border-radius: var(--radius, 12px);
+    background: hsl(var(--card) / 0.95);
+    border: 1px solid hsl(var(--border) / 0.5);
+    box-sizing: border-box;
+    transition: color 260ms ease, background-color 150ms ease-out, border-color 150ms ease-out, box-shadow 150ms ease-out;
+  }
+
+  .inputContainer:hover {
+    background: hsl(var(--card));
+  }
+
+  .inputContainer:focus-within {
+    border-color: currentColor;
+    box-shadow: none;
+  }
+
+  .inputContainer input,
+  .inputContainer textarea {
+    width: 100%;
+    display: block;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: #D9D9D9;
+    font-size: 14px;
+    padding: 0;
+    min-height: 17px;
+    line-height: 17px;
+    overflow-y: hidden;
+    box-sizing: border-box;
+    font-family: inherit;
+    resize: none;
+    cursor: text;
+  }
+
+  .textarea-clip {
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .inputContainer.multiline-collapsed .textarea-clip {
+    max-height: 50px;
+    overflow: hidden;
+  }
+
+  .inputContainer.multiline-expanded .textarea-clip {
+    max-height: none;
+    overflow: visible;
+  }
+
+  .textarea-clip textarea {
+    width: 100%;
+    display: block;
+    box-sizing: border-box;
+    overflow-y: hidden;
+  }
+
+  .inputContainer input::placeholder,
+  .inputContainer textarea::placeholder {
+    color: #D9D9D9;
+  }
+
+  .titleAndInputContainer {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .inputTitle {
+    width: 100%;
+    text-align: left;
+    font-size: 12px;
+    font-weight: 500;
+    margin-bottom: 4px;
+    transition: color 260ms ease;
+  }
+
+  .titleIcon :global(svg) {
+    width: 18px;
+    height: 18px;
+    display: block;
+    transition: fill 220ms ease;
+  }
+
+  .titleIcon {
+    align-self: flex-start;
+    margin-top: 6px;
+    transition: color 260ms ease;
+  }
+
+  .right-icon-wrapper {
+    display: flex;
+    align-items: center;
+  }
+</style>

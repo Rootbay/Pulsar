@@ -1,0 +1,1 @@
+ALTER TABLE password_items ADD COLUMN custom_fields TEXT;

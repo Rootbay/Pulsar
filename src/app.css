@@ -1,0 +1,58 @@
+:root {
+  --white: hsl(0, 0%, 100%);
+  --light-gray: hsl(0, 0%, 94%);
+  --medium-gray: hsl(0, 0%, 88%);
+  --dark-gray: hsl(0, 0%, 34%);
+  --near-black: hsl(240, 2%, 8%);
+  --black: hsl(0, 0%, 6%);
+  --blue: hsl(211, 100%, 50%);
+}
+
+html.theme-light {
+  --sidebar-width: 86px;
+  --passwordList-width: 300px;
+  --main-bg: var(--white);
+  --sidepanel-bg: var(--light-gray);
+  --sidepanel-gradient: linear-gradient(to bottom, var(--light-gray) 0%, var(--white) 100%);
+  --btn-nav-border: hsl(0, 0%, 80%);
+  --text-color: hsl(0, 0%, 20%);
+  --border-color: hsl(0, 0%, 80%);
+  --input-bg: var(--white);
+  --accent-color: var(--blue);
+  --accent-text-color: var(--white);
+  --focus-ring-color: var(--blue);
+}
+
+html.theme-dark {
+  --sidebar-width: 86px;
+  --passwordList-width: 300px;
+  --main-bg: var(--black);
+  --sidepanel-bg: hsl(0, 0%, 7%);
+  --sidepanel-gradient: linear-gradient(to bottom, var(--sidepanel-bg) 0%, var(--black) 100%);
+  --btn-nav-border: hsl(240, 4%, 11%);
+  --text-color: hsl(0, 0%, 20%);
+  --border-color: hsl(0, 0%, 80%);
+  --input-bg: hsl(0, 0%, 30%);
+  --accent-color: var(--blue);
+  --accent-text-color: var(--white);
+  --focus-ring-color: var(--blue);
+}
+
+html {
+  background-color: var(--main-bg);
+  color: var(--text-color);
+}
+
+h1, h2, h3, h4, h5, h6 {
+  color: inherit;
+}
+
+p {
+  color: inherit;
+}
+
+/* Global styling for placeholder-like values shown as text */
+.placeholder-value {
+  color: hsl(0, 0%, 55%);
+  font-size: 12px;
+}

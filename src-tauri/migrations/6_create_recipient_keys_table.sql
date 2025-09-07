@@ -1,0 +1,7 @@
+
+CREATE TABLE IF NOT EXISTS recipient_keys (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    public_key TEXT NOT NULL UNIQUE,
+    private_key TEXT NOT NULL
+);

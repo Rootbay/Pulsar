@@ -5,7 +5,7 @@ import svelte from "eslint-plugin-svelte";
 
 export default [
   {
-    ignores: ["build/", ".svelte-kit/", "node_modules/", "dist/", "src-tauri/"],
+    ignores: ["build/", ".svelte-kit/", "node_modules/", "dist/", "src-tauri/", "src/lib/components/ui"],
   },
   pluginJs.configs.recommended,
   ...tseslint.configs.recommended,

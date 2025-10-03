@@ -1,220 +1,166 @@
 <script lang="ts">
-import { createEventDispatcher } from 'svelte';
-import Icon from "../ui/Icon.svelte";
-import { iconPaths } from "$lib/icons";
-import { selectedTag, filterCategory, showSettingsPopup } from '$lib/stores';
-import ContextMenu from '../ui/ContextMenu.svelte';
-import { invoke } from '@tauri-apps/api/core';
+  import { createEventDispatcher } from 'svelte';
+  import { invoke } from '@tauri-apps/api/core';
+  import { iconPaths } from '$lib/icons';
+  import { filterCategory, selectedTag, showSettingsPopup } from '$lib/stores';
+  import Icon from '../ui/Icon.svelte';
+  import { Globe, Plus, Settings } from '@lucide/svelte';
+  import {
+    ContextMenu,
+    ContextMenuContent,
+    ContextMenuItem,
+    ContextMenuTrigger
+  } from '$lib/components/ui/context-menu';
+  import {
+    Sidebar as SidebarRoot,
+    SidebarContent,
+    SidebarFooter,
+    SidebarGroup,
+    SidebarGroupContent,
+    SidebarHeader,
+    SidebarMenu,
+    SidebarMenuButton,
+    SidebarMenuItem
+  } from '$lib/components/ui/sidebar';
+  import { Button } from '$lib/components/ui/button';
 
-  interface Button { id: number; text: string; icon: string; color: string }
-  export let buttons: Button[] = [];
+  interface ButtonOption {
+    id: number;
+    text: string;
+    icon: string;
+    color: string;
+  }
+
+  const DEFAULT_TAG_COLOR = 'var(--sidebar-border)';
+
+  export let buttons: ButtonOption[] = [];
 
   const dispatch = createEventDispatcher();
 
-  let contextMenuVisible = false;
-  let contextMenuX = 0;
-  let contextMenuY = 0;
-  let contextMenuButton: Button | null = null;
-
   function handleOpenPopup() {
-      dispatch('openPopup', { mode: 'create' });
+    dispatch('openPopup', { mode: 'create' });
   }
 
   function handleShowAll() {
-      selectedTag.set(null);
-      filterCategory.set('all');
+    selectedTag.set(null);
+    filterCategory.set('all');
   }
 
   function handleTagClick(tagText: string) {
-      selectedTag.set(tagText);
+    selectedTag.set(tagText);
   }
 
-  function handleContextMenu(event: MouseEvent, button: Button) {
-      event.preventDefault();
-      contextMenuVisible = true;
-      contextMenuX = event.clientX;
-      contextMenuY = event.clientY;
-      contextMenuButton = button;
+  function handleEdit(button: ButtonOption) {
+    dispatch('openPopup', { mode: 'edit', tag: button });
   }
 
-  function closeContextMenu() {
-      contextMenuVisible = false;
-      contextMenuButton = null;
-  }
-
-  function handleEdit() {
-      if (contextMenuButton) {
-          dispatch('openPopup', { mode: 'edit', tag: contextMenuButton });
-      }
-      closeContextMenu();
-  }
-
-  async function handleRemove() {
-      if (contextMenuButton) {
-          try {
-              await invoke('delete_button', { id: contextMenuButton.id });
-              dispatch('tagDeleted', { id: contextMenuButton.id, text: contextMenuButton.text });
-          } catch (error) {
-              console.error('Failed to delete tag:', error);
-          }
-      }
-      closeContextMenu();
+  async function handleRemove(button: ButtonOption) {
+    try {
+      await invoke('delete_button', { id: button.id });
+      dispatch('tagDeleted', {
+        id: button.id,
+        text: button.text
+      });
+    } catch (error) {
+      console.error('Failed to delete tag:', error);
+    }
   }
 </script>
 
-<aside class="sidebar">
-	<img src="/svelte.svg" alt="Logo" class="logo-icon" />
-	<section class="navButtonContainer">
-		<button class="asideButton show-all-button" aria-label="Show All Items" on:click={handleShowAll} class:selected={$selectedTag === null && $filterCategory === 'all'}>
-			  <Icon path={iconPaths.globe} size="22" viewBox="0 0 44 44" color="#fff" />
-		</button>
-		
-		<section class="asideButtonsContainer">
-			{#each buttons as button (button.id)}
-			<button 
-                class="asideButton" 
-                aria-label={button.text} 
-                style="border-color: #1A1A1C; background-color: transparent;" 
-                class:selected={$selectedTag === button.text}
-                on:click={() => handleTagClick(button.text)}
-                on:contextmenu={(e) => handleContextMenu(e, button)}
+<SidebarRoot
+  collapsible="none"
+  class="border-r border-border/50 bg-sidebar/90 backdrop-blur"
+  style="--sidebar-width: 5.75rem;"
+>
+  <SidebarHeader class="flex items-center justify-center py-5">
+    <img src="/svelte.svg" alt="Pulsar logo" class="size-8" />
+  </SidebarHeader>
+
+  <SidebarContent class="flex flex-1 flex-col items-center gap-6 px-2 pb-6">
+    <SidebarGroup class="w-full">
+      <SidebarGroupContent>
+        <SidebarMenu class="items-center gap-3">
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              size="lg"
+              aria-label="Show all items"
+              tooltipContent="All items"
+              isActive={$selectedTag === null && $filterCategory === 'all'}
+              class="h-12 w-12 justify-center rounded-xl text-sidebar-foreground/80 transition hover:text-sidebar-foreground"
+              onclick={handleShowAll}
             >
-				<Icon
-                    path={button.icon}
-                    color={button.color}
-                    size="22"
-                    viewBox="0 0 44 44"
-                />
-			</button>
-			{/each}
-		</section>
+              <Globe style="w-5 h-5" className="size-5 opacity-70 transition-opacity group-data-[active=true]/menu-item:opacity-100" />
+              <span class="sr-only">All items</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
 
-		<button id="newButton" on:click={handleOpenPopup} aria-label="Add New Item">
-			  <Icon path={iconPaths.plus} size="23" color="currentColor" />
-		</button>
-	</section>
+          {#each buttons as button (button.id)}
+            <SidebarMenuItem>
+              <ContextMenu>
+                <ContextMenuTrigger>
+                  <SidebarMenuButton
+                    size="lg"
+                    aria-label={button.text}
+                    tooltipContent={button.text}
+                    isActive={$selectedTag === button.text}
+                    class="group h-12 w-12 justify-center rounded-xl text-sidebar-foreground/70 transition hover:text-sidebar-foreground"
+                    onclick={() => handleTagClick(button.text)}
+                  >
+                    <span
+                      class="size-2.5 rounded-full"
+                      style={`background: ${button.color || DEFAULT_TAG_COLOR};`}
+                      aria-hidden="true"
+                    ></span>
+                    <Icon
+                      path={button.icon}
+                      size="22"
+                      viewBox="0 0 44 44"
+                      color={button.color || DEFAULT_TAG_COLOR}
+                      className="size-5 opacity-75 transition-opacity group-data-[active=true]/menu-item:opacity-100"
+                    />
+                    <span class="sr-only">{button.text}</span>
+                  </SidebarMenuButton>
+                </ContextMenuTrigger>
+                <ContextMenuContent class="w-44">
+                  <ContextMenuItem onSelect={() => handleEdit(button)}>Edit Tag</ContextMenuItem>
+                  <ContextMenuItem
+                    class="text-destructive focus:text-destructive data-[highlighted]:bg-destructive/10"
+                    onSelect={() => handleRemove(button)}
+                  >Remove Tag</ContextMenuItem>
+                </ContextMenuContent>
+              </ContextMenu>
+            </SidebarMenuItem>
+          {/each}
+        </SidebarMenu>
+      </SidebarGroupContent>
+    </SidebarGroup>
 
-	<button on:click={() => showSettingsPopup.set(true)} class="settings-button" aria-label="Settings">
-			<Icon path={iconPaths.settings} size="22" viewBox="0 0 44 44" color="#fff" />
-  </button>
-</aside>
+    <Button
+      variant="outline"
+      size="icon"
+      class="size-12 rounded-full border-dashed border-border/60 text-muted-foreground transition hover:border-primary/50 hover:text-primary"
+      aria-label="Add new tag"
+      onclick={handleOpenPopup}
+    >
+      <Plus style="w-5 h-5" />
+    </Button>
+  </SidebarContent>
 
-{#if contextMenuVisible}
-    <ContextMenu 
-        x={contextMenuX} 
-        y={contextMenuY} 
-        on:close={closeContextMenu}
-        on:edit={handleEdit}
-        on:remove={handleRemove}
-    />
-{/if}
+  <SidebarFooter class="mt-auto w-full border-t border-border/40 pt-4">
+    <SidebarMenu class="items-center">
+      <SidebarMenuItem>
+        <SidebarMenuButton
+          size="lg"
+          aria-label="Open settings"
+          tooltipContent="Settings"
+          class="h-12 w-12 justify-center rounded-xl text-sidebar-foreground/70 transition hover:text-sidebar-foreground"
+          onclick={() => showSettingsPopup.set(true)}
+        >
+          <Settings style="w-5 h-5" className="size-5 opacity-70 transition-opacity group-hover/menu-item:opacity-100" />
+          <span class="sr-only">Settings</span>
+        </SidebarMenuButton>
+      </SidebarMenuItem>
+    </SidebarMenu>
+  </SidebarFooter>
+</SidebarRoot>
 
-<style>
-  .sidebar {
-    background-color: var(--sidepanel-bg);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    padding: 15px 0;
-    height: 100%;
-    overflow-y: auto;
-    box-sizing: border-box;
-  }
-
-  .logo-icon {
-    width: 24px;
-    height: 24px;
-  }
-
-  #newButton {
-    height: 40px;
-    width: 40px;
-    border-radius: 20px;
-    border: none;
-    cursor: pointer;
-    background: var(--btn-nav-border);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-
-  #newButton :global(svg) {
-    width: 23px;
-    height: 23px;
-    color: var(--white);
-	opacity: 40%;
-  }
-
-  .asideButtonsContainer {
-    display: flex;
-    flex-direction: column;
-  }
-
-  .navButtonContainer {
-    display: flex;
-    flex-direction: column;
-    margin-top: 25px;
-    align-items: center;
-    flex-grow: 1;
-  }
-
-  .show-all-button {
-    margin-bottom: 25px;
-  }
-
-  .asideButton {
-    width: 46px;
-    height: 46px;
-    border-radius: 8px;
-    border: 3px solid;
-    border-color: var(--btn-nav-border);
-    background-color: transparent;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    padding: 0;
-    margin-bottom: 15px;
-  }
-
-  .asideButton :global(svg) {
-    width: 22px;
-    height: 22px;
-    display: block;
-    opacity: 40%;
-    transition: opacity 200ms ease;
-  }
-
-  /* Hover effect: increase icon opacity on hover */
-  .asideButton:hover :global(svg) {
-    opacity: 100%;
-  }
-
-  /* Selected effect: keep icon opaque when selected */
-  .asideButton.selected :global(svg) {
-    opacity: 100%;
-  }
-
-  .settings-button {
-    width: 46px;
-    height: 46px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    padding: 0;
-    border: none;
-    margin-top: auto;
-    margin-bottom: 0;
-    background-color: transparent;
-  }
-
-  .settings-button :global(svg) {
-    opacity: 40%;
-  }
-
-  .settings-button:hover :global(svg) {
-    opacity: 100%;
-  }
-
-</style>

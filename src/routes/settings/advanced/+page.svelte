@@ -1,379 +1,258 @@
+
 <script lang="ts">
-    
-    import { advancedSettings } from '$lib/stores/advanced'; // Import the new store
-    import Switch from '$lib/components/ui/Switch.svelte';
-    import SettingItem from '$lib/components/ui/SettingItem.svelte';
-    import SettingsCard from '$lib/components/ui/SettingsCard.svelte';
+  import { get } from 'svelte/store';
+  import { onDestroy } from 'svelte';
+  import { advancedSettings } from '$lib/stores/advanced';
+  import type { AdvancedSettings } from '$lib/config/settings';
+  import { Button } from '$lib/components/ui/button';
+  import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '$lib/components/ui/card';
+  import { Input } from '$lib/components/ui/input';
+  import { Label } from '$lib/components/ui/label';
+  import { Switch } from '$lib/components/ui/switch';
+  import { cn } from '$lib/utils';
+  import { Gauge, TriangleAlert, ShieldCheck, ShieldAlert } from '@lucide/svelte';
 
-    // No need to define interface or default settings here anymore
-    // No need for writable, derived, or deepEqual here anymore
+  type KdfPreset = AdvancedSettings['kdfPreset'];
 
-    let kdfPreset: 'fast' | 'balanced' | 'secure' | 'paranoid';
-    let timeCost: number;
-    let memoryCost: number;
-    let parallelism: number;
-    let wipeConfirmationText: string;
-    let lockMemoryPages: boolean;
-    let secureMemoryAllocation: boolean;
+  const kdfPresets: Array<{
+    value: KdfPreset;
+    label: string;
+  }> = [
+    { value: 'fast', label: 'Fast' },
+    { value: 'balanced', label: 'Balanced' },
+    { value: 'secure', label: 'Secure' },
+    { value: 'paranoid', label: 'Paranoid' }
+  ];
 
-    // Subscribe to the advancedSettings store
-    advancedSettings.subscribe(value => {
-        kdfPreset = value.kdfPreset;
-        timeCost = value.timeCost;
-        memoryCost = value.memoryCost;
-        parallelism = value.parallelism;
-        wipeConfirmationText = value.wipeConfirmationText;
-        lockMemoryPages = value.lockMemoryPages;
-        secureMemoryAllocation = value.secureMemoryAllocation;
+  const presetConfig: Record<KdfPreset, { time: number; memory: number; parallel: number }> = {
+    fast: { time: 1, memory: 16, parallel: 1 },
+    balanced: { time: 3, memory: 64, parallel: 4 },
+    secure: { time: 6, memory: 256, parallel: 8 },
+    paranoid: { time: 12, memory: 1024, parallel: 16 }
+  };
+
+  const memoryToggles: Array<{
+    key: 'lockMemoryPages' | 'secureMemoryAllocation';
+    title: string;
+    description: string;
+  }> = [
+    {
+      key: 'lockMemoryPages',
+      title: 'Lock Memory Pages',
+      description: 'Prevent sensitive pages from being swapped to disk.'
+    },
+    {
+      key: 'secureMemoryAllocation',
+      title: 'Secure Memory Allocation',
+      description: 'Use hardened allocators for secrets kept in RAM.'
+    }
+  ];
+
+  const WIPE_CONFIRMATION_TOKEN = 'DELETE VAULT';
+
+  let currentSettings: AdvancedSettings = get(advancedSettings);
+  let { kdfPreset, timeCost, memoryCost, parallelism, wipeConfirmationText, lockMemoryPages, secureMemoryAllocation } =
+    currentSettings;
+
+  const unsubscribe = advancedSettings.subscribe((value) => {
+    currentSettings = value;
+    ({
+      kdfPreset,
+      timeCost,
+      memoryCost,
+      parallelism,
+      wipeConfirmationText,
+      lockMemoryPages,
+      secureMemoryAllocation
+    } = value);
+  });
+
+  onDestroy(() => {
+    unsubscribe();
+  });
+
+  function applyChanges(partial: Partial<AdvancedSettings>) {
+    currentSettings = { ...currentSettings, ...partial };
+    advancedSettings.set(currentSettings);
+  }
+
+  function selectPreset(preset: KdfPreset) {
+    const config = presetConfig[preset];
+    applyChanges({
+      kdfPreset: preset,
+      timeCost: config.time,
+      memoryCost: config.memory,
+      parallelism: config.parallel
     });
+  }
 
-    function updateSettings(newValues: Partial<typeof $advancedSettings>) {
-        advancedSettings.update(current => ({
-            ...current,
-            ...newValues
-        }));
-    }
+  function handleSliderInput(field: 'timeCost' | 'memoryCost' | 'parallelism', event: Event) {
+    const value = Number((event.target as HTMLInputElement).value);
+    applyChanges({ [field]: value } as Partial<AdvancedSettings>);
+  }
 
-    function setKDFPreset(preset: 'fast' | 'balanced' | 'secure' | 'paranoid') {
-        const presets = {
-            fast: { time: 1, memory: 16, parallel: 1 },
-            balanced: { time: 3, memory: 64, parallel: 4 },
-            secure: { time: 6, memory: 256, parallel: 8 },
-            paranoid: { time: 12, memory: 1024, parallel: 16 }
-        };
-        const config = presets[preset];
-        updateSettings({
-            kdfPreset: preset,
-            timeCost: config.time,
-            memoryCost: config.memory,
-            parallelism: config.parallel
-        });
-    }
+  function toggleSetting(setting: 'lockMemoryPages' | 'secureMemoryAllocation') {
+    applyChanges({ [setting]: !currentSettings[setting] } as Partial<AdvancedSettings>);
+  }
 
-    function handleChange() {
-        updateSettings({
-            kdfPreset,
-            timeCost,
-            memoryCost,
-            parallelism,
-            wipeConfirmationText,
-            lockMemoryPages,
-            secureMemoryAllocation
-        });
-    }
+  function handleWipeInput(event: Event) {
+    const value = (event.target as HTMLInputElement).value;
+    applyChanges({ wipeConfirmationText: value });
+  }
 
-    function handleSwitchChange(setting: 'lockMemoryPages' | 'secureMemoryAllocation') {
-        if (setting === 'lockMemoryPages') {
-            updateSettings({ lockMemoryPages: !lockMemoryPages });
-        } else if (setting === 'secureMemoryAllocation') {
-            updateSettings({ secureMemoryAllocation: !secureMemoryAllocation });
-        }
-    }
-
-    // No need for save() and reset() here, as they are handled by secureStorage.createStore
-    // No need for onMount to register module, as secureStorage.createStore does it
-
+  $: canWipeVault = wipeConfirmationText.trim() === WIPE_CONFIRMATION_TOKEN;
 </script>
 
-<div class="advanced-container">
-    <SettingsCard icon="<path d='M19.14 12.94a4 4 0 0 0-5.66 0l-4.28 4.28a2 2 0 0 0 0 2.83l1.42 1.42a2 2 0 0 0 2.83 0l4.28-4.28a4 4 0 0 0 0-5.66z'/><path d='M14.83 4.83a4 4 0 0 0-5.66 0l-4.28 4.28a2 2 0 0 0 0 2.83l1.42 1.42a2 2 0 0 0 2.83 0l4.28-4.28a4 4 0 0 0 0-5.66z'/>" title="KDF Tuning (Argon2id)" description="Configure key derivation function parameters.">
+<div class="flex flex-1 flex-col gap-6 overflow-y-auto px-8 py-8">
+  <Card class="border-border/60 bg-background/80 backdrop-blur">
+    <CardHeader class="flex flex-row items-start gap-3 border-b border-border/40 pb-4">
+      <div class="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
+        <Gauge class="h-5 w-5" aria-hidden="true" />
+      </div>
+      <div>
+        <CardTitle>KDF Tuning (Argon2id)</CardTitle>
+        <CardDescription>Adjust key-derivation hardness to balance security with unlock speed.</CardDescription>
+      </div>
+    </CardHeader>
+    <CardContent class="flex flex-col gap-6 pt-4">
+      <div class="flex items-start gap-3 rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm text-warning-foreground">
+        <TriangleAlert class="mt-0.5 h-4 w-4" aria-hidden="true" />
+        <p>Increasing these parameters strengthens security but also slows down authentication.</p>
+      </div>
 
-        <div class="alert alert-warning">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-            <span>Higher values are more secure but will slow down authentication.</span>
+      <div class="space-y-3">
+        <Label class="text-sm font-medium text-foreground">Presets</Label>
+        <div class="flex flex-wrap gap-2">
+          {#each kdfPresets as preset}
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              class={cn(
+                'rounded-full border-border/60 bg-muted/20 px-4 py-1.5 text-sm font-medium transition-colors',
+                kdfPreset === preset.value
+                  ? 'border-primary/60 bg-primary/10 text-primary shadow-sm'
+                  : 'hover:border-primary/50 hover:text-primary'
+              )}
+              onclick={() => selectPreset(preset.value)}
+            >
+              {preset.label}
+            </Button>
+          {/each}
+        </div>
+      </div>
+
+      <div class="space-y-5">
+        <div class="space-y-2">
+          <Label class="text-sm font-medium text-foreground" for="time-cost">Time Cost (iterations)</Label>
+          <div class="flex items-center gap-4">
+            <input
+              id="time-cost"
+              type="range"
+              min="1"
+              max="20"
+              value={timeCost}
+              class="h-1.5 flex-1 appearance-none rounded-full bg-secondary accent-primary"
+              oninput={(event) => handleSliderInput('timeCost', event)}
+            />
+            <span class="w-16 text-right text-sm text-muted-foreground">{timeCost}</span>
+          </div>
         </div>
 
-        <fieldset class="form-group">
-            <legend class="label">Presets</legend>
-            <div class="preset-buttons">
-                <button class="preset-button" class:active={kdfPreset === 'fast'} on:click={() => setKDFPreset('fast')}>Fast</button>
-                <button class:active={kdfPreset === 'balanced'} on:click={() => setKDFPreset('balanced')}>Balanced</button>
-                <button class:active={kdfPreset === 'secure'} on:click={() => setKDFPreset('secure')}>Secure</button>
-                <button class:active={kdfPreset === 'paranoid'} on:click={() => setKDFPreset('paranoid')}>Paranoid</button>
-            </div>
-        </fieldset>
-        <div class="form-group">
-            <label class="label" for="time-cost">Time Cost (iterations)</label>
-            <div class="slider-container">
-                <input type="range" class="slider" min="1" max="20" bind:value={timeCost} on:input={handleChange} id="time-cost">
-                <span class="slider-value">{timeCost}</span>
-            </div>
+        <div class="space-y-2">
+          <Label class="text-sm font-medium text-foreground" for="memory-cost">Memory Cost (MB)</Label>
+          <div class="flex items-center gap-4">
+            <input
+              id="memory-cost"
+              type="range"
+              min="16"
+              max="1024"
+              step="16"
+              value={memoryCost}
+              class="h-1.5 flex-1 appearance-none rounded-full bg-secondary accent-primary"
+              oninput={(event) => handleSliderInput('memoryCost', event)}
+            />
+            <span class="w-20 text-right text-sm text-muted-foreground">{memoryCost}&nbsp;MB</span>
+          </div>
         </div>
-        <div class="form-group">
-            <label class="label" for="memory-cost">Memory Cost</label>
-            <div class="slider-container">
-                <input type="range" class="slider" min="16" max="1024" step="16" bind:value={memoryCost} on:input={handleChange} id="memory-cost">
-                <span class="slider-value">{memoryCost} MB</span>
-            </div>
-        </div>
-        <div class="form-group">
-            <label class="label" for="parallelism">Parallelism</label>
-            <div class="slider-container">
-                <input type="range" class="slider" min="1" max="16" bind:value={parallelism} on:input={handleChange} id="parallelism">
-                <span class="slider-value">{parallelism} threads</span>
-            </div>
-        </div>
-    </SettingsCard>
 
-    <SettingsCard icon="<path d='M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z'/><path d='m9 12 2 2 4-4'/>" title="Memory Hardening" description="Protect sensitive data in system memory.">
-        <div class="settings-group">
-            <SettingItem>
-                 <div slot="info" class="setting-info">
-                    <div class="setting-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></div>
-                    <div>
-                        <label class="label" for="lock-memory-pages-switch" style="margin-bottom: 0;">Lock Memory Pages</label>
-                        <div class="description">Prevent data from being swapped to disk</div>
-                    </div>
-                </div>
-                 <div slot="control">
-                    <Switch checked={lockMemoryPages} ariaLabel="Toggle lock memory pages" on:click={() => handleSwitchChange('lockMemoryPages')} />
-                </div>
-            </SettingItem>
-            <SettingItem>
-                 <div slot="info" class="setting-info">
-                    <div class="setting-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19.4 19.4a2 2 0 0 1-2.8 0L12 14.8l-4.6 4.6a2 2 0 0 1-2.8-2.8l4.6-4.6-4.6-4.6a2 2 0 0 1 2.8-2.8l4.6 4.6 4.6-4.6a2 2 0 0 1 2.8 2.8L14.8 12l4.6 4.6a2 2 0 0 1 0 2.8z"/></svg></div>
-                    <div>
-                        <div class="label" style="margin-bottom: 0;">Secure Memory Allocation</div>
-                        <div class="description">Use secure allocator for sensitive data</div>
-                    </div>
-                </div>
-                 <div slot="control">
-                    <Switch checked={secureMemoryAllocation} ariaLabel="Toggle secure memory allocation" on:click={() => handleSwitchChange('secureMemoryAllocation')} />
-                </div>
-            </SettingItem>
+        <div class="space-y-2">
+          <Label class="text-sm font-medium text-foreground" for="parallelism">Parallelism (threads)</Label>
+          <div class="flex items-center gap-4">
+            <input
+              id="parallelism"
+              type="range"
+              min="1"
+              max="16"
+              value={parallelism}
+              class="h-1.5 flex-1 appearance-none rounded-full bg-secondary accent-primary"
+              oninput={(event) => handleSliderInput('parallelism', event)}
+            />
+            <span class="w-20 text-right text-sm text-muted-foreground">{parallelism}</span>
+          </div>
         </div>
-    </SettingsCard>
+      </div>
+    </CardContent>
+  </Card>
 
-    <SettingsCard icon="<path d='M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z'/>" title="Destructive Actions" description="These actions are irreversible and will delete data.">
-        
-        <div class="danger-zone">
-            <div class="label danger-title">Wipe Vault Database</div>
-            <p class="description" style="margin-bottom: 1rem;">Permanently delete all vault data and settings.</p>
-            <input type="text" class="input is-danger" placeholder='Type "DELETE VAULT" to confirm' bind:value={wipeConfirmationText} on:input={handleChange}>
-            <button class="button button-destructive" disabled={wipeConfirmationText !== 'DELETE VAULT'} style="margin-top: 0.75rem; width: 100%;">
-                Wipe Vault Database
-            </button>
+  <Card class="border-border/60 bg-background/80 backdrop-blur">
+    <CardHeader class="flex flex-row items-start gap-3 border-b border-border/40 pb-4">
+      <div class="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
+        <ShieldCheck class="h-5 w-5" aria-hidden="true" />
+      </div>
+      <div>
+        <CardTitle>Memory Hardening</CardTitle>
+        <CardDescription>Apply additional safeguards to keep sensitive data in memory protected.</CardDescription>
+      </div>
+    </CardHeader>
+    <CardContent class="flex flex-col gap-4 pt-4">
+      {#each memoryToggles as toggle}
+        <div class="flex items-start justify-between gap-4 rounded-lg border border-border/60 bg-muted/20 px-4 py-3">
+          <div>
+            <p class="text-sm font-semibold text-foreground">{toggle.title}</p>
+            <p class="text-sm text-muted-foreground">{toggle.description}</p>
+          </div>
+          <Switch
+            checked={toggle.key === 'lockMemoryPages' ? lockMemoryPages : secureMemoryAllocation}
+            aria-label={`Toggle ${toggle.title.toLowerCase()}`}
+            onclick={() => toggleSetting(toggle.key)}
+          />
         </div>
-    </SettingsCard>
+      {/each}
+    </CardContent>
+  </Card>
+
+  <Card class="border-border/60 bg-background/80 backdrop-blur">
+    <CardHeader class="flex flex-row items-start gap-3 border-b border-border/40 pb-4">
+      <div class="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
+        <ShieldAlert class="h-5 w-5" aria-hidden="true" />
+      </div>
+      <div>
+        <CardTitle>Destructive Actions</CardTitle>
+        <CardDescription>These operations permanently remove data and cannot be undone.</CardDescription>
+      </div>
+    </CardHeader>
+    <CardContent class="pt-4">
+      <div class="space-y-4 rounded-lg border border-destructive/40 bg-destructive/10 p-4">
+        <div>
+          <p class="text-sm font-semibold text-destructive">Wipe Vault Database</p>
+          <p class="text-sm text-destructive/80">Enter the confirmation phrase to enable vault wiping.</p>
+        </div>
+        <Input
+          placeholder={`Type "${WIPE_CONFIRMATION_TOKEN}" to confirm`}
+          value={wipeConfirmationText}
+          oninput={handleWipeInput}
+          class={cn(
+            'w-full',
+            wipeConfirmationText.length && !canWipeVault
+              ? 'border-destructive/60 focus-visible:ring-destructive/20'
+              : ''
+          )}
+        />
+        <Button type="button" variant="destructive" class="w-full" disabled={!canWipeVault} onclick={() => {}}>
+          Wipe Vault Database
+        </Button>
+      </div>
+    </CardContent>
+  </Card>
 </div>
-
-<style>
-    * {
-        box-sizing: border-box;
-    }
-
-    .advanced-container {
-        flex: 1;
-        padding: 32px;
-        overflow-y: auto;
-        position: relative;
-        animation: slideUp 0.5s ease-out;
-        display: flex;
-        flex-direction: column;
-        gap: 1.5rem;
-    }
-
-    .form-group {
-        margin-bottom: 1.5rem;
-    }
-
-    .form-group:last-child {
-        margin-bottom: 0;
-    }
-
-    fieldset {
-        border: none;
-        padding: 0;
-        margin: 0;
-    }
-
-    .label {
-        display: block;
-        font-weight: 500;
-        margin-bottom: 0.5rem;
-        color: hsl(var(--foreground));
-    }
-
-    .description {
-        color: hsl(var(--muted-foreground));
-        font-size: 0.875rem;
-    }
-
-    .input {
-        width: 100%;
-        padding: 0.75rem;
-        border: 1px solid hsl(var(--border));
-        border-radius: var(--radius);
-        background: hsl(var(--background));
-        color: hsl(var(--foreground));
-        font-size: 0.875rem;
-        transition: var(--transition-smooth);
-    }
-
-    .input:focus {
-        outline: none;
-        border-color: hsl(var(--ring));
-        box-shadow: 0 0 0 3px hsl(var(--ring) / 0.2);
-    }
-
-    .input.is-danger {
-        border-color: hsl(var(--destructive));
-    }
-
-    .input.is-danger:focus {
-        box-shadow: 0 0 0 3px hsl(var(--destructive) / 0.3);
-    }
-
-    .slider-container {
-        display: flex;
-        align-items: center;
-        gap: 1rem;
-    }
-
-    .slider {
-        flex: 1;
-        height: 6px;
-        border-radius: 3px;
-        background: hsl(var(--secondary));
-        outline: none;
-        -webkit-appearance: none;
-        appearance: none;
-    }
-
-    .slider::-webkit-slider-thumb {
-        -webkit-appearance: none;
-        appearance: none;
-        width: 20px;
-        height: 20px;
-        border-radius: 50%;
-        background: hsl(var(--primary));
-        cursor: pointer;
-        border: 2px solid hsl(var(--foreground));
-    }
-
-    .slider-value {
-        min-width: 4.5rem;
-        text-align: right;
-        color: hsl(var(--muted-foreground));
-        font-size: 0.875rem;
-    }
-
-    .preset-buttons {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.5rem;
-        margin-top: 1rem;
-    }
-
-    .preset-button {
-        padding: 0.25rem 0.75rem;
-        background: hsl(var(--muted));
-        border: 1px solid hsl(var(--border));
-        border-radius: 99px;
-        cursor: pointer;
-        font-size: 0.75rem;
-        transition: all 0.2s;
-        color: hsl(var(--muted-foreground));
-    }
-
-    .preset-button:hover {
-        background: hsl(var(--secondary));
-        color: hsl(var(--foreground));
-    }
-
-    .preset-button.active {
-        background: hsl(var(--primary));
-        color: hsl(var(--primary-foreground));
-        border-color: hsl(var(--primary));
-    }
-
-    .alert {
-        padding: 1rem;
-        margin-bottom: 1rem;
-        border-radius: var(--radius);
-        font-size: 0.875rem;
-    }
-
-    .alert-warning {
-        background: hsl(var(--warning) / 0.1);
-        border: 1px solid hsl(var(--warning) / 0.3);
-        color: hsl(var(--warning));
-        display: flex;
-        align-items: center;
-        gap: 0.75rem;
-    }
-
-    .danger-zone {
-        padding: 1.25rem;
-        border-radius: var(--radius);
-        background: hsl(var(--destructive) / 0.1);
-        border: 1px solid hsl(var(--destructive) / 0.3);
-    }
-
-    .danger-title {
-        color: hsl(var(--destructive));
-        font-weight: 600;
-        margin-bottom: 0.5rem;
-    }
-
-    .settings-group {
-        display: flex;
-        flex-direction: column;
-        gap: 1rem;
-    }
-
-    
-
-    .setting-info {
-        display: flex;
-        align-items: center;
-        gap: 1rem;
-    }
-
-    .setting-icon {
-        color: hsl(var(--muted-foreground));
-    }
-
-    
-
-    .button {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        padding: 0.625rem 1.25rem;
-        border-radius: var(--radius);
-        font-size: 0.875rem;
-        font-weight: 500;
-        border: none;
-        cursor: pointer;
-        transition: var(--transition-smooth);
-        text-decoration: none;
-        gap: 0.5rem;
-    }
-
-    .button-destructive {
-        background: hsl(var(--destructive));
-        color: hsl(var(--primary-foreground));
-    }
-
-    .button-destructive:hover {
-        background: hsl(var(--destructive) / 0.9);
-    }
-
-    .button:disabled {
-        background: hsl(var(--muted));
-        color: hsl(var(--muted-foreground));
-        cursor: not-allowed;
-    }
-
-    @keyframes slideUp {
-        from {
-            opacity: 0;
-            transform: translateY(20px);
-        }
-        to {
-            opacity: 1;
-            transform: translateY(0);
-        }
-    }
-</style>

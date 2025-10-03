@@ -1,434 +1,280 @@
+
 <script lang="ts">
-	import { settingsStore } from '$lib/stores';
-	import { appearanceSettings, type AppearanceSettingsStore } from '$lib/stores/appearance';
-	import { onMount } from 'svelte';
-	import Switch from '$lib/components/ui/Switch.svelte';
-	import Select from '$lib/components/ui/Select.svelte';
-	import SettingItem from '$lib/components/ui/SettingItem.svelte';
-	import SettingsCard from '$lib/components/ui/SettingsCard.svelte';
-	import { iconPaths } from '$lib/icons';
+  import { onDestroy, onMount } from 'svelte';
+  import { settingsStore } from '$lib/stores';
+  import { appearanceSettings } from '$lib/stores/appearance';
+  import type { AppearanceSettings } from '$lib/config/settings';
+  import { Button } from '$lib/components/ui/button';
+  import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '$lib/components/ui/card';
+  import { Label } from '$lib/components/ui/label';
+  import { Select, SelectContent, SelectItem, SelectTrigger } from '$lib/components/ui/select';
+  import { Switch } from '$lib/components/ui/switch';
+  import { cn } from '$lib/utils';
+  import { Palette, Contrast, LayoutDashboard, Waves, Gauge, Monitor } from '@lucide/svelte';
 
-	let theme: 'system' | 'light' | 'dark';
-	let compactMode: boolean;
-	let fontSize: number;
-	let highContrast: boolean;
-	let reducedMotion: boolean;
-	let pageDensity: 'comfortable' | 'compact' | 'dense';
+  type ThemeOption = AppearanceSettings['theme'];
+  type DensityOption = AppearanceSettings['pageDensity'];
+  type BooleanSettingKey = {
+    [K in keyof AppearanceSettings]: AppearanceSettings[K] extends boolean ? K : never;
+  }[keyof AppearanceSettings];
 
-	appearanceSettings.subscribe((settings) => {
-		theme = settings.theme;
-		compactMode = settings.compactMode;
-		fontSize = settings.fontSize;
-		highContrast = settings.highContrast;
-		reducedMotion = settings.reducedMotion;
-		pageDensity = settings.pageDensity;
-	});
+  const themeOptions: Array<{ value: ThemeOption; label: string }> = [
+    { value: 'system', label: 'System' },
+    { value: 'light', label: 'Light' },
+    { value: 'dark', label: 'Dark' }
+  ];
 
-	onMount(() => {
-		settingsStore.registerModule('appearance', appearanceSettings);
-	});
+  const toggleOptions: Array<{
+    key: BooleanSettingKey;
+    title: string;
+    description: string;
+    ariaLabel: string;
+    Icon: typeof Contrast;
+  }> = [
+    {
+      key: 'highContrast',
+      title: 'High Contrast',
+      description: 'Increase contrast for improved readability.',
+      ariaLabel: 'Toggle high contrast',
+      Icon: Contrast
+    },
+    {
+      key: 'reducedMotion',
+      title: 'Reduced Motion',
+      description: 'Minimise animations and motion effects.',
+      ariaLabel: 'Toggle reduced motion',
+      Icon: Waves
+    }
+  ];
 
-	function handleChange() {
-		appearanceSettings.set({
-			theme,
-			compactMode,
-			fontSize,
-			highContrast,
-			reducedMotion,
-			pageDensity
-		});
-	}
+  const densityOptions: Array<{
+    value: DensityOption;
+    title: string;
+    description: string;
+    spacing: string;
+  }> = [
+    {
+      value: 'comfortable',
+      title: 'Comfortable',
+      description: 'Balanced spacing for everyday use.',
+      spacing: 'space-y-3'
+    },
+    {
+      value: 'compact',
+      title: 'Compact',
+      description: 'Denser layout for information-dense views.',
+      spacing: 'space-y-2'
+    },
+    {
+      value: 'dense',
+      title: 'Dense',
+      description: 'Maximum information per view with tight spacing.',
+      spacing: 'space-y-1'
+    }
+  ];
+
+  const FONT_MIN = 12;
+  const FONT_MAX = 20;
+
+  let currentSettings: AppearanceSettings;
+  let theme: ThemeOption = 'system';
+  let compactMode = false;
+  let fontSize = 14;
+  let highContrast = false;
+  let reducedMotion = false;
+  let pageDensity: DensityOption = 'comfortable';
+
+  const unsubscribe = appearanceSettings.subscribe((settings) => {
+    currentSettings = settings;
+    theme = settings.theme;
+    compactMode = settings.compactMode;
+    fontSize = settings.fontSize;
+    highContrast = settings.highContrast;
+    reducedMotion = settings.reducedMotion;
+    pageDensity = settings.pageDensity;
+  });
+
+  onMount(() => {
+    settingsStore.registerModule('appearance', appearanceSettings);
+  });
+
+  onDestroy(() => {
+    unsubscribe();
+  });
+
+  function applyChanges(partial: Partial<AppearanceSettings>) {
+    const next = { ...currentSettings, ...partial };
+    currentSettings = next;
+    appearanceSettings.set(next);
+  }
+
+  function isThemeOption(value: string): value is ThemeOption {
+    return themeOptions.some((option) => option.value === value);
+  }
+
+  function updateTheme(value: string) {
+    if (!isThemeOption(value)) {
+      return;
+    }
+
+    theme = value;
+    applyChanges({ theme: value });
+  }
+
+  function handleFontSizeInput(event: Event) {
+    const value = Number((event.target as HTMLInputElement).value);
+    fontSize = value;
+    applyChanges({ fontSize: value });
+  }
+
+  function toggleSetting(setting: BooleanSettingKey) {
+    applyChanges({ [setting]: !currentSettings[setting] } as Partial<AppearanceSettings>);
+  }
+
+  function selectDensity(value: DensityOption) {
+    if (value === pageDensity) return;
+    pageDensity = value;
+    applyChanges({ pageDensity: value });
+  }
+
+  function getThemeLabel(value: ThemeOption) {
+    return themeOptions.find((option) => option.value === value)?.label ?? 'Select theme';
+  }
 </script>
 
-<div class="appearance-container">
-	<SettingsCard icon={iconPaths.appearance} title="Theme & Display" description="Customize how the app looks and behaves.">
-		<div class="settings-group">
-			<SettingItem>
-				<div slot="info" class="setting-info">
-					<div class="setting-icon">
-						<svg
-							width="24"
-							height="24"
-							viewBox="0 0 24 24"
-							fill="none"
-							stroke="currentColor"
-							stroke-width="2"
-							><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z" /></svg
-						>
-					</div>
-					<div>
-						<div class="setting-label">Theme</div>
-						<div class="setting-description">Choose how the app appears</div>
-					</div>
-				</div>
-				<div slot="control" class="setting-control">
-					<Select bind:value={theme} options={[{value: 'system', label: 'System'}, {value: 'light', label: 'Light'}, {value: 'dark', label: 'Dark'}]} on:change={handleChange} ariaLabel="Select theme" />
-				</div>
-			</SettingItem>
+<div class="flex flex-1 flex-col gap-6 overflow-y-auto px-8 py-8">
+  <Card class="border-border/60 bg-background/80 backdrop-blur">
+    <CardHeader class="flex flex-row items-start gap-3 border-b border-border/40 pb-4">
+      <div class="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
+        <Palette class="h-5 w-5" aria-hidden="true" />
+      </div>
+      <div>
+        <CardTitle>Theme &amp; Display</CardTitle>
+        <CardDescription>Customise the application look and spacing.</CardDescription>
+      </div>
+    </CardHeader>
+    <CardContent class="flex flex-col gap-6 pt-4">
+      <div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+        <div class="space-y-2">
+          <Label class="text-sm font-medium text-foreground">Theme</Label>
+          <Select type="single" value={theme} onValueChange={updateTheme}>
+            <SelectTrigger aria-label="Select theme" class="w-full sm:w-56">
+              <span data-slot="select-value" class="flex items-center gap-2 truncate text-sm">
+                <Monitor class="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                {getThemeLabel(theme)}
+              </span>
+            </SelectTrigger>
+            <SelectContent>
+              {#each themeOptions as option}
+                <SelectItem value={option.value}>{option.label}</SelectItem>
+              {/each}
+            </SelectContent>
+          </Select>
+        </div>
 
-			<SettingItem>
-				<div slot="info" class="setting-info">
-					<div class="setting-icon">
-						<svg
-							width="24"
-							height="24"
-							viewBox="0 0 24 24"
-							fill="none"
-							stroke="currentColor"
-							stroke-width="2"
-							><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" /></svg
-						>
-					</div>
-					<div>
-						<div class="setting-label">Compact Mode</div>
-						<div class="setting-description">Reduce spacing and padding</div>
-					</div>
-				</div>
-				<div slot="control" class="setting-control">
-					<Switch
-						checked={compactMode}
-						ariaLabel="Toggle compact mode"
-						on:click={() => {
-							compactMode = !compactMode;
-							handleChange();
-						}}
-					/>
-				</div>
-			</SettingItem>
+        <div class="flex items-center justify-between gap-4 rounded-lg border border-border/60 bg-muted/20 px-4 py-3">
+          <div class="flex items-center gap-3">
+            <div class="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
+              <LayoutDashboard class="h-5 w-5" aria-hidden="true" />
+            </div>
+            <div>
+              <p class="text-sm font-semibold text-foreground">Compact Mode</p>
+              <p class="text-sm text-muted-foreground">Reduce spacing and padding.</p>
+            </div>
+          </div>
+          <Switch
+            checked={compactMode}
+            aria-label="Toggle compact mode"
+            onclick={() => toggleSetting('compactMode')}
+          />
+        </div>
+      </div>
 
-			<SettingItem>
-				<div slot="info" class="setting-info">
-					<div class="setting-icon">
-						<svg
-							width="24"
-							height="24"
-							viewBox="0 0 24 24"
-							fill="none"
-							stroke="currentColor"
-							stroke-width="2"
-							><path d="M4 7V4h16v3M9 20h6M12 4v16" /></svg
-						>
-					</div>
-					<div>
-						<div class="setting-label">Font Size</div>
-						<div class="setting-description">Adjust text size for readability</div>
-					</div>
-				</div>
-				<div slot="control" class="setting-control">
-					<div class="range-container">
-						<input
-							type="range"
-							min="12"
-							max="20"
-							class="range"
-							bind:value={fontSize}
-							on:input={handleChange}
-						/>
-						<span class="range-value">{fontSize}px</span>
-					</div>
-				</div>
-			</SettingItem>
-		</div>
-	</SettingsCard>
+      <div class="space-y-2">
+        <Label class="flex items-center gap-2 text-sm font-medium text-foreground">
+          <Gauge class="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+          Font Size
+        </Label>
+        <div class="flex items-center gap-4">
+          <input
+            type="range"
+            min={FONT_MIN}
+            max={FONT_MAX}
+            value={fontSize}
+            class="h-1.5 flex-1 appearance-none rounded-full bg-secondary accent-primary"
+            oninput={handleFontSizeInput}
+          />
+          <span class="w-12 text-right text-sm text-muted-foreground">{fontSize}px</span>
+        </div>
+      </div>
 
-	<SettingsCard icon={iconPaths.user} title="Accessibility" description="Fine-tune the app for your specific needs.">
-		<div class="settings-group">
-			<SettingItem>
-				<div slot="info" class="setting-info">
-					<div class="setting-icon">
-						<svg
-							width="24"
-							height="24"
-							viewBox="0 0 24 24"
-							fill="none"
-							stroke="currentColor"
-							stroke-width="2"
-							><circle cx="12" cy="12" r="10" /><path d="M12 18a6 6 0 0 0 0-12v12z" /></svg
-						>
-					</div>
-					<div>
-						<div class="setting-label">High Contrast</div>
-						<div class="setting-description">Increase contrast for better visibility</div>
-					</div>
-				</div>
-				<div slot="control" class="setting-control">
-					<Switch
-						checked={highContrast}
-						ariaLabel="Toggle high contrast"
-						on:click={() => {
-							highContrast = !highContrast;
-							handleChange();
-						}}
-					/>
-				</div>
-			</SettingItem>
+      <div class="grid gap-4 md:grid-cols-2">
+        {#each toggleOptions as option (option.key)}
+          <div class="flex items-center justify-between gap-4 rounded-lg border border-border/60 bg-muted/20 px-4 py-3">
+            <div class="flex items-center gap-3">
+              <div class="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
+                <option.Icon class="h-5 w-5" aria-hidden="true" />
+              </div>
+              <div>
+                <p class="text-sm font-semibold text-foreground">{option.title}</p>
+                <p class="text-sm text-muted-foreground">{option.description}</p>
+              </div>
+            </div>
+            <Switch
+              checked={option.key === 'highContrast' ? highContrast : reducedMotion}
+              aria-label={option.ariaLabel}
+              onclick={() => toggleSetting(option.key)}
+            />
+          </div>
+        {/each}
+      </div>
+    </CardContent>
+  </Card>
 
-			<SettingItem>
-				<div slot="info" class="setting-info">
-					<div class="setting-icon">
-						<svg
-							width="24"
-							height="24"
-							viewBox="0 0 24 24"
-							fill="none"
-							stroke="currentColor"
-							stroke-width="2"
-							><path d="m13 17-5-5 5-5m-5 5h12.5" /></svg
-						>
-					</div>
-					<div>
-						<div class="setting-label">Reduced Motion</div>
-						<div class="setting-description">Minimize animations and transitions</div>
-					</div>
-				</div>
-				<div slot="control" class="setting-control">
-					<Switch
-						checked={reducedMotion}
-						ariaLabel="Toggle reduced motion"
-						on:click={() => {
-							reducedMotion = !reducedMotion;
-							handleChange();
-						}}
-					/>
-				</div>
-			</SettingItem>
-		</div>
-	</SettingsCard>
-
-	<SettingsCard icon={iconPaths.reorder} title="Page Density" description="Choose how content is displayed on each page.">
-
-		<div class="preview-grid">
-			<button
-				class="preview-card"
-				role="radio"
-				aria-checked={pageDensity === 'comfortable'}
-				aria-label="Set page density to comfortable"
-				class:selected={pageDensity === 'comfortable'}
-				on:click={() => {
-					pageDensity = 'comfortable';
-					handleChange();
-				}}
-				data-density="comfortable"
-			>
-				<div class="preview-title">Comfortable</div>
-				<div class="preview-viz">
-					<div></div>
-					<div></div>
-					<div></div>
-				</div>
-			</button>
-
-			<button
-				class="preview-card"
-				role="radio"
-				aria-checked={pageDensity === 'compact'}
-				aria-label="Set page density to compact"
-				class:selected={pageDensity === 'compact'}
-				on:click={() => {
-					pageDensity = 'compact';
-					handleChange();
-				}}
-				data-density="compact"
-			>
-				<div class="preview-title">Compact</div>
-				<div class="preview-viz">
-					<div></div>
-					<div></div>
-					<div></div>
-				</div>
-			</button>
-
-			<button
-				class="preview-card"
-				role="radio"
-				aria-checked={pageDensity === 'dense'}
-				aria-label="Set page density to dense"
-				class:selected={pageDensity === 'dense'}
-				on:click={() => {
-					pageDensity = 'dense';
-					handleChange();
-				}}
-				data-density="dense"
-			>
-				<div class="preview-title">Dense</div>
-				<div class="preview-viz">
-					<div></div>
-					<div></div>
-					<div></div>
-				</div>
-			</button>
-		</div>
-	</SettingsCard>
+  <Card class="border-border/60 bg-background/80 backdrop-blur">
+    <CardHeader class="flex flex-row items-start gap-3 border-b border-border/40 pb-4">
+      <div class="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
+        <LayoutDashboard class="h-5 w-5" aria-hidden="true" />
+      </div>
+      <div>
+        <CardTitle>Page Density</CardTitle>
+        <CardDescription>Choose how much information appears on each view.</CardDescription>
+      </div>
+    </CardHeader>
+    <CardContent class="pt-4">
+      <div class="grid gap-3 md:grid-cols-3">
+        {#each densityOptions as option (option.value)}
+          <Button
+            type="button"
+            variant="outline"
+            class={cn(
+              'h-full w-full flex-col items-start gap-3 rounded-xl border-border/60 bg-muted/20 p-4 text-left transition-colors',
+              pageDensity === option.value
+                ? 'border-primary/60 bg-primary/10 text-primary shadow-sm'
+                : 'hover:border-primary/50 hover:text-primary'
+            )}
+            aria-pressed={pageDensity === option.value}
+            aria-label={`Set page density to ${option.title.toLowerCase()}`}
+            onclick={() => selectDensity(option.value)}
+          >
+            <div>
+              <p class="text-sm font-semibold text-foreground">{option.title}</p>
+              <p class="text-sm text-muted-foreground">{option.description}</p>
+            </div>
+            <div
+              class={cn(
+                'w-full rounded-lg bg-background/70 p-3',
+                option.spacing,
+                '[&>div]:h-1.5 [&>div]:rounded-full [&>div]:bg-muted-foreground/40'
+              )}
+            >
+              <div class="w-full"></div>
+              <div class="w-10/12"></div>
+              <div class="w-8/12"></div>
+            </div>
+          </Button>
+        {/each}
+      </div>
+    </CardContent>
+  </Card>
 </div>
-
-<style>
-    
-
-    * {
-        box-sizing: border-box;
-    }
-
-    .appearance-container {
-        flex: 1;
-        padding: 32px;
-        overflow-y: auto;
-        position: relative;
-        animation: slideUp 0.5s ease-out;
-        display: flex;
-        flex-direction: column;
-        gap: 1.5rem;
-    }
-
-    
-
-    .settings-group {
-        display: flex;
-        flex-direction: column;
-        gap: 1rem;
-    }
-
-    
-
-    .setting-info {
-        display: flex;
-        align-items: center;
-        gap: 1rem;
-    }
-
-    .setting-icon {
-        color: hsl(var(--muted-foreground));
-    }
-
-    .setting-label {
-        font-weight: 500;
-        color: hsl(var(--foreground));
-    }
-
-    .setting-description {
-        color: hsl(var(--muted-foreground));
-        font-size: 0.875rem;
-    }
-
-    .setting-control {
-        flex-shrink: 0;
-        margin-left: 1rem;
-    }
-
-    
-
-    
-
-    .range-container {
-        display: flex;
-        align-items: center;
-        gap: 1rem;
-        min-width: 200px;
-    }
-
-    .range {
-        flex: 1;
-        height: 6px;
-        border-radius: 3px;
-        background: hsl(var(--secondary));
-        outline: none;
-        -webkit-appearance: none;
-        appearance: none;
-    }
-
-    .range::-webkit-slider-thumb {
-        -webkit-appearance: none;
-        appearance: none;
-        width: 20px;
-        height: 20px;
-        border-radius: 50%;
-        background: hsl(var(--primary));
-        cursor: pointer;
-        border: 2px solid hsl(var(--foreground));
-    }
-
-    .range-value {
-        color: hsl(var(--muted-foreground));
-        font-size: 0.875rem;
-        min-width: 2.5rem;
-        text-align: right;
-    }
-
-    
-
-    .preview-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-        gap: 1rem;
-    }
-
-    .preview-card {
-        background: hsl(var(--muted) / 0.3);
-        border: 2px solid hsl(var(--border));
-        border-radius: var(--radius);
-        padding: 1rem;
-        text-align: center;
-        cursor: pointer;
-        transition: var(--transition-smooth);
-    }
-
-    .preview-card:hover {
-        border-color: hsl(var(--primary) / 0.5);
-        transform: translateY(-3px);
-    }
-
-    .preview-card.selected {
-        border-color: hsl(var(--primary));
-        background: hsl(var(--primary) / 0.1);
-        box-shadow: var(--shadow-glow);
-    }
-
-    .preview-title {
-        font-weight: 500;
-        margin-bottom: 0.75rem;
-    }
-
-    .preview-viz {
-        display: flex;
-        flex-direction: column;
-        gap: 4px;
-        background: hsl(var(--background) / 0.5);
-        padding: 0.5rem;
-        border-radius: calc(var(--radius) - 4px);
-    }
-
-    .preview-viz div {
-        background: hsl(var(--muted-foreground) / 0.5);
-        border-radius: 3px;
-        height: 6px;
-    }
-
-    .preview-card[data-density="comfortable"] .preview-viz {
-        gap: 6px;
-    }
-
-    .preview-card[data-density="compact"] .preview-viz {
-        gap: 4px;
-    }
-
-    .preview-card[data-density="dense"] .preview-viz {
-        gap: 2px;
-    }
-
-    @keyframes slideUp {
-        from {
-            opacity: 0;
-            transform: translateY(20px);
-        }
-        to {
-            opacity: 1;
-            transform: translateY(0);
-        }
-    }
-
-    @media (max-width: 640px) {
-        
-        .setting-control {
-            margin-left: 0;
-        }
-    }
-</style>

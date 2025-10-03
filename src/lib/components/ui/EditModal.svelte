@@ -30,7 +30,7 @@
 </script>
 
 {#if show}
-<div class="overlay" on:click|self={handleCancel}>
+<div class="overlay" role="presentation" on:pointerdown|self={handleCancel}>
   <div class="dialog">
     <button class="close-button" on:click={close} aria-label="Close edit modal">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">

@@ -1,83 +1,147 @@
+<svelte:options runes />
+
 <script lang="ts">
 	import type { PasswordItem } from '../../../routes/+layout.ts';
 	import Icon from '../ui/Icon.svelte';
 	import { iconPaths } from '$lib/icons';
 	import { invoke } from '@tauri-apps/api/core';
-	
 	import Input from '../ui/Input.svelte';
+	import { Button } from '../ui/button';
+	import { Select, SelectContent, SelectItem, SelectTrigger } from '../ui/select';
+	import { Skeleton } from '../ui/skeleton';
 	import { createEventDispatcher, tick, onDestroy } from 'svelte';
-	
-	
 	import UnsavedChangesPopup from '../UnsavedChangesPopup.svelte';
 	import PasswordDetailHeader from '../password/PasswordDetailHeader.svelte';
 	import { selectedTag, filterCategory } from '$lib/stores';
+	import { flip } from 'svelte/animate';
+	import { dndzone } from 'svelte-dnd-action';
+	import { quintOut, cubicOut } from 'svelte/easing';
+	import { Plus, ArrowUp, ArrowDown, Eye, EyeOff, ArrowDownUp } from '@lucide/svelte';
 
-	// import { SvelteMap } from 'svelte/collections';
-    import { flip } from 'svelte/animate';
-    import { dndzone } from 'svelte-dnd-action';
-    import { quintOut } from 'svelte/easing';
-
-    // Clean, slower fade-in with gentle lift
-    function modernFade(node: Element, { duration = 400 } = {}) {
-        const reduce = typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-        const dur = reduce ? 0 : duration;
-        return {
-            duration: dur,
-            easing: quintOut,
-            css: (t: number) => {
-                const o = t; // opacity 0->1
-                const y = (1 - t) * 8; // translateY 8px->0
-                return `opacity:${o}; transform: translateY(${y}px);`;
-            }
-        };
-    }
-
-	const dispatch = createEventDispatcher();
-
-	export let selectedPasswordItem: PasswordItem | null;
-	export let displayColor: string;
-	export let buttons: any[];
-
-	
-	let isEditing = false;
-	let hasUnsavedChanges = false;
-	let showTimestamps = false;
-	let showPassword = false;
-	let addingField = false;
-	let newFieldType = 'text';
-	let newFieldName = '';
-    let pendingTagOrder: string | null = null;
-
-	let dndItems: any[] = [];
-
-	// Skeleton loading when switching via sidebar (tags/filter)
-	let showSkeletonDetail = false;
-	let skeletonTimerDetail: any = null;
-	let lastSkeletonKeyDetail = '';
-	$: currentSkeletonKeyDetail = `${$selectedTag ?? 'all'}|${$filterCategory}`;
-	$: if (currentSkeletonKeyDetail !== lastSkeletonKeyDetail) {
-		lastSkeletonKeyDetail = currentSkeletonKeyDetail;
-		(async () => {
-			await tick(); // ensure fields computed for new context
-			const count = selectedPasswordItem ? (isEditing ? dndItems.length : displayFields.length) : 0;
-			if (count > 0) {
-				showSkeletonDetail = true;
-				clearTimeout(skeletonTimerDetail);
-				skeletonTimerDetail = setTimeout(() => {
-					showSkeletonDetail = false;
-				}, 200); // match list skeleton duration
-			}
-		})();
+	function modernFade(node: Element, { duration = 400 } = {}) {
+		const reduce =
+		typeof window !== 'undefined' &&
+		window.matchMedia &&
+		window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+		const dur = reduce ? 0 : duration;
+		return {
+		duration: dur,
+		easing: quintOut,
+		css: (t: number) => {
+			const o = t;
+			const y = (1 - t) * 8;
+			return `opacity:${o}; transform: translateY(${y}px);`;
+		}
+		};
 	}
+
+	interface Props {
+		selectedPasswordItem: PasswordItem | null;
+		displayColor: string;
+		buttons: any[];
+	}
+
+	let {
+		selectedPasswordItem = $bindable<PasswordItem | null>(),
+		displayColor,
+		buttons
+	}: Props = $props();
+
+	const dispatch = createEventDispatcher<{
+		removeEntry: PasswordItem;
+		tagsSaved: { id: number; tags: string };
+	}>();
+	const fieldTypeOptions = [
+		{ value: 'text', label: 'Text' },
+		{ value: 'password', label: 'Password' },
+		{ value: 'file', label: 'File' }
+	] as const;
+	type FieldType = (typeof fieldTypeOptions)[number]['value'];
+	const getFieldTypeLabel = (value: FieldType) =>
+		fieldTypeOptions.find((option) => option.value === value)?.label ?? value;
+
+	const MIN_FIELD_SKELETONS = 6;
+	const MIN_TAG_SKELETONS = 3;
+	const createPlaceholders = (count: number, min = MIN_FIELD_SKELETONS) =>
+		Array.from({ length: Math.max(count, min) });
+	const extractTags = (tags?: string | null) =>
+		tags
+			? tags
+				.split(',')
+				.map((tag) => tag.trim())
+				.filter(Boolean)
+			: [];
+	const createTagPlaceholders = (tags?: string | null) =>
+		createPlaceholders(extractTags(tags).length, MIN_TAG_SKELETONS);
+
+	let isEditing = $state(false);
+	let hasUnsavedChanges = $state(false);
+	let showTimestamps = $state(false);
+	let showPassword = $state(false);
+	let addingField = $state(false);
+	let newFieldType = $state<FieldType>('text');
+	let newFieldName = $state('');
+	let pendingTagOrder = $state<string | null>(null);
+	let dndItems = $state<DisplayField[]>([]);
+	let showSkeletonDetail = $state(false);
+	let skeletonTimerDetail: any = null;
+
+	function handleTagsSaved(detail: { id: number; tags: string }) {
+		dispatch('tagsSaved', detail);
+	}
+
+	function handleRemoveRequest(id?: number) {
+		if (!selectedPasswordItem) {
+			return;
+		}
+		if (id != null && selectedPasswordItem.id !== id) {
+			return;
+		}
+		dispatch('removeEntry', selectedPasswordItem);
+	}
+	let lastSkeletonKeyDetail = '';
+
+	$effect(() => {
+		const currentSkeletonKeyDetail = `${$selectedTag ?? 'all'}|${$filterCategory}`;
+		if (currentSkeletonKeyDetail !== lastSkeletonKeyDetail) {
+			lastSkeletonKeyDetail = currentSkeletonKeyDetail;
+			(async () => {
+				await tick();
+				const count = selectedPasswordItem
+					? (isEditing ? dndItems.length : displayFields.length)
+					: 0;
+				if (count > 0) {
+					showSkeletonDetail = true;
+					clearTimeout(skeletonTimerDetail);
+					skeletonTimerDetail = setTimeout(() => {
+						showSkeletonDetail = false;
+					}, 200);
+				}
+			})();
+		}
+	});
 
 	onDestroy(() => {
 		clearTimeout(skeletonTimerDetail);
 	});
 
-	$: displayFields = (() => {
-		if (!selectedPasswordItem) return [];
+	type DisplayField = {
+		id: string;
+		name: string;
+		value: any;
+		type: string;
+		icon: string;
+	};
 
-		const staticFields = [
+	let displayFields = $state<DisplayField[]>([]);
+
+	$effect(() => {
+		if (!selectedPasswordItem) {
+			displayFields = [];
+			return;
+		}
+
+		const staticFields: DisplayField[] = [
 			{
 				id: 'username',
 				name: 'Username',
@@ -92,7 +156,13 @@
 				type: 'password',
 				icon: iconPaths.key
 			},
-			{ id: 'url', name: 'URL', value: selectedPasswordItem.url, type: 'text', icon: iconPaths.link },
+			{
+				id: 'url',
+				name: 'URL',
+				value: selectedPasswordItem.url,
+				type: 'text',
+				icon: iconPaths.link
+			},
 			{
 				id: 'notes',
 				name: 'Notes',
@@ -102,238 +172,252 @@
 			}
 		];
 
-		const customFields = (selectedPasswordItem.custom_fields || []).map((f) => ({
-			...f,
-			id: f.name,
-			name: f.name,
-			value: f.value,
-			type: f.field_type,
-			icon: iconPaths.plus
-		}));
+		const customFields: DisplayField[] =
+			(selectedPasswordItem.custom_fields ?? []).map((field: { name: string; value: string; field_type: string }) => ({
+				id: field.name,
+				name: field.name,
+				value: field.value,
+				type: field.field_type,
+				icon: iconPaths.plus
+			}));
 
-		let allFields = [...staticFields, ...customFields];
+		let allFields: DisplayField[] = [...staticFields, ...customFields];
 
-		if (selectedPasswordItem.field_order && selectedPasswordItem.field_order.length > 0) {
-			const orderedFields: any[] = [];
+		if (selectedPasswordItem.field_order?.length) {
+			const orderedFields: DisplayField[] = [];
 			const fieldMap = new Map(allFields.map((field) => [field.id, field]));
 
 			for (const fieldId of selectedPasswordItem.field_order) {
-				if (fieldMap.has(fieldId)) {
-					orderedFields.push(fieldMap.get(fieldId));
+				const field = fieldMap.get(fieldId);
+				if (field) {
+					orderedFields.push(field);
 					fieldMap.delete(fieldId);
 				}
 			}
-			for (const remainingField of fieldMap.values()) {
-				orderedFields.push(remainingField);
-			}
-			return orderedFields;
-		} else {
-			return allFields;
+			orderedFields.push(...fieldMap.values());
+			allFields = orderedFields;
 		}
-	})();
 
-	
+		displayFields = allFields;
+	});
 
-	function handleDndConsider(e: CustomEvent) {
+	function handleDndConsider(e: CustomEvent<{ items: DisplayField[] }>) {
 		dndItems = e.detail.items;
 	}
 
-	function handleDndFinalize(e: CustomEvent) {
+	function handleDndFinalize(e: CustomEvent<{ items: DisplayField[] }>) {
 		dndItems = e.detail.items;
-		dndItems = [...dndItems];
-		if (selectedPasswordItem) {
-			selectedPasswordItem.field_order = dndItems.map((item) => item.id);
-		}
-	}
+    dndItems = [...dndItems];
+    if (selectedPasswordItem) {
+      selectedPasswordItem.field_order = dndItems.map((item) => item.id);
+    }
+  }
 
-	
+  let originalPasswordItem: PasswordItem | null = null;
 
-	
+  $effect(() => {
+    if (isEditing && originalPasswordItem) {
+      const currentItemState = JSON.parse(
+        JSON.stringify(originalPasswordItem)
+      );
+      const newCustomFields: {
+        name: string;
+        value: string;
+        field_type: string;
+      }[] = [];
 
-	let originalPasswordItem: PasswordItem | null = null;
+      for (const item of dndItems) {
+        switch (item.id) {
+          case 'username':
+            currentItemState.username = item.value;
+            break;
+          case 'password':
+            currentItemState.password = item.value;
+            break;
+          case 'url':
+            currentItemState.url = item.value;
+            break;
+          case 'notes':
+            currentItemState.notes = item.value;
+            break;
+          default:
+            newCustomFields.push({
+              name: item.name,
+              value: item.value,
+              field_type: item.type
+            });
+            break;
+        }
+      }
+      currentItemState.custom_fields = newCustomFields;
+      currentItemState.field_order = dndItems.map((item) => item.id);
 
-	$: {
-		if (isEditing && originalPasswordItem) {
-		const currentItemState = JSON.parse(JSON.stringify(originalPasswordItem));
-			const newCustomFields: { name: string; value: string; field_type: string }[] = [];
+      const normalizedCurrent = JSON.parse(JSON.stringify(currentItemState));
+      const normalizedOriginal = JSON.parse(
+        JSON.stringify(originalPasswordItem)
+      );
+      if (normalizedCurrent.password === '')
+        normalizedCurrent.password = 'N/A';
+      if (normalizedOriginal.password == null)
+        normalizedOriginal.password = 'N/A';
+      if (normalizedCurrent.url === '') normalizedCurrent.url = null;
 
-			for (const item of dndItems) {
-				switch (item.id) {
-					case 'username':
-						currentItemState.username = item.value;
-						break;
-					case 'password':
-						currentItemState.password = item.value;
-						break;
-					case 'url':
-						currentItemState.url = item.value;
-						break;
-					case 'notes':
-						currentItemState.notes = item.value;
-						break;
-					default:
-						newCustomFields.push({ name: item.name, value: item.value, field_type: item.type });
-						break;
-			}
-		}
-		currentItemState.custom_fields = newCustomFields;
-		currentItemState.field_order = dndItems.map((item) => item.id);
+      hasUnsavedChanges =
+        JSON.stringify(normalizedCurrent) !==
+        JSON.stringify(normalizedOriginal);
 
-		// Normalize transient edit-state differences so clicking "Modify" alone
-		// does not trigger the Unsaved Changes popup.
-		const normalizedCurrent = JSON.parse(JSON.stringify(currentItemState));
-		const normalizedOriginal = JSON.parse(JSON.stringify(originalPasswordItem));
-		// Treat empty password during edit as placeholder 'N/A'
-		if (normalizedCurrent.password === '') normalizedCurrent.password = 'N/A';
-		if (normalizedOriginal.password == null) normalizedOriginal.password = 'N/A';
-		// Treat empty URL as null (same as save normalization)
-		if (normalizedCurrent.url === '') normalizedCurrent.url = null;
+      if (!hasUnsavedChanges) {
+        const origTags = (originalPasswordItem?.tags ?? '') as string;
+        if (pendingTagOrder !== null && pendingTagOrder !== origTags) {
+          hasUnsavedChanges = true;
+        }
+      }
+    } else {
+      hasUnsavedChanges = false;
+    }
+  });
 
-		hasUnsavedChanges = JSON.stringify(normalizedCurrent) !== JSON.stringify(normalizedOriginal);
-	// Also consider pending tag changes
-	if (!hasUnsavedChanges) {
-		const origTags = (originalPasswordItem?.tags ?? '') as string;
-		if (pendingTagOrder !== null && pendingTagOrder !== origTags) {
-			hasUnsavedChanges = true;
-		}
-	}
-	} else {
-		hasUnsavedChanges = false;
-	}
-	}
-
-function enterEditMode() {
-	originalPasswordItem = JSON.parse(JSON.stringify(selectedPasswordItem));
-	dndItems = [...displayFields];
-	// If password is placeholder "N/A", clear it for editing
-	for (const item of dndItems) {
-		if (item.id === 'password' && (item.value === 'N/A' || item.value == null)) {
-			item.value = '';
-		}
-	}
+  function enterEditMode() {
+    originalPasswordItem = JSON.parse(
+      JSON.stringify(selectedPasswordItem)
+    );
+    dndItems = [...displayFields];
+    for (const item of dndItems) {
+      if (
+        item.id === 'password' &&
+        (item.value === 'N/A' || item.value == null)
+      ) {
+        item.value = '';
+      }
+    }
     pendingTagOrder = null;
-	isEditing = true;
-}
+    isEditing = true;
+  }
 
-async function handleSave() {
+  async function handleSave() {
     if (!selectedPasswordItem) return;
     const item = selectedPasswordItem as PasswordItem;
 
     const updated = JSON.parse(JSON.stringify(selectedPasswordItem));
-    const newCustomFields: { name: string; value: string; field_type: string }[] = [];
+    const newCustomFields: {
+      name: string;
+      value: string;
+      field_type: string;
+    }[] = [];
     for (const item of dndItems) {
-        const val = (item.value ?? '').toString().trim();
-        switch (item.id) {
-            case 'username':
-                updated.username = val.length > 0 ? val : null;
-                break;
-            case 'password':
-                updated.password = val.length > 0 ? val : 'N/A';
-                break;
-            case 'url': {
-                if (val.length === 0) {
-                    updated.url = null;
-                } else {
-                    // Ensure URL passes backend validation
-                    updated.url = (/^https?:\/\//i.test(val) ? val : `https://${val}`);
-                }
-                break;
-            }
-            case 'notes':
-                updated.notes = val.length > 0 ? val : null;
-                break;
-            default:
-                newCustomFields.push({ name: item.name, value: item.value, field_type: item.type });
-                break;
+      const val = (item.value ?? '').toString().trim();
+      switch (item.id) {
+        case 'username':
+          updated.username = val.length > 0 ? val : null;
+          break;
+        case 'password':
+          updated.password = val.length > 0 ? val : 'N/A';
+          break;
+        case 'url': {
+          if (val.length === 0) {
+            updated.url = null;
+          } else {
+            updated.url = /^https?:\/\//i.test(val)
+              ? val
+              : `https://${val}`;
+          }
+          break;
         }
+        case 'notes':
+          updated.notes = val.length > 0 ? val : null;
+          break;
+        default:
+          newCustomFields.push({
+            name: item.name,
+            value: item.value,
+            field_type: item.type
+          });
+          break;
+      }
     }
     updated.custom_fields = newCustomFields;
     updated.field_order = dndItems.map((item) => item.id);
 
     if (JSON.stringify(updated) !== JSON.stringify(originalPasswordItem)) {
-        try {
-            await invoke('update_password_item', { item: updated });
-            // sync local state with saved version and baseline
-            selectedPasswordItem = updated;
-            originalPasswordItem = JSON.parse(JSON.stringify(updated));
-        } catch (error) {
-            console.error('Error updating password item:', error);
-            alert(`Failed to save changes: ${error}`);
-            return; // stay in edit mode to correct
-        }
-    } else {
-        // no field changes, continue to check tag reorder below
+      try {
+        await invoke('update_password_item', { item: updated });
+        selectedPasswordItem = updated;
+        originalPasswordItem = JSON.parse(JSON.stringify(updated));
+      } catch (error) {
+        console.error('Error updating password item:', error);
+        alert(`Failed to save changes: ${error}`);
+        return;
+      }
     }
 
-    // Apply pending tag reorder only on Save
-    // Note: allow empty string ('') to clear all tags
     if (pendingTagOrder !== null && pendingTagOrder !== (item.tags ?? '')) {
-        try {
-            await invoke('update_password_item_tags', { id: item.id, tags: pendingTagOrder });
-            const updatedItem = { ...item, tags: pendingTagOrder } as any;
-            selectedPasswordItem = updatedItem;
-            dispatch('tagsSaved', { id: updatedItem.id, tags: pendingTagOrder });
-        } catch (error) {
-            console.error('Error saving tag order:', error);
-            alert(`Failed to save tag order: ${error}`);
-            return; // stay in edit mode if tag save fails
-        }
+      try {
+        await invoke('update_password_item_tags', {
+          id: item.id,
+          tags: pendingTagOrder
+        });
+        const updatedItem = { ...item, tags: pendingTagOrder } as any;
+        selectedPasswordItem = updatedItem;
+			handleTagsSaved({ id: updatedItem.id, tags: pendingTagOrder });
+      } catch (error) {
+        console.error('Error saving tag order:', error);
+        alert(`Failed to save tag order: ${error}`);
+        return;
+      }
     }
 
-    // Exit edit mode after a short delay so color transitions
-    // in the edit view can play before the DOM branch swaps.
     hasUnsavedChanges = false;
     pendingTagOrder = null;
     await tick();
-    setTimeout(() => { isEditing = false; }, 320);
-}
+    setTimeout(() => {
+      isEditing = false;
+    }, 320);
+  }
 
-	function handleReset() {
-		if (originalPasswordItem) {
-			selectedPasswordItem = JSON.parse(JSON.stringify(originalPasswordItem));
-		}
-		isEditing = false;
-		hasUnsavedChanges = false;
-		pendingTagOrder = null;
-	}
+  function handleReset() {
+    if (originalPasswordItem) {
+      selectedPasswordItem = JSON.parse(
+        JSON.stringify(originalPasswordItem)
+      );
+    }
+    isEditing = false;
+    hasUnsavedChanges = false;
+    pendingTagOrder = null;
+  }
 
-	
+  function formatTimestamp(timestamp: string | null): string {
+    if (!timestamp) return 'N/A';
+    const date = new Date(timestamp);
+    return date.toLocaleString();
+  }
 
-	
+  function handleCancelAddField() {
+    addingField = false;
+    newFieldName = '';
+    newFieldType = 'text';
+  }
 
-	function formatTimestamp(timestamp: string | null): string {
-		if (!timestamp) return 'N/A';
-		const date = new Date(timestamp);
-		return date.toLocaleString();
-	}
+  async function handleConfirmAddField() {
+    if (!newFieldName.trim()) {
+      alert('Please enter a name for the new field.');
+      return;
+    }
 
-	function handleCancelAddField() {
-		addingField = false;
-		newFieldName = '';
-		newFieldType = 'text';
-	}
-
-	async function handleConfirmAddField() {
-		if (!newFieldName.trim()) {
-			alert('Please enter a name for the new field.');
-			return;
-		}
-
-		if (selectedPasswordItem) {
-			try {
-				await invoke('add_custom_field', {
-					itemId: selectedPasswordItem.id,
-					fieldName: newFieldName,
-					fieldType: newFieldType
-				});
-				alert('Custom field added successfully!');
-				handleCancelAddField();
-			} catch (error) {
-				console.error('Error adding custom field:', error);
-				alert(`Failed to add custom field: ${error}`);
-			}
-		}
-	}
+    if (selectedPasswordItem) {
+      try {
+        await invoke('add_custom_field', {
+          itemId: selectedPasswordItem.id,
+          fieldName: newFieldName,
+          fieldType: newFieldType
+        });
+        alert('Custom field added successfully!');
+        handleCancelAddField();
+      } catch (error) {
+        console.error('Error adding custom field:', error);
+        alert(`Failed to add custom field: ${error}`);
+      }
+    }
+  }
 </script>
 
 <main class="passwordDetail" class:editing={isEditing}>
@@ -343,32 +427,31 @@ async function handleSave() {
 		<PasswordDetailHeader
 			bind:selectedPasswordItem
 			bind:isEditing={isEditing}
-			
 			displayColor={displayColor}
 			{buttons}
-			on:enterEditMode={enterEditMode}
-			on:handleReset={handleReset}
-			on:save={handleSave}
-			on:tagsReorderedPending={(e) => { pendingTagOrder = e.detail?.tags ?? null; }}
-			on:tagsSaved={(e) => dispatch('tagsSaved', e.detail)}
-			on:removeEntry={(event) => dispatch('removeEntry', event.detail)}
+
+			onEnterEditMode={enterEditMode}
+			onHandleReset={handleReset}
+			onSave={handleSave}
+			onRemoveEntry={handleRemoveRequest}
+			onTagsReorderedPending={(detail) => { pendingTagOrder = detail?.tags ?? null; }}
 		/>
 
 		<div class="detail-group" aria-busy={showSkeletonDetail}>
 			{#if !isEditing}
 				{#if showSkeletonDetail}
-					{#each displayFields as _field, i}
-						<div class="detail-skel-row" aria-hidden="true">
-							<div class="detail-skel-avatar" aria-hidden="true"></div>
-							<div class="detail-skel-texts">
-								<div class="detail-skel-line title" aria-hidden="true"></div>
-								<div class="detail-skel-line desc" aria-hidden="true"></div>
+					{#each createPlaceholders(displayFields.length) as _}
+						<div class="flex items-center gap-4 py-2" aria-hidden="true">
+							<Skeleton class="h-5 w-5 rounded-md" />
+							<div class="flex flex-1 flex-col gap-2">
+								<Skeleton class="h-4 w-40" />
+								<Skeleton class="h-3 w-32 opacity-70" />
 							</div>
 						</div>
 					{/each}
 				{:else}
 					{#each displayFields as field (field.id)}
-					<Input
+						<Input
 							title={field.name}
 							inputValue={
 								field.id === 'password'
@@ -395,34 +478,38 @@ async function handleSave() {
 										? (showPassword ? 'text' : 'password')
 										: 'text')
 								: (field.type === 'password' ? 'password' : 'text')}
-            isExpandable={true}
+							isExpandable={true}
 						>
 							<div slot="rightIcon">
 								{#if field.id === 'password' && field.value && field.value.length && field.value !== 'N/A'}
-									<button
+									<Button
 										type="button"
-										class="password-toggle"
-										on:click={() => (showPassword = !showPassword)}
+										variant="ghost"
+										size="icon"
+										class="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
+										aria-pressed={showPassword}
+										aria-label={showPassword ? 'Hide password' : 'Show password'}
+										onclick={() => (showPassword = !showPassword)}
 									>
-										<Icon
-											path={showPassword ? iconPaths.eye : iconPaths.eyeOff}
-											size="24"
-											color="currentColor"
-										/>
-									</button>
+										{#if showPassword}
+											<Eye class="h-5 w-5" />
+										{:else}
+											<EyeOff class="h-5 w-5" />
+										{/if}
+									</Button>
 								{/if}
-						</div>
+							</div>
 						</Input>
 					{/each}
 				{/if}
 			{:else}
 				{#if showSkeletonDetail}
-					{#each dndItems as _item, i}
-						<div class="detail-skel-row" aria-hidden="true">
-							<div class="detail-skel-avatar" aria-hidden="true"></div>
-							<div class="detail-skel-texts">
-								<div class="detail-skel-line title" aria-hidden="true"></div>
-								<div class="detail-skel-line desc" aria-hidden="true"></div>
+					{#each createPlaceholders(dndItems.length) as _}
+						<div class="flex items-center gap-4 py-2" aria-hidden="true">
+							<Skeleton class="h-5 w-5 rounded-md" />
+							<div class="flex flex-1 flex-col gap-2">
+								<Skeleton class="h-4 w-48" />
+								<Skeleton class="h-3 w-36 opacity-70" />
 							</div>
 						</div>
 					{/each}
@@ -430,8 +517,8 @@ async function handleSave() {
 				<div
 					class="detail-group"
 					use:dndzone={{ items: dndItems, flipDurationMs: 300, dropFromOthersDisabled: true }}
-					on:consider={handleDndConsider}
-					on:finalize={handleDndFinalize}
+					onconsider={handleDndConsider}
+					onfinalize={handleDndFinalize}
 				>
 					{#each dndItems as field (field.id)}
 							<div animate:flip={{ duration: 300, easing: cubicOut }} class="dnd-item">
@@ -455,24 +542,28 @@ async function handleSave() {
 								>
 									<div
 										slot="rightIcon"
-										style="display: flex; align-items: center; gap: 10px;"
+										class="flex items-center gap-2"
 									>
 										{#if field.id === 'password'}
-											<button
+											<Button
 												type="button"
-												class="password-toggle"
-												on:click={() => (showPassword = !showPassword)}
+												variant="ghost"
+												size="icon"
+												class="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
+												aria-pressed={showPassword}
+												aria-label={showPassword ? 'Hide password' : 'Show password'}
+												onclick={() => (showPassword = !showPassword)}
 											>
-												<Icon
-													path={showPassword ? iconPaths.eye : iconPaths.eyeOff}
-													size="24"
-													color="currentColor"
-												/>
-											</button>
+													{#if showPassword}
+														<Eye class="h-5 w-5" />
+													{:else}
+														<EyeOff class="h-5 w-5" />
+													{/if}
+											</Button>
 										{/if}
 										{#if isEditing}
 											<div class="drag-handle" data-dnd-handle>
-												<Icon path={iconPaths.reorder} size="24" color="currentColor" />
+												<ArrowDownUp class="h-6 w-6" />
 											</div>
 										{/if}
 									</div>
@@ -486,14 +577,26 @@ async function handleSave() {
 
 		{#if isEditing}
 			{#if !addingField}
-				<button class="add-field-button" on:click={() => (addingField = true)}>
-					<Icon path={iconPaths.plus} color="#fff" size="20" />
-				</button>
+				<Button
+					type="button"
+					variant="outline"
+					class="mt-3 flex h-14 w-full items-center justify-center rounded-lg border border-border/60 bg-muted/20 text-muted-foreground transition-colors hover:border-primary/50 hover:text-primary"
+					onclick={() => (addingField = true)}
+				>
+					<Plus class="h-5 w-5" />
+				</Button>
 			{:else}
-				<div class="new-field-container">
-					<button class="icon-button">
-						<Icon path={iconPaths.plus} size="24" color="currentColor" />
-					</button>
+				<div class="mt-3 flex items-center gap-3">
+					<Button
+						type="button"
+						variant="ghost"
+						size="icon"
+						class="h-9 w-9 text-muted-foreground"
+						disabled
+						aria-hidden="true"
+					>
+						<Plus class="h-5 w-5" />
+					</Button>
 					<Input
 						title="New Field"
 						placeholder="New Field"
@@ -504,15 +607,30 @@ async function handleSave() {
 						selectedIconPath={iconPaths.plus}
 						selectedIconName="plus"
 					/>
-					<select class="field-type-dropdown" bind:value={newFieldType}>
-						<option value="text">Text</option>
-						<option value="password">Password</option>
-						<option value="file">File</option>
-					</select>
+					<Select
+						type="single"
+						value={newFieldType}
+						onValueChange={(value) => (newFieldType = value as FieldType)}
+					>
+						<SelectTrigger class="w-40">
+							<span data-slot="select-value" class="flex items-center gap-2 truncate text-sm">
+								{getFieldTypeLabel(newFieldType)}
+							</span>
+						</SelectTrigger>
+						<SelectContent>
+							{#each fieldTypeOptions as option}
+								<SelectItem value={option.value}>{option.label}</SelectItem>
+							{/each}
+						</SelectContent>
+					</Select>
 				</div>
-				<div class="new-field-actions">
-					<button class="cancel-button" on:click={handleCancelAddField}>Cancel</button>
-					<button class="confirm-button" on:click={handleConfirmAddField}>Confirm</button>
+				<div class="mt-3 flex justify-end gap-2">
+					<Button type="button" variant="ghost" onclick={handleCancelAddField}>
+						Cancel
+					</Button>
+					<Button type="button" onclick={handleConfirmAddField}>
+						Confirm
+					</Button>
 				</div>
 			{/if}
 		{/if}
@@ -522,14 +640,14 @@ async function handleSave() {
 				type="button"
 				class="collapsible-header"
 				class:expanded={showTimestamps}
-				on:click={() => (showTimestamps = !showTimestamps)}
+				onclick={() => (showTimestamps = !showTimestamps)}
 			>
 				<h3>Metadata</h3>
-				<Icon
-					path={showTimestamps ? iconPaths.arrowUp : iconPaths.arrowDown}
-					size="20"
-					color="currentColor"
-				/>
+				{#if showTimestamps}
+					<ArrowUp class="h-5 w-5" />
+				{:else}
+					<ArrowDown class="h-5 w-5" />
+				{/if}
 			</button>
 			<div class="detail-group timestamps collapsible-content" class:collapsed={!showTimestamps}>
 				<div class="detail-section">
@@ -574,103 +692,79 @@ async function handleSave() {
     </div>
     {/key}
 
-    {#if showSkeletonDetail}
-        <!-- Full overlay skeleton to cover entire detail page -->
-        <div class="detail-skeleton-overlay" aria-hidden="true">
-            
-            <div class="sk-header-block">
-                <div class="sk-top">
-                    <div class="sk-header">
-                        <div class="sk-avatar"></div>
-                        <div class="sk-texts">
-                            <div class="sk-line title"></div>
-                            <div class="sk-line subtitle"></div>
-                        </div>
-                    </div>
-                <div class="sk-actions">
-                    <div class="sk-edit-btn" aria-hidden="true"></div>
-                    <div class="sk-more-btn" aria-hidden="true"></div>
-                </div>
-                </div>
-                <div class="sk-tags">
-                    {#each (selectedPasswordItem?.tags ? selectedPasswordItem.tags.split(',').map(t => t.trim()).filter(Boolean) : []) as _tag}
-                        <div class="sk-chip" aria-hidden="true"></div>
-                    {/each}
-                </div>
-            </div>
-            <div class="sk-fields">
-                {#each Array((isEditing ? dndItems.length : displayFields.length) || 6) as _, i}
-                    <div class="sk-field-row">
-                        <div class="sk-icon"></div>
-                        <div class="sk-lines">
-                            <div class="sk-line title"></div>
-                            <div class="sk-line desc"></div>
-                        </div>
-                    </div>
-                {/each}
-            </div>
-            <div class="sk-sections">
-                <div class="sk-section-title"></div>
-                <div class="sk-line wide"></div>
-                <div class="sk-line wide faint"></div>
-            </div>
-        </div>
-    {/if}
+	{#if showSkeletonDetail}
+		<div
+			class="pointer-events-none absolute inset-0 flex flex-col gap-6 bg-[color:var(--passworddetail-overlay)] p-5"
+			aria-hidden="true"
+		>
+			<div class="flex flex-col gap-4">
+				<div class="flex items-start justify-between gap-4">
+					<div class="flex items-center gap-3">
+						<Skeleton class="h-6 w-6 rounded-md" />
+						<div class="flex flex-col gap-2">
+							<Skeleton class="h-4 w-44" />
+							<Skeleton class="h-3 w-32 opacity-70" />
+						</div>
+					</div>
+					<div class="flex items-center gap-3">
+						<Skeleton class="h-6 w-20 rounded-full" />
+						<Skeleton class="h-6 w-10 rounded-full" />
+					</div>
+				</div>
+				<div class="flex flex-wrap gap-3">
+					{#each createTagPlaceholders(selectedPasswordItem?.tags) as _}
+						<Skeleton class="h-6 w-16 rounded-full" />
+					{/each}
+				</div>
+			</div>
+			<div class="flex flex-col gap-4">
+				{#each createPlaceholders(isEditing ? dndItems.length : displayFields.length) as _}
+					<div class="flex items-center gap-4">
+						<Skeleton class="h-5 w-5 rounded-md" />
+						<div class="flex flex-1 flex-col gap-2">
+							<Skeleton class="h-4 w-52" />
+							<Skeleton class="h-3 w-40 opacity-70" />
+						</div>
+					</div>
+				{/each}
+			</div>
+			<div class="flex flex-col gap-3">
+				<Skeleton class="h-4 w-36" />
+				<Skeleton class="h-3 w-3/4" />
+				<Skeleton class="h-3 w-2/3 opacity-70" />
+			</div>
+		</div>
+	{/if}
 	{#if hasUnsavedChanges}
 		<UnsavedChangesPopup on:save={handleSave} on:reset={handleReset} />
 	{/if}
 </main>
 
 <style>
-	/* Detail skeleton styles */
-	@keyframes detail-skeleton-shimmer {
-		0% { background-position: -160px 0; }
-		100% { background-position: 160px 0; }
-	}
-
 	.detail-group[aria-busy="true"] {
 		pointer-events: none;
 	}
 
-	.detail-skel-row {
-		display: flex;
-		align-items: center;
-		gap: 12px;
-		padding: 8px 0;
+	.detail-anim {
+		will-change: opacity, transform;
 	}
 
-    .detail-skel-avatar {
-        width: 20px;
-        height: 20px;
-        border-radius: 6px;
-        background: linear-gradient(90deg, #1f1f24 25%, #2a2a30 37%, #1f1f24 63%);
-        background-size: 400px 100%;
-        animation: detail-skeleton-shimmer 0.8s ease-in-out infinite;
-    }
-
-	.detail-skel-texts {
-		display: flex;
-		flex-direction: column;
-		gap: 8px;
-	}
-
-    .detail-skel-line {
-        height: 10px;
-        border-radius: 6px;
-        background: linear-gradient(90deg, #1f1f24 25%, #2a2a30 37%, #1f1f24 63%);
-        background-size: 400px 100%;
-        animation: detail-skeleton-shimmer 0.8s ease-in-out infinite;
-    }
-
-	.detail-skel-line.title { width: 220px; }
-	.detail-skel-line.desc { width: 160px; opacity: 0.6; }
-    .detail-anim {
-        will-change: opacity, transform;
-    }
 	.passwordDetail {
+		--passworddetail-surface: color-mix(in oklch, var(--card) 90%, var(--background) 10%);
+		--passworddetail-elevated: color-mix(in oklch, var(--card) 80%, var(--background) 20%);
+		--passworddetail-hover: color-mix(in oklch, var(--passworddetail-elevated) 82%, var(--background) 18%);
+		--passworddetail-border: var(--border);
+		--passworddetail-strong-text: var(--foreground);
+		--passworddetail-muted-text: color-mix(in oklch, var(--foreground) 65%, transparent);
+		--passworddetail-subtle-text: color-mix(in oklch, var(--foreground) 40%, transparent);
+		--passworddetail-accent: var(--primary);
+		--passworddetail-accent-foreground: var(--primary-foreground);
+		--passworddetail-secondary-surface: color-mix(in oklch, var(--passworddetail-elevated) 85%, var(--background) 15%);
+		--passworddetail-secondary-hover: color-mix(in oklch, var(--passworddetail-secondary-surface) 80%, var(--passworddetail-elevated) 20%);
+		--passworddetail-overlay: color-mix(in oklch, var(--passworddetail-surface) 85%, transparent);
 		padding: 20px;
-		background-color: var(--main-bg);
-		color: var(--white);
+		background-color: var(--passworddetail-surface);
+		color: var(--passworddetail-strong-text);
 		display: flex;
 		flex-direction: column;
 		height: 100%;
@@ -679,18 +773,16 @@ async function handleSave() {
 		position: relative;
 	}
 
-	
-
 	.detail-group {
 		display: flex;
 		flex-direction: column;
-		gap: 12px;
+		gap: 6px;
 		outline: none !important;
 	}
 
-	/* Smoothen FLIP movement during drag swaps */
 	.dnd-item {
 		will-change: transform;
+		touch-action: none;
 	}
 
 	.detail-group.timestamps {
@@ -706,7 +798,7 @@ async function handleSave() {
 	.detail-section h3 {
 		margin-top: 0;
 		margin-bottom: 5px;
-		color: #bbb;
+		color: var(--passworddetail-muted-text);
 		font-size: 14px;
 		display: flex;
 		align-items: center;
@@ -721,43 +813,13 @@ async function handleSave() {
 
 	.no-selection {
 		text-align: center;
-		color: #888;
+		color: var(--passworddetail-subtle-text);
 		margin-top: 50px;
-	}
-
-	.passwordDetail {
-		display: flex;
-		flex-direction: column;
-	}
-
-	/* Stack inputs with tighter vertical rhythm */
-	.detail-group {
-		display: flex;
-		flex-direction: column;
-		gap: 6px;
-		outline: none !important;
-	}
-
-	.add-field-button {
-		width: 100%;
-		height: 56px;
-		background-color: var(--near-black);
-		border: none;
-		border-radius: 10px;
-		display: flex;
-		justify-content: center;
-		align-items: center;
-		cursor: pointer;
-		margin-top: 12px;
-	}
-
-	.add-field-button:hover {
-		background-color: #17171b;
 	}
 
 	.collapsible-section {
 		margin-top: 20px;
-		border: 1px solid var(--btn-nav-border);
+		border: 1px solid var(--passworddetail-border);
 		border-radius: 8px;
 	}
 
@@ -766,16 +828,16 @@ async function handleSave() {
 		justify-content: space-between;
 		align-items: center;
 		padding: 10px 15px;
-		background-color: var(--near-black);
+		background-color: var(--passworddetail-elevated);
 		cursor: pointer;
 		font-weight: 500;
-		color: var(--white);
+		color: var(--passworddetail-strong-text);
 		border: none;
 		width: 100%;
 	}
 
 	.collapsible-header:hover {
-		background-color: #17171b;
+		background-color: var(--passworddetail-hover);
 	}
 
 	.collapsible-header h3 {
@@ -793,7 +855,7 @@ async function handleSave() {
 
 	.collapsible-content {
 		padding: 15px;
-		background-color: var(--main-bg);
+		background-color: var(--passworddetail-surface);
 		overflow-y: auto;
 		max-height: 169px;
 		transition: max-height 0.3s ease-out;
@@ -806,145 +868,13 @@ async function handleSave() {
 		overflow-y: hidden;
 	}
 
-	.password-toggle {
-		cursor: pointer;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		width: 24px;
-		height: 24px;
-		margin-left: 10px;
-		background: transparent;
-		border: none;
-		color: white;
-	}
-
-	.password-toggle :global(svg) {
-		width: 24px;
-		height: 24px;
-		fill: currentColor;
-	}
-
-	.new-field-container {
-		display: flex;
-		gap: 10px;
-		align-items: center;
-		margin-top: 12px;
-	}
-
-	.field-type-dropdown {
-		background-color: var(--near-black);
-		color: var(--white);
-		border: 1px solid var(--btn-nav-border);
-		border-radius: 5px;
-		padding: 8px;
-		font-size: 14px;
-	}
-
-	.new-field-actions {
-		display: flex;
-		justify-content: flex-end;
-		gap: 10px;
-		margin-top: 12px;
-	}
-
-	.cancel-button,
-	.confirm-button {
-		padding: 8px 16px;
-		border-radius: 5px;
-		border: none;
-		cursor: pointer;
-		font-size: 14px;
-	}
-
-	.cancel-button {
-		background-color: #444;
-		color: var(--white);
-	}
-
-	.confirm-button {
-		background-color: #007bff;
-		color: var(--white);
-	}
-
-	.icon-button {
-		background: transparent;
-		border: none;
-		color: var(--white);
-		cursor: pointer;
-		padding: 0;
-		display: flex;
-		align-items: center;
-	}
-
 	.drag-handle {
 		cursor: grab;
 		margin-left: 10px;
 	}
 
-	.dnd-item {
-		touch-action: none;
+	.detail-content[aria-hidden="true"] {
+		visibility: hidden;
+		pointer-events: none;
 	}
-
-    /* Hide live content while skeleton overlay is shown */
-    .detail-content[aria-hidden="true"] { visibility: hidden; pointer-events: none; }
-
-    /* Overlay skeleton covering entire detail page */
-    .detail-skeleton-overlay {
-        position: absolute;
-        inset: 0;
-        padding: 20px;
-        display: flex;
-        flex-direction: column;
-        gap: 0; /* control spacing explicitly via header/sections margins */
-        background: var(--main-bg);
-        pointer-events: none;
-    }
-    .sk-header-block { display: flex; flex-direction: column; gap: 5px; margin-bottom: 20px; }
-    .sk-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-    .sk-header { display: flex; align-items: center; gap: 10px; }
-    .sk-avatar {
-        width: 24px; height: 24px; border-radius: 6px;
-        background: linear-gradient(90deg, #1f1f24 25%, #2a2a30 37%, #1f1f24 63%);
-        background-size: 400px 100%;
-        animation: detail-skeleton-shimmer 0.8s ease-in-out infinite;
-    }
-    .sk-texts { display: flex; flex-direction: column; gap: 8px; }
-    .sk-line {
-        height: 10px; border-radius: 6px;
-        background: linear-gradient(90deg, #1f1f24 25%, #2a2a30 37%, #1f1f24 63%);
-        background-size: 400px 100%;
-        animation: detail-skeleton-shimmer 0.8s ease-in-out infinite;
-    }
-    .sk-line.title { width: 260px; }
-    .sk-line.subtitle { width: 180px; opacity: 0.7; }
-    .sk-tags { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 5px; visibility: hidden; }
-    .sk-chip {
-        height: 22px; min-width: 38px; border-radius: 11px;
-        background: linear-gradient(90deg, #1f1f24 25%, #2a2a30 37%, #1f1f24 63%);
-        background-size: 400px 100%;
-        animation: detail-skeleton-shimmer 0.8s ease-in-out infinite;
-    }
-    .sk-actions { display: flex; align-items: cevnter; gap: 35px;  margin-bottom: -20px;}
-    .sk-edit-btn {
-        width: 68px; height: 20px; border-radius: 14px;
-        background: linear-gradient(90deg, #1f1f24 25%, #2a2a30 37%, #1f1f24 63%);
-        background-size: 400px 100%;
-        animation: detail-skeleton-shimmer 0.8s ease-in-out infinite;
-    }
-    
-    .sk-fields { display: flex; flex-direction: column;} /* match .detail-group gap */
-    .sk-field-row { display: flex; align-items: center; gap: 14px; min-height: 56px; padding: 0px 12px; }
-    .sk-icon {
-        width: 19px; height: 19px; border-radius: 5px;
-        background: linear-gradient(90deg, #1f1f24 25%, #2a2a30 37%, #1f1f24 63%);
-        background-size: 400px 100%;
-        animation: detail-skeleton-shimmer 0.8s ease-in-out infinite;
-    }
-    .sk-lines { display: flex; flex-direction: column; gap: 8px; }
-    .sk-line.desc { width: 200px; opacity: 0.6; }
-    .sk-sections { display: flex; flex-direction: column; gap: 8px; margin-top: 20px; visibility: hidden; }
-    .sk-section-title { width: 120px; height: 10px; border-radius: 6px; background: linear-gradient(90deg, #1f1f24 25%, #2a2a30 37%, #1f1f24 63%); background-size: 400px 100%; animation: detail-skeleton-shimmer 0.8s ease-in-out infinite; visibility: hidden; }
-    .sk-line.wide { width: 60%; height: 10px; }
-    .sk-line.wide.faint { width: 45%; height: 10px; opacity: 0.5; }
 </style>

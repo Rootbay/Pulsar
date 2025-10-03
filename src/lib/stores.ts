@@ -9,5 +9,6 @@ export const isLocked = writable<boolean>(true);
 export const isDatabaseLoaded = writable<boolean>(false);
 export const needsPasswordSetup = writable<boolean>(false);
 export const showSettingsPopup = writable<boolean>(false);
+export const totpVerified = writable<boolean>(false);
 
 export { theme, settingsStore };

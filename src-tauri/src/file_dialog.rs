@@ -61,8 +61,13 @@ pub async fn elevated_copy(src: String) -> Result<String, String> {
     let file_name = src_path.file_name().and_then(|s| s.to_str()).ok_or_else(|| "Invalid source filename".to_string())?;
     let dest_path = app_dir.join(file_name);
 
-    let copy_cmd = format!("-NoProfile -Command Copy-Item -LiteralPath \"{}\" -Destination \"{}\" -Force", src, dest_path.display());
-    let start_process_cmd = format!("Start-Process -FilePath powershell -ArgumentList '{}' -Verb RunAs -Wait", copy_cmd);
+    let sanitized_src = src.replace("'", "''");
+    let sanitized_dest = dest_path.to_string_lossy().replace("'", "''");
+    let argument_list = format!(
+        "-NoProfile -Command Copy-Item -LiteralPath '{}' -Destination '{}' -Force",
+        sanitized_src,
+        sanitized_dest
+    );
 
     let status = Command::new("powershell")
         .arg("-NoProfile")
@@ -71,7 +76,7 @@ pub async fn elevated_copy(src: String) -> Result<String, String> {
         .arg("-FilePath")
         .arg("powershell")
         .arg("-ArgumentList")
-        .arg(format!("-NoProfile -Command Copy-Item -LiteralPath '{}' -Destination '{}' -Force", src.replace("'", "''"), dest_path.to_string_lossy().replace("'", "''")))
+        .arg(argument_list)
         .arg("-Verb")
         .arg("RunAs")
         .arg("-Wait")

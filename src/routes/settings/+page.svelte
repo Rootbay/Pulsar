@@ -237,30 +237,6 @@
 </div>
 
 <style>
-    :root {
-        --background: 0 0% 5.9%;
-        --foreground: 0 0% 98%;
-        --card: 240 10% 3.9%;
-        --card-foreground: 0 0% 98%;
-        --popover: 240 10% 3.9%;
-        --popover-foreground: 0 0% 98%;
-        --primary: 262.1 83.3% 57.8%;
-        --primary-foreground: 210 20% 98%;
-        --secondary: 240 3.7% 15.9%;
-        --secondary-foreground: 0 0% 98%;
-        --muted: 240 3.7% 15.9%;
-        --muted-foreground: 240 5% 64.9%;
-        --accent: 240 3.7% 15.9%;
-        --accent-foreground: 0 0% 98%;
-        --destructive: 0 84.2% 60.2%;
-        --destructive-foreground: 0 0% 98%;
-        --warning: 38 92% 50%;
-        --border: 240 3.7% 15.9%;
-        --input: 240 3.7% 15.9%;
-        --ring: 262.1 83.3% 57.8%;
-        --radius: 0.5rem;
-        --success: 142 76% 36%;
-    }
     
     * {
         margin: 0;
@@ -342,57 +318,21 @@
         align-items: center;
         justify-content: center;
         transition: all 0.3s;
+        --sidebar-icon-color: var(--primary);
+        color: var(--sidebar-icon-color);
+        background: color-mix(in oklch, var(--sidebar-icon-color) 15%, var(--background));
     }
 
-    .sidebar-icon.account {
-        background: hsl(210 100% 50% / 0.1);
-        color: hsl(210 100% 50%);
-    }
-
-    .sidebar-icon.security {
-        background: hsl(120 100% 40% / 0.1);
-        color: hsl(120 100% 40%);
-    }
-
-    .sidebar-icon.vaultstorage {
-        background: hsl(30 100% 50% / 0.1);
-        color: hsl(30 100% 50%);
-    }
-
-    .sidebar-icon.autofill {
-        background: hsla(197, 98%, 25%, 0.1);
-        color: hsl(197, 98%, 25%);
-    }
-
-    .sidebar-icon.generator {
-        background: hsla(165, 93%, 33%, 0.1);
-        color: hsl(165, 93%, 33%);
-    }
-
-    .sidebar-icon.clipboard {
-        background: hsla(128, 97%, 44%, 0.1);
-        color: hsl(128, 97%, 44%);
-    }
-
-    .sidebar-icon.backup {
-        background: hsla(320, 96%, 44%, 0.1);
-        color: hsl(320, 96%, 44%);
-    }
-    
-    .sidebar-icon.appearance {
-        background: hsl(280 100% 60% / 0.1);
-        color: hsl(280 100% 60%);
-    }
-
-    .sidebar-icon.advanced {
-        background: hsla(347, 99%, 39%, 0.1);
-        color: hsl(347, 99%, 39%);
-    }
-
-    .sidebar-icon.about {
-        background: hsl(0 0% 50% / 0.1);
-        color: hsl(0 0% 50%);
-    }
+    .sidebar-icon.account { --sidebar-icon-color: var(--primary); }
+    .sidebar-icon.security { --sidebar-icon-color: var(--chart-2); }
+    .sidebar-icon.vaultstorage { --sidebar-icon-color: var(--chart-3); }
+    .sidebar-icon.autofill { --sidebar-icon-color: var(--chart-4); }
+    .sidebar-icon.generator { --sidebar-icon-color: var(--chart-5); }
+    .sidebar-icon.clipboard { --sidebar-icon-color: var(--chart-1); }
+    .sidebar-icon.backup { --sidebar-icon-color: var(--accent); }
+    .sidebar-icon.appearance { --sidebar-icon-color: var(--secondary); }
+    .sidebar-icon.advanced { --sidebar-icon-color: var(--destructive); }
+    .sidebar-icon.about { --sidebar-icon-color: var(--muted-foreground); }
 
     .sidebar-text {
         flex: 1;
@@ -413,14 +353,13 @@
     .sidebar-arrow {
         width: 20px;
         height: 20px;
-					fill: var(--white);
+        fill: currentColor;
         color: hsl(var(--muted-foreground));
         transition: all 0.3s;
     }
     .sidebar-item.active .sidebar-arrow {
         color: hsl(var(--primary));
         transform: rotate(90deg);
-					fill: hsl(var(--primary));
     }
     .content-area {
         flex: 1;

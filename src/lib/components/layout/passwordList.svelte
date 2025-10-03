@@ -1,16 +1,26 @@
 <script lang="ts">
-  import { onMount, createEventDispatcher, tick, onDestroy } from 'svelte';
-  import Icon from "../ui/Icon.svelte";
+  import { createEventDispatcher, tick, onDestroy } from 'svelte';
   import TagIcon from "../ui/TagIcon.svelte";
   import Favicon from "../ui/Favicon.svelte";
   import { iconPaths } from "$lib/icons";
   import { invoke } from '@tauri-apps/api/core';
-
   import { selectedTag, filterCategory } from '$lib/stores';
-
-  export let items: any[] = [];
+  import type { PasswordItem } from '../../../routes/+layout.ts';
+  import { Search, X } from '@lucide/svelte';
+  import { Button } from '$lib/components/ui/button';
+  import { Input } from '$lib/components/ui/input';
+  import { ScrollArea } from '$lib/components/ui/scroll-area';
+  import { Skeleton } from '$lib/components/ui/skeleton';
+  import {
+    ContextMenu,
+    ContextMenuContent,
+    ContextMenuItem,
+    ContextMenuSeparator,
+    ContextMenuTrigger
+  } from '$lib/components/ui/context-menu';
+  export let items: PasswordItem[] = [];
   export let buttons: any[] = [];
-  export let selectedId: number | null = null; // external selection control
+  export let selectedId: number | null = null;
 
   $: tagMap = new Map(buttons.map(b => [b.text, { color: b.color, icon: b.icon }]));
 
@@ -22,7 +32,7 @@
             return { icon: firstTag.icon, color: firstTag.color };
         }
     }
-    return { icon: iconPaths.default, color: '#ccc' };
+    return { icon: iconPaths.default, color: 'var(--sidebar-border)' };
   }
 
   let isResizing = false;
@@ -31,14 +41,36 @@
   let searchTerm = '';
   
 
-  const dispatch = createEventDispatcher();
+  const dispatch = createEventDispatcher<{
+    select: PasswordItem;
+    createEntry: void;
+    editEntry: PasswordItem;
+    removeEntry: PasswordItem;
+  }>();
 
   $: itemsCount = items.length;
 
-  $: filteredItems = items.filter(item => {
-    const matchesTag = $selectedTag === null || (item.tags && (typeof item.tags === 'string' ? item.tags.split(',').map((tag: string) => tag.trim()) : item.tags).includes($selectedTag));
-    const matchesSearch = searchTerm === '' || item.title.toLowerCase().includes(searchTerm.toLowerCase()) || item.username.toLowerCase().includes(searchTerm.toLowerCase());
-    return matchesTag && matchesSearch;
+  $: filteredItems = items.filter((item) => {
+    const matchesTag =
+      $selectedTag === null ||
+      (item.tags &&
+        (typeof item.tags === 'string'
+          ? item.tags.split(',').map((tag: string) => tag.trim())
+          : item.tags
+        ).includes($selectedTag));
+
+    if (!matchesTag) {
+      return false;
+    }
+
+    if (searchTerm === '') {
+      return true;
+    }
+
+    const normalizedTerm = searchTerm.toLowerCase();
+    const titleMatch = item.title?.toLowerCase().includes(normalizedTerm) ?? false;
+    const usernameMatch = item.username?.toLowerCase().includes(normalizedTerm) ?? false;
+    return titleMatch || usernameMatch;
   });
 
   function getTagNames(item: any): string[] {
@@ -93,20 +125,14 @@
     ];
   })();
 
-  // Auto-select the first visible item when the list changes due to
-  // sidebar tag/filter changes or search updates. If the current
-  // selection is no longer visible, pick the first item in the first
-  // non-empty section; otherwise leave the selection as-is.
   $: {
     const visibleIds = new Set(filteredItems.map((i) => i.id));
     if (filteredItems.length === 0) {
-      // Clear selection when nothing is visible
       selectedItemId = null;
     } else if (selectedItemId === null || !visibleIds.has(selectedItemId)) {
       const firstSection = sectionedItems.find((s) => s.items.length > 0);
       if (firstSection) {
         const firstItem = firstSection.items[0];
-        // Use existing selection flow to update parent and local state
         selectItem(firstItem);
       }
     }
@@ -120,15 +146,8 @@
     searchTerm = '';
   }
 
-  let showContextMenu = false;
-  let contextMenuX = 0;
-  let contextMenuY = 0;
-  let selectedItem: any = null;
-  let isCreateEnabled = false;
-  let isEditRemoveEnabled = false;
   let selectedItemId: number | null = null;
 
-  // Skeleton loading when switching via sidebar (tags/filter)
   let showSkeleton = false;
   let skeletonTimer: any = null;
   let lastSkeletonKey = '';
@@ -136,14 +155,14 @@
   $: if (currentSkeletonKey !== lastSkeletonKey) {
     lastSkeletonKey = currentSkeletonKey;
     (async () => {
-      await tick(); // ensure filteredItems/sections updated for new selection
+      await tick();
       const count = filteredItems.length;
       if (count > 0) {
         showSkeleton = true;
         clearTimeout(skeletonTimer);
         skeletonTimer = setTimeout(() => {
           showSkeleton = false;
-        }, 200); // shorter animation window
+        }, 200);
       }
     })();
   }
@@ -152,60 +171,32 @@
     clearTimeout(skeletonTimer);
   });
 
-  function handleContextMenu(event: MouseEvent, item: any = null) {
-    event.preventDefault();
-    selectedItem = item;
-    isCreateEnabled = item === null;
-    isEditRemoveEnabled = item !== null;
-
-    contextMenuX = event.clientX;
-    contextMenuY = event.clientY;
-    showContextMenu = true;
-  }
-
-  function closeContextMenu() {
-    showContextMenu = false;
-    selectedItem = null;
-  }
-
   function handleCreateEntry() {
     dispatch('createEntry');
-    closeContextMenu();
   }
 
-  function handleEditEntry() {
-    if (selectedItem) {
-      dispatch('editEntry', selectedItem);
-    }
-    closeContextMenu();
+  function handleEditEntry(item: PasswordItem) {
+    dispatch('editEntry', item);
   }
 
-  function handleRemoveEntry() {
-    if (selectedItem) {
-      dispatch('removeEntry', selectedItem);
-    }
-    closeContextMenu();
+  function handleRemoveEntry(item: PasswordItem) {
+    dispatch('removeEntry', item);
   }
 
-  async function handlePinToggle() {
-    if (!selectedItem) return;
-    const id = selectedItem.id;
-    const parts = getTagNames(selectedItem);
+  async function handlePinToggle(item: PasswordItem) {
+    const id = item.id;
+    const parts = getTagNames(item);
     const lower = parts.map((t) => t.toLowerCase());
     const alreadyPinnedIdx = lower.findIndex((t) => t === 'pinned' || t === 'pin');
     let newTagsArr: string[];
     if (alreadyPinnedIdx >= 0) {
-      // Unpin: remove any pin/pinned tags
       newTagsArr = parts.filter((t, i) => lower[i] !== 'pinned' && lower[i] !== 'pin');
     } else {
-      // Pin: add canonical 'Pinned' tag at the start
       newTagsArr = ['Pinned', ...parts];
     }
     const newTags = newTagsArr.join(',');
     try {
       await invoke('update_password_item_tags', { id, tags: newTags });
-      // Update local view so UI reflects immediately
-      selectedItem = { ...selectedItem, tags: newTags };
       const idx = items.findIndex((it) => it.id === id);
       if (idx !== -1) {
         items = [
@@ -217,11 +208,8 @@
     } catch (e) {
       console.error('Failed to toggle pin:', e);
       alert(`Failed to ${alreadyPinnedIdx >= 0 ? 'unpin' : 'pin'} item: ${e}`);
-    } finally {
-      closeContextMenu();
     }
   }
-
   function startResize(e: MouseEvent) {
     isResizing = true;
     startX = e.clientX;
@@ -254,135 +242,180 @@
     dispatch('select', item);
   }
 
-  function handleGlobalMouseDown(e: MouseEvent) {
-    // Don't close if clicking inside the context menu itself
-    const target = e.target as HTMLElement;
-    if (target && target.closest('.context-menu')) return;
-    // Only close menu on left-clicks so right-click keeps it open
-    if (e.button === 0) closeContextMenu();
-  }
-
-  onMount(() => {
-    window.addEventListener('mousedown', handleGlobalMouseDown);
-    return () => {
-      window.removeEventListener('mousedown', handleGlobalMouseDown);
-    };
-  });
 </script>
 
 <nav class="passwordList">
-  <div class="navInner" aria-busy={showSkeleton} on:contextmenu={(e) => { const t = e.target as HTMLElement; if (!t.closest('.item')) handleContextMenu(e, null); }}>
-    <div class="topControls" role="region" aria-label="Navigation controls">
-      <div class="searchContainer">
-        <button class="searchBtn" aria-label="Search" title="Search">
-          <Icon
-            path={iconPaths.search}
-            size="20"
-            viewBox="0 0 40 40"
-            color="currentColor"
-          />
-        </button>
-        <input type="text" placeholder="Search..." class="searchInput" bind:value={searchTerm} on:input={handleSearchInput} />
-        {#if searchTerm}
-          <button class="clearSearchBtn" on:click={clearSearch} aria-label="Clear search">
-            <Icon path={iconPaths.clear} size="16" viewBox="0 0 48 48" color="currentColor" />
-          </button>
-        {/if}
-      </div>
+  <ContextMenu>
+    <ContextMenuTrigger>
+      <div class="navInner" aria-busy={showSkeleton} role="region" aria-label="Password list" tabindex="-1">
+        <div class="topControls" role="region" aria-label="Navigation controls">
+          <div class="searchContainer">
+            <Button
+              type="button"
+              class="searchBtn h-8 w-8 shrink-0 text-muted-foreground hover:text-foreground"
+              variant="ghost"
+              size="icon"
+              aria-label="Search"
+              title="Search"
+            >
+              <Search class="w-5 h-5" />
+            </Button>
+            <Input
+              type="text"
+              placeholder="Search..."
+              class="searchInput h-8 border-0 bg-transparent px-2 text-sm shadow-none focus-visible:border-0 focus-visible:ring-0 focus-visible:ring-offset-0"
+              bind:value={searchTerm}
+              oninput={handleSearchInput}
+            />
+            {#if searchTerm}
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                class="clearSearchBtn h-8 w-8 shrink-0 text-muted-foreground hover:text-foreground"
+                onclick={clearSearch}
+                aria-label="Clear search"
+              >
+                <X class="w-4 h-4" />
+              </Button>
+            {/if}
+          </div>
 
-      <div class="segButtons" role="tablist" aria-label="Filter tabs">
-                <button class="segBtn all" role="tab" aria-selected={$filterCategory === 'all'} on:click={() => filterCategory.set('all')}>All <span class="count">({itemsCount})</span></button>
-        <button class="segBtn recent" role="tab" aria-selected={$filterCategory === 'recent'} on:click={() => filterCategory.set('recent')}>Recently</button>
-      </div>
-    </div>
+          <div class="segButtons" role="tablist" aria-label="Filter tabs">
+            <Button
+              type="button"
+              class="segBtn"
+              role="tab"
+              variant="ghost"
+              size="sm"
+              aria-selected={$filterCategory === 'all'}
+              onclick={() => filterCategory.set('all')}
+            >
+              All <span class="count">({itemsCount})</span>
+            </Button>
+            <Button
+              type="button"
+              class="segBtn"
+              role="tab"
+              variant="ghost"
+              size="sm"
+              aria-selected={$filterCategory === 'recent'}
+              onclick={() => filterCategory.set('recent')}
+            >
+              Recently
+            </Button>
+          </div>
+        </div>
 
-    {#if filteredItems.length === 0}
-      <ul class="itemList" role="list">
-        <li class="no-items-message">
-          {#if $selectedTag}
-            No passwords found for tag "{$selectedTag}".
-          {:else}
-            No passwords found. Create a new entry or select a tag.
-          {/if}
-        </li>
-      </ul>
-    {:else}
-      {#each sectionedItems as section (section.title)}
-        {#if section.items.length}
-          <div class="sectionTitle" role="heading" aria-level="2">{section.title}</div>
-          <ul class="itemList" role="list" on:contextmenu={(e) => handleContextMenu(e, null)}>
-            {#if showSkeleton}
-              {#each Array(section.items.length) as _, i}
-                <li class="item" aria-hidden="true">
-                  <a class="itemLink">
-                    <div class="itemLeft">
-                      <div class="skeleton-avatar" aria-hidden="true"></div>
-                      <div class="itemTexts">
-                        <div class="skeleton-line title" aria-hidden="true"></div>
-                        <div class="skeleton-line desc" aria-hidden="true"></div>
-                      </div>
-                    </div>
-                  </a>
+        <ScrollArea class="navScroll">
+          <div class="scrollContent">
+            {#if filteredItems.length === 0}
+              <ul class="itemList" role="list">
+                <li class="no-items-message">
+                  {#if $selectedTag}
+                    No passwords found for tag "{$selectedTag}".
+                  {:else}
+                    No passwords found. Create a new entry or select a tag.
+                  {/if}
                 </li>
-              {/each}
+              </ul>
             {:else}
-              {#each section.items as item (item.id)}
-                {@const fallback = getFallback(item)}
-                <li class="item" class:selected={selectedItemId === item.id} role="listitem" on:contextmenu|stopPropagation={(e) => handleContextMenu(e, item)}>
-                  <a
-                    href={item.url}
-                    class="itemLink"
-                    on:click|preventDefault={() => selectItem(item)}
-                    draggable="false"
-                  >
-                    <div class="itemLeft">
-                      <Favicon 
-                        url={item.url} 
-                        title={item.title} 
-                        fallbackIcon={fallback.icon} 
-                        fallbackColor={fallback.color}
-                      />
-                      <div class="itemTexts">
-                        <div class="itemTitle">{item.title}</div>
-                        <div class="itemDesc">{item.username}</div>
-                      </div>
-                    </div>
-                    <div class="itemTags">
-                      <TagIcon tagNames={item.tags ? item.tags.split(',').map((tag: string) => tag.trim()) : []} {tagMap} />
-                    </div>
-                  </a>
-                </li>
+              {#each sectionedItems as section (section.title)}
+                {#if section.items.length}
+                  <div class="sectionTitle" role="heading" aria-level="2">{section.title}</div>
+                  <ul class="itemList" role="list">
+                    {#if showSkeleton}
+                      {#each section.items as placeholder (placeholder.id)}
+                        <li class="item" aria-hidden="true">
+                          <div class="itemLink" role="presentation">
+                            <div class="itemLeft">
+                              <Skeleton class="h-7 w-7 rounded-md opacity-70" aria-hidden="true" />
+                              <div class="itemTexts">
+                                <Skeleton class="h-3 w-36 rounded-md opacity-80" aria-hidden="true" />
+                                <Skeleton class="mt-2 h-3 w-24 rounded-md opacity-60" aria-hidden="true" />
+                              </div>
+                            </div>
+                          </div>
+                        </li>
+                      {/each}
+                    {:else}
+                      {#each section.items as item (item.id)}
+                        {@const fallback = getFallback(item)}
+                        <li class="item" class:selected={selectedItemId === item.id} role="listitem">
+                          <ContextMenu>
+                            <ContextMenuTrigger>
+                              <a
+                                href={item.url}
+                                class="itemLink"
+                                onclick={(event: MouseEvent) => { event.preventDefault(); selectItem(item); }}
+                                draggable="false"
+                              >
+                                <div class="itemLeft">
+                                  <Favicon
+                                    url={item.url}
+                                    title={item.title}
+                                    fallbackIcon={fallback.icon}
+                                    fallbackColor={fallback.color}
+                                  />
+                                  <div class="itemTexts">
+                                    <div class="itemTitle">{item.title}</div>
+                                    <div class="itemDesc">{item.username}</div>
+                                  </div>
+                                </div>
+                                <div class="itemTags">
+                                  <TagIcon
+                                    tagNames={item.tags ? item.tags.split(',').map((tag: string) => tag.trim()) : []}
+                                    {tagMap}
+                                  />
+                                </div>
+                              </a>
+                            </ContextMenuTrigger>
+                            <ContextMenuContent class="w-48">
+                              <ContextMenuItem onSelect={() => handlePinToggle(item)}>{isPinned(item) ? 'Unpin' : 'Pin'}</ContextMenuItem>
+                              <ContextMenuSeparator />
+                              <ContextMenuItem onSelect={() => handleEditEntry(item)}>Edit Entry</ContextMenuItem>
+                              <ContextMenuItem
+                                class="text-destructive focus:text-destructive data-[highlighted]:bg-destructive/10"
+                                onSelect={() => handleRemoveEntry(item)}
+                              >
+                                Remove Entry
+                              </ContextMenuItem>
+                            </ContextMenuContent>
+                          </ContextMenu>
+                        </li>
+                      {/each}
+                    {/if}
+                  </ul>
+                {/if}
               {/each}
             {/if}
-          </ul>
-        {/if}
-      {/each}
-    {/if}
-  </div>
-  <button class="resizer" on:mousedown={startResize} aria-label="Resize sidebar"></button>
-
-  {#if showContextMenu}
-    <div
-      class="context-menu"
-      role="menu"
-      tabindex="0"
-      style="left: {contextMenuX}px; top: {contextMenuY}px;"
-      on:keydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { closeContextMenu(); } }}
-    >
-      <button type="button" on:click={handleCreateEntry} disabled={!isCreateEnabled}>Create Entry</button>
-      <button type="button" on:click={handlePinToggle} disabled={!isEditRemoveEnabled}>{isPinned(selectedItem) ? 'Unpin' : 'Pin'}</button>
-      <button type="button" on:click={handleEditEntry} disabled={!isEditRemoveEnabled}>Edit Entry</button>
-      <button type="button" on:click={handleRemoveEntry} disabled={!isEditRemoveEnabled}>Remove Entry</button>
-    </div>
-  {/if}
+          </div>
+        </ScrollArea>
+      </div>
+    </ContextMenuTrigger>
+    <ContextMenuContent class="w-48">
+      <ContextMenuItem onSelect={handleCreateEntry}>Create Entry</ContextMenuItem>
+    </ContextMenuContent>
+  </ContextMenu>
+  <button class="resizer" onmousedown={startResize} aria-label="Resize sidebar"></button>
 </nav>
 
 <style>
   .passwordList {
+    --passwordlist-surface: color-mix(in oklch, var(--sidebar) 90%, var(--background) 10%);
+    --passwordlist-elevated: color-mix(in oklch, var(--sidebar) 80%, var(--background) 20%);
+    --passwordlist-hover: color-mix(in oklch, var(--sidebar) 65%, var(--background) 35%);
+    --passwordlist-strong-text: var(--sidebar-foreground);
+    --passwordlist-muted-text: color-mix(in oklch, var(--sidebar-foreground) 60%, transparent);
+    --passwordlist-subtle-text: color-mix(in oklch, var(--sidebar-foreground) 35%, transparent);
+    --passwordlist-border: var(--sidebar-border);
+    --passwordlist-scroll-thumb: color-mix(in oklch, var(--sidebar-border) 75%, var(--sidebar) 25%);
+    --passwordlist-skeleton-base: color-mix(in oklch, var(--passwordlist-elevated) 88%, var(--background) 12%);
+    --passwordlist-skeleton-highlight: color-mix(in oklch, var(--passwordlist-elevated) 70%, var(--background) 30%);
     width: var(--passwordList-width);
     min-width: 150px;
     position: relative;
-    background: var(--sidepanel-gradient);
+    background: var(--passwordlist-surface);
     height: 100%;
     display: flex;
     flex-direction: column;
@@ -393,10 +426,16 @@
     flex-direction: column;
     box-sizing: border-box;
     flex-grow: 1;
-    /* Make the whole list area scroll instead of each section */
-    overflow-y: auto;
-    /* Ensure flex child can actually shrink to allow scrolling */
     min-height: 0;
+    overflow: hidden;
+  }
+
+  .scrollContent {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 0 12px 12px;
+    box-sizing: border-box;
   }
 
   .topControls {
@@ -414,52 +453,12 @@
   .searchContainer {
     display: flex;
     align-items: center;
-    background: #202024;
+    background: var(--passwordlist-elevated);
     border-radius: 16px;
     height: 32px;
     width: 100%;
     padding: 0 5px;
     box-sizing: border-box;
-  }
-
-  .searchBtn {
-    border: none;
-    background: transparent;
-    color: var(--white);
-    cursor: pointer;
-    display: grid;
-    place-items: center;
-    flex-shrink: 0;
-    z-index: 1;
-    padding-right: 8px;
-  }
-
-  .searchBtn :global(svg) {
-    opacity: 0.8;
-  }
-
-  .searchInput {
-    flex-grow: 1;
-    height: 100%;
-    border: none;
-    background: transparent;
-    color: var(--white);
-    padding: 0;
-    font-size: 14px;
-    caret-color: currentColor; 
-    outline: none;
-  }
-
-  .clearSearchBtn {
-    border: none;
-    background: transparent;
-    color: var(--white);
-    cursor: pointer;
-    display: grid;
-    place-items: center;
-    flex-shrink: 0;
-    z-index: 1;
-    padding: 0 5px;
   }
 
   .segButtons {
@@ -468,45 +467,20 @@
     width: 100%;
   }
 
-  .segBtn {
-    height: 32px;
-    padding: 0 12px;
-    border-radius: 7px;
-    border: 2px solid var(--btn-nav-border);
-    background: var(--near-black);
-    color: rgba(247, 219, 209, 0.5);
-    font-size: 13px;
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    cursor: pointer;
-    transition: background-image 220ms ease, color 220ms ease;
-  }
-
-  .segBtn[aria-selected="true"] {
-    background: var(--near-black);
-    color: transparent;
-    background-image: linear-gradient(to right, #F7DBD1, #C587CB);
-    -webkit-background-clip: text;
-    background-clip: text;
-  }
-
   .sectionTitle {
     margin-left: 12px;
     font-size: 12px;
-    color: #BDBDBD;
+    color: var(--passwordlist-muted-text);
     margin-top: 0;
   }
 
   .itemList {
     margin-top: 8px;
     list-style: none;
-    /* Tighten spacing between consecutive lists */
     padding: 0 0 6px 0;
     display: flex;
     flex-direction: column;
     gap: 2px;
-    /* Do not grow; avoids large empty space between sections */
     flex-grow: 0;
     overflow: visible;
   }
@@ -520,14 +494,14 @@
   }
 
   .itemList::-webkit-scrollbar-thumb {
-    background-color: #444;
+    background-color: var(--passwordlist-scroll-thumb);
     border-radius: 10px;
     border: 2px solid transparent;
     background-clip: padding-box;
   }
 
   .itemList::-webkit-scrollbar-thumb:hover {
-    background-color: #555;
+    background-color: color-mix(in oklch, var(--passwordlist-scroll-thumb) 85%, var(--passwordlist-hover) 15%);
   }
 
   .itemList::-webkit-scrollbar-button {
@@ -544,12 +518,13 @@
     box-sizing: border-box;
     cursor: pointer;
   }
+
   .item:hover {
-    background: #17171B;
+    background: var(--passwordlist-hover);
   }
 
   .item.selected {
-    background: #17171B;
+    background: var(--passwordlist-hover);
   }
 
   .itemLink {
@@ -581,7 +556,7 @@
 
   .itemTitle {
     font-size: 14px;
-    color: #FFFFFF;
+    color: var(--passwordlist-strong-text);
     line-height: 1;
     user-select: none;
   }
@@ -589,7 +564,7 @@
   .itemDesc {
     margin-top: 3px;
     font-size: 12px;
-    color: rgba(255, 255, 255, 0.5);
+    color: var(--passwordlist-muted-text);
     line-height: 1;
     user-select: none;
   }
@@ -600,102 +575,32 @@
     align-items: center;
   }
 
-  /* Skeleton loading styles */
-  @keyframes skeleton-shimmer {
-    0% { background-position: -160px 0; }
-    100% { background-position: 160px 0; }
-  }
-
   .navInner[aria-busy="true"] {
     pointer-events: none;
   }
 
-  .skeleton-avatar {
-    width: 28px;
-    height: 28px;
-    border-radius: 6px;
-    background: linear-gradient(90deg, #1f1f24 25%, #2a2a30 37%, #1f1f24 63%);
-    background-size: 400px 100%;
-    animation: skeleton-shimmer 0.8s ease-in-out infinite;
-  }
-
-  .skeleton-line {
-    height: 12px;
-    border-radius: 6px;
-    background: linear-gradient(90deg, #1f1f24 25%, #2a2a30 37%, #1f1f24 63%);
-    background-size: 400px 100%;
-    animation: skeleton-shimmer 0.8s ease-in-out infinite;
-  }
-
-  .skeleton-line.title {
-    width: 140px;
-    margin-bottom: 8px;
-  }
-
-  .skeleton-line.desc {
-    width: 100px;
-    opacity: 0.6;
-  }
-
-  /* No skeleton for tag icons per request */
-
   .no-items-message {
     padding: 20px;
     text-align: center;
-    color: #aaa;
+    color: var(--passwordlist-subtle-text);
     font-style: italic;
   }
 
   .resizer {
-	width: 5px;
-	height: 100%;
-	background: transparent;
-	position: absolute;
-	right: 0;
-	top: 0;
-	cursor: ew-resize;
-	z-index: 6;
-	border: none;
-	padding: 0;
+    width: 5px;
+    height: 100%;
+    background: transparent;
+    position: absolute;
+    right: 0;
+    top: 0;
+    cursor: ew-resize;
+    z-index: 6;
+    border: none;
+    padding: 0;
   }
 
   @media (pointer: coarse) {
-	.resizer { width: 12px; }
-  }
-
-  .context-menu {
-    position: fixed;
-    background-color: var(--near-black);
-    border: 1px solid var(--btn-nav-border);
-    border-radius: 8px;
-    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
-    z-index: 200;
-    display: flex;
-    flex-direction: column;
-    padding: 5px 0;
-  }
-
-  .context-menu:hover {
-    background-color: #17171A;
-  }
-
-  .context-menu button {
-    background: none;
-    border: none;
-    color: var(--white);
-    padding: 8px 15px;
-    text-align: left;
-    cursor: pointer;
-    width: 100%;
-    white-space: nowrap;
-  }
-
-  .context-menu button:hover:not(:disabled) {
-    background-color: #3a3a3a;
-  }
-
-  .context-menu button:disabled {
-    color: #666;
-    cursor: not-allowed;
+    .resizer { width: 12px; }
   }
 </style>
+

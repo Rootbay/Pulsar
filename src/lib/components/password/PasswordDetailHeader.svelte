@@ -1,80 +1,122 @@
+<svelte:options runes />
+
 <script lang="ts">
-	import type { PasswordItem } from '../../../routes/+layout.ts';
-	import { createEventDispatcher } from 'svelte';
-	import TagList from './TagList.svelte';
-	import Icon from '../ui/Icon.svelte';
-	import { iconPaths } from '$lib/icons';
+  import type { PasswordItem } from '../../../routes/+layout.ts';
+  import TagList from './TagList.svelte';
+  import Icon from '../ui/Icon.svelte';
+  import { iconPaths } from '$lib/icons';
+  import { Circle } from '@lucide/svelte';
 
-	const dispatch = createEventDispatcher();
+  interface Props {
+    selectedPasswordItem: PasswordItem | null;
+    isEditing: boolean;
+    displayColor: string;
+    buttons: any[];
 
-	export let selectedPasswordItem: PasswordItem | null;
-	export let isEditing: boolean;
-	
-	
-	export let displayColor: string;
-	export let buttons: any[];
+    onEnterEditMode?: () => void;
+    onHandleReset?: () => void;
+    onSave?: () => void;
+    onRemoveEntry?: (id: number | undefined) => void;
+    onTagsReorderedPending?: (detail: any) => void;
+  }
 
-	let showMoreDropdown = false;
+  let {
+	selectedPasswordItem = $bindable<PasswordItem | null>(),
+	isEditing = $bindable(false),
+	displayColor,
+	buttons,
+	onEnterEditMode,
+	onHandleReset,
+	onSave,
+	onRemoveEntry,
+	onTagsReorderedPending
+  }: Props = $props();
 
-    let prevColor: string | null = null;
-    let pulse = false;
+  let showMoreDropdown = $state(false);
 
-    $: if (selectedPasswordItem) {
-        if (prevColor === null) {
-            prevColor = displayColor;
-        } else if (prevColor !== displayColor) {
-            pulse = false;
-            setTimeout(() => { pulse = true; prevColor = displayColor; setTimeout(() => (pulse = false), 360); }, 0);
-        }
+  let prevColor: string | null = $state(null);
+  let pulse = $state(false);
+
+  $effect(() => {
+    if (selectedPasswordItem) {
+      if (prevColor === null) {
+        prevColor = displayColor;
+      } else if (prevColor !== displayColor) {
+        pulse = false;
+        setTimeout(() => {
+          pulse = true;
+          prevColor = displayColor;
+          setTimeout(() => (pulse = false), 360);
+        }, 0);
+      }
     }
+  });
 
-    function enterEditMode() {
-        dispatch('enterEditMode');
-    }
+  function enterEditMode() {
+    onEnterEditMode?.();
+  }
 
-	function handleReset() {
-		dispatch('handleReset');
-	}
+  function handleReset() {
+    onHandleReset?.();
+  }
 </script>
 
 {#if selectedPasswordItem}
-    <div class="detail-header" style="--display-color: {displayColor};">
-        <div class="title-and-tags">
-            <div class="title-container">
-                {#if selectedPasswordItem.img}
-                    <img src={selectedPasswordItem.img} alt={selectedPasswordItem.title} class="title-image" />
-                {:else}
-                    <Icon path={iconPaths.default} size="24" color={displayColor} className="header-icon" />
-                {/if}
-                <h2 class="header-title" style="color: {displayColor}">{selectedPasswordItem.title}</h2>
-                <span class="color-pulse-bg" aria-hidden="true" class:pulsing={pulse}></span>
-            </div>
-    <TagList
-      bind:selectedPasswordItem
-      bind:isEditing
-      {buttons}
-      on:reorderPending={(e) => dispatch('tagsReorderedPending', e.detail)}
-      on:tagsSaved={(e) => dispatch('tagsSaved', e.detail)}
-    />
-        </div>
-		<div class="detail-actions">
-			<button class="edit-button" on:click={isEditing ? () => dispatch('save') : enterEditMode}>
-				{isEditing ? 'Save' : 'Modify'}
-			</button>
-			<div class="more-dropdown-container">
-				<button class="more-button" on:click={() => (showMoreDropdown = !showMoreDropdown)}>
-					<Icon path={iconPaths.more} size="24" color="currentColor" />
-				</button>
-				{#if showMoreDropdown}
-					<div class="more-dropdown-menu">
-						<button on:click={() => dispatch('removeEntry', selectedPasswordItem?.id)}
-							>Delete Entry</button
-						>
-					</div>
-				{/if}
-			</div>
-		</div>
-	</div>
+  <div class="detail-header" style="--display-color: {displayColor};">
+    <div class="title-and-tags">
+      <div class="title-container">
+        {#if selectedPasswordItem.img}
+          <img
+            src={selectedPasswordItem.img}
+            alt={selectedPasswordItem.title}
+            class="title-image"
+          />
+        {:else}
+			<Circle
+				color={displayColor}
+				className="header-icon w-6 h-6"
+			/>
+        {/if}
+        <h2 class="header-title" style="color: {displayColor}">
+          {selectedPasswordItem.title}
+        </h2>
+        <span class="color-pulse-bg" aria-hidden="true" class:pulsing={pulse}></span>
+      </div>
+
+      <TagList
+        bind:selectedPasswordItem
+        bind:isEditing
+        {buttons}
+        onReorderPending={onTagsReorderedPending}
+      />
+    </div>
+
+    <div class="detail-actions">
+      <button
+        class="edit-button"
+        onclick={isEditing ? () => onSave?.() : enterEditMode}
+      >
+        {isEditing ? 'Save' : 'Modify'}
+      </button>
+      <div class="more-dropdown-container">
+        <button
+          class="more-button"
+          onclick={() => (showMoreDropdown = !showMoreDropdown)}
+        >
+          <Icon path={iconPaths.more} size="24" color="currentColor" />
+        </button>
+        {#if showMoreDropdown}
+          <div class="more-dropdown-menu">
+            <button
+              onclick={() => onRemoveEntry?.(selectedPasswordItem?.id)}
+            >
+              Delete Entry
+            </button>
+          </div>
+        {/if}
+      </div>
+    </div>
+  </div>
 {/if}
 
 <style>
@@ -110,10 +152,6 @@
         flex-direction: column;
     }
 
-    /* Smooth color transition for icon */
-    .header-icon { transition: fill 260ms ease; }
-
-    /* Ambient pulse background when color changes */
     .title-container { position: relative; }
     .color-pulse-bg {
         position: absolute;

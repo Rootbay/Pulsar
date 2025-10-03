@@ -1,0 +1,21 @@
+<script lang="ts">
+	import type { Snippet } from "svelte";
+	import { cn } from "$lib/utils.js";
+
+	let {
+		class: className,
+		children,
+		...restProps
+	}: {
+		class?: string;
+		children?: Snippet;
+	} = $props();
+</script>
+
+<span
+	data-slot="context-menu-shortcut"
+	class={cn("ml-auto text-xs tracking-widest text-muted-foreground/70", className)}
+	{...restProps}
+>
+	{@render children?.()}
+</span>

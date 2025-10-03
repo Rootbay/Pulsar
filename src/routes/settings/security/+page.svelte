@@ -1,648 +1,480 @@
 <script lang="ts">
-	
-	import { securitySettings } from '$lib/stores/security';
-	import type { SecuritySettings } from '$lib/config/settings';
-	import Switch from '$lib/components/ui/Switch.svelte';
-	import Select from '$lib/components/ui/Select.svelte';
-	import SettingsCard from '$lib/components/ui/SettingsCard.svelte';
-	import { iconPaths } from '$lib/icons';
+  import { get } from 'svelte/store';
+  import { onDestroy } from 'svelte';
+  import { securitySettings } from '$lib/stores/security';
+  import type { SecuritySettings } from '$lib/config/settings';
+  import { Button } from '$lib/components/ui/button';
+  import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '$lib/components/ui/card';
+  import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '$lib/components/ui/dialog';
+  import { Input } from '$lib/components/ui/input';
+  import { Label } from '$lib/components/ui/label';
+  import { Select, SelectContent, SelectItem, SelectTrigger } from '$lib/components/ui/select';
+  import { Switch } from '$lib/components/ui/switch';
+  import { Badge } from '$lib/components/ui/badge';
+  import { cn } from '$lib/utils';
+  import { Lock, RefreshCw, Trash2, ShieldCheck, Fingerprint, Smartphone, CalendarClock, MonitorSmartphone, EyeOff, Eye, TriangleAlert, HardDrive, Shield } from '@lucide/svelte';
+  
+  type BooleanSettingKey = {
+    [K in keyof SecuritySettings]: SecuritySettings[K] extends boolean ? K : never;
+  }[keyof SecuritySettings];
 
-	let currentSecuritySettings: SecuritySettings;
-	securitySettings.subscribe(value => {
-		currentSecuritySettings = value;
-	});
+  type AutoLockOption = {
+    value: SecuritySettings['autoLockInactivity'];
+    label: string;
+  };
 
-	let passwordModalOpen = false;
-	let showCurrentPassword = false;
+  const autoLockOptions: AutoLockOption[] = [
+    { value: 'Immediate', label: 'Immediate' },
+    { value: '1 minute', label: '1 minute' },
+    { value: '5 minutes', label: '5 minutes' },
+    { value: '15 minutes', label: '15 minutes' },
+    { value: 'Custom...', label: 'Custom...' }
+  ];
 
-	function updateSettings(newValues: Partial<SecuritySettings>) {
-		securitySettings.set({ ...currentSecuritySettings, ...newValues });
-	}
+  const privacyToggles: Array<{
+    key: BooleanSettingKey;
+    title: string;
+    description: string;
+  }> = [
+    {
+      key: 'externalBreachCheck',
+      title: 'External Breach Check',
+      description: 'Cross-reference vault items against known breach databases.'
+    },
+    {
+      key: 'localReuseDetection',
+      title: 'Local Reuse Detection',
+      description: 'Alert when passwords repeat across vault entries.'
+    },
+    {
+      key: 'secureRAMHandling',
+      title: 'Secure RAM Handling',
+      description: 'Allocate hardened memory regions for sensitive operations.'
+    }
+  ];
 
-	function toggleSwitch(setting: keyof SecuritySettings) {
-		if (typeof currentSecuritySettings[setting] === 'boolean') {
-			updateSettings({ [setting]: !currentSecuritySettings[setting] } as Partial<SecuritySettings>);
-		}
-	}
+  const pairedDevices: Array<{
+    name: string;
+    lastSeen: string;
+    isCurrent: boolean;
+    type: string;
+    Icon: typeof Fingerprint;
+  }> = [
+    {
+      name: 'Touch ID (MacBook Pro)',
+      lastSeen: '2 minutes ago',
+      isCurrent: true,
+      type: 'Biometric',
+      Icon: Fingerprint
+    },
+    {
+      name: 'Pixel 8 (Device Key)',
+      lastSeen: 'Yesterday � 20:14',
+      isCurrent: false,
+      type: 'Device Key',
+      Icon: Smartphone
+    }
+  ];
 
-	function openPasswordModal() {
-		passwordModalOpen = true;
-	}
+  const securityActions: Array<{
+    title: string;
+    description: string;
+    Icon: typeof RefreshCw;
+  }> = [
+    {
+      title: 'Re-key Vault',
+      description: 'Rotate encryption keys and re-encrypt stored data.',
+      Icon: RefreshCw
+    },
+    {
+      title: 'Clear Memory',
+      description: 'Scrub sensitive material from memory immediately.',
+      Icon: Trash2
+    },
+    {
+      title: 'Integrity Check',
+      description: 'Verify vault contents for tampering or corruption.',
+      Icon: ShieldCheck
+    }
+  ];
 
-	function closePasswordModal() {
-		passwordModalOpen = false;
-	}
+  let currentSettings: SecuritySettings = get(securitySettings);
+  let passwordModalOpen = false;
+  let showCurrentPassword = false;
+  let currentPassword = '';
+  let newPassword = '';
+  let confirmPassword = '';
 
-	function togglePasswordVisibility() {
-		showCurrentPassword = !showCurrentPassword;
-	}
+  const unsubscribe = securitySettings.subscribe((settings) => {
+    currentSettings = settings;
+  });
 
-	function handleSelectChange(event: Event) {
-		const target = event.target as HTMLSelectElement;
-		updateSettings({ autoLockInactivity: target.value });
-	}
+  onDestroy(() => {
+    unsubscribe();
+  });
+
+  function applyChanges(partial: Partial<SecuritySettings>) {
+    currentSettings = { ...currentSettings, ...partial };
+    securitySettings.set(currentSettings);
+  }
+
+  function toggleSetting(setting: BooleanSettingKey) {
+    applyChanges({ [setting]: !currentSettings[setting] } as Partial<SecuritySettings>);
+  }
+
+  function updateAutoLock(value: SecuritySettings['autoLockInactivity']) {
+    applyChanges({ autoLockInactivity: value });
+  }
+
+  function openPasswordModal() {
+    passwordModalOpen = true;
+    currentPassword = '';
+    newPassword = '';
+    confirmPassword = '';
+    showCurrentPassword = false;
+  }
+
+  function closePasswordModal() {
+    passwordModalOpen = false;
+  }
+
+  function handleDialogChange(open: boolean) {
+    passwordModalOpen = open;
+    if (!passwordModalOpen) {
+      showCurrentPassword = false;
+    }
+  }
+
+  function togglePasswordVisibility() {
+    showCurrentPassword = !showCurrentPassword;
+  }
 </script>
 
-<div class="main-content">
-  <SettingsCard icon={iconPaths.lock} title="Master Password & Encryption" description="Manage your master password and encryption settings.">
-    <div style="margin-bottom: 1.5rem;">
-      <div class="setting-row">
-        <div class="setting-info">
-          <div class="setting-label">Master Password</div>
-          <div class="setting-description">Change your master password to secure your vault</div>
-        </div>
-        <button class="btn btn-outline" on:click={openPasswordModal}>Change Password</button>
+<div class="flex flex-1 flex-col gap-6 overflow-y-auto px-8 py-8">
+  <Card class="border-border/60 bg-background/80 backdrop-blur">
+    <CardHeader class="flex flex-row items-start gap-3 border-b border-border/40 pb-4">
+      <div class="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
+        <Lock class="h-5 w-5" aria-hidden="true" />
       </div>
-      <div class="kdf-info">
+      <div>
+        <CardTitle>Master Password &amp; Encryption</CardTitle>
+        <CardDescription>Manage the master password and key derivation policy.</CardDescription>
+      </div>
+    </CardHeader>
+    <CardContent class="flex flex-col gap-5 pt-4">
+      <div class="flex flex-col gap-2 rounded-lg border border-border/60 bg-muted/20 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <p style="font-weight: 500;">Key Derivation Function</p>
-          <p style="font-size: 0.875rem; color: hsl(var(--muted-foreground));">Argon2id (m=64MB, t=3, p=4)</p>
+          <p class="text-sm font-semibold text-foreground">Master Password</p>
+          <p class="text-sm text-muted-foreground">Update the password used to unlock your vault.</p>
         </div>
-        <button class="btn btn-outline btn-sm">Reconfigure KDF</button>
+        <Button variant="outline" onclick={openPasswordModal}>
+          Change Password
+        </Button>
       </div>
-    </div>
-  </SettingsCard>
 
-  <SettingsCard icon={iconPaths.calendar} title="Auto-lock Controls" description="Configure automatic locking behavior.">
-    <div>
-      <div class="setting-row">
-        <div class="setting-info">
-          <div class="setting-label">Lock on Suspend</div>
-          <div class="setting-description">Automatically lock when system goes to sleep</div>
+      <div class="flex flex-col gap-2 rounded-lg border border-border/60 bg-muted/20 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p class="text-sm font-semibold text-foreground">Key Derivation</p>
+          <p class="text-sm text-muted-foreground">Argon2id � memory 64&nbsp;MB � time cost 3 � parallelism 4</p>
         </div>
-        <Switch checked={currentSecuritySettings.lockOnSuspend} ariaLabel="Toggle lock on suspend" on:click={() => toggleSwitch('lockOnSuspend')} />
+        <Button variant="outline" size="sm" onclick={() => {}}>
+          Reconfigure KDF
+        </Button>
       </div>
-      <div class="setting-row">
-        <div class="setting-info">
-          <div class="setting-label">Lock on Minimize</div>
-          <div class="setting-description">Lock vault when app is minimized</div>
-        </div>
-        <Switch checked={currentSecuritySettings.lockOnMinimize} ariaLabel="Toggle lock on minimize" on:click={() => toggleSwitch('lockOnMinimize')} />
-      </div>
-      <div class="setting-row">
-        <div class="setting-info">
-          <div class="setting-label">Auto-lock After Inactivity</div>
-          <div class="setting-description">Lock vault after specified idle time</div>
-        </div>
-        <Select bind:value={currentSecuritySettings.autoLockInactivity} options={[{value: 'Immediate', label: 'Immediate'}, {value: '1 minute', label: '1 minute'}, {value: '5 minutes', label: '5 minutes'}, {value: '15 minutes', label: '15 minutes'}, {value: 'Custom...', label: 'Custom...'}]} on:change={handleSelectChange} ariaLabel="Select auto-lock inactivity" />
-      </div>
-    </div>
-  </SettingsCard>
+    </CardContent>
+  </Card>
 
-  <SettingsCard icon={iconPaths.eye} title="Biometric & Session" description="Manage biometric unlock and session settings.">
-    <div>
-      <div class="setting-row">
-        <div class="setting-info">
-          <div class="setting-label">Biometric Unlock</div>
-          <div class="setting-description">Use fingerprint or face recognition to unlock</div>
-        </div>
-        <Switch checked={currentSecuritySettings.biometricUnlock} ariaLabel="Toggle biometric unlock" on:click={() => toggleSwitch('biometricUnlock')} />
+  <Card class="border-border/60 bg-background/80 backdrop-blur">
+    <CardHeader class="flex flex-row items-start gap-3 border-b border-border/40 pb-4">
+      <div class="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
+        <CalendarClock class="h-5 w-5" aria-hidden="true" />
       </div>
-      <div class="setting-row">
-        <div class="setting-info">
-          <div class="setting-label">Session Persistence</div>
-          <div class="setting-description">Remember unlock state between app restarts</div>
-        </div>
-        <Switch checked={currentSecuritySettings.sessionPersistence} ariaLabel="Toggle session persistence" on:click={() => toggleSwitch('sessionPersistence')} />
+      <div>
+        <CardTitle>Auto-lock Controls</CardTitle>
+        <CardDescription>Define when the vault should automatically lock itself.</CardDescription>
       </div>
-    </div>
-  </SettingsCard>
+    </CardHeader>
+    <CardContent class="flex flex-col gap-4 pt-4">
+      <div class="flex items-start justify-between gap-4 rounded-lg border border-border/60 bg-muted/20 px-4 py-3">
+        <div>
+          <p class="text-sm font-semibold text-foreground">Lock on Suspend</p>
+          <p class="text-sm text-muted-foreground">Lock whenever the system sleeps or hibernates.</p>
+        </div>
+        <Switch
+          checked={currentSettings.lockOnSuspend}
+          aria-label="Toggle lock on suspend"
+          onclick={() => toggleSetting('lockOnSuspend')}
+        />
+      </div>
 
-  <SettingsCard icon={iconPaths.default} title="Paired Devices" description="Manage your paired devices.">
-    <div slot="header-content" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5rem;">
-      <h2 class="card-header" style="margin-bottom: 0;">
-        <svg class="icon" style="color: hsl(var(--primary))" viewBox="0 0 24 24">
-          <rect width="14" height="20" x="5" y="2" rx="2" ry="2"/>
-          <path d="M12 18h.01"/>
-        </svg>
-        Paired Devices
-      </h2>
-      <button class="btn btn-outline btn-sm">Pair New Device</button>
-    </div>
-    <div>
-      <div class="device-item">
-        <div class="device-info">
-          <div class="device-icon">
-            <svg class="icon" viewBox="0 0 24 24">
-              <path d="M12 10a2 2 0 0 0-2 2c0 1.02-.1 2.51-.26 4"/>
-              <path d="M14 13.12c0 2.38 0 6.38-1 8.88"/>
-              <path d="M17.29 21.02c.12-.6.43-2.3.5-3.02"/>
-              <path d="M2 12a10 10 0 0 1 18-6"/>
-              <path d="M2 16h.01"/>
-              <path d="M21.8 16c.2-2 .131-5.354 0-6"/>
-              <path d="M5 19.5C5.5 18 6 15 6 12a6 6 0 0 1 .34-2"/>
-              <path d="M8.65 22c.21-.66.45-1.32.57-2"/>
-              <path d="M9 6.8a6 6 0 0 1 9 5.2v2"/>
-            </svg>
-          </div>
-          <div class="device-details">
-            <div class="device-name">Touch ID (MacBook Pro)</div>
-            <div class="device-meta">
-              <span>2 minutes ago</span>
-              <span>Current device</span>
+      <div class="flex items-start justify-between gap-4 rounded-lg border border-border/60 bg-muted/20 px-4 py-3">
+        <div>
+          <p class="text-sm font-semibold text-foreground">Lock on Minimise</p>
+          <p class="text-sm text-muted-foreground">Lock the vault when the window is minimised.</p>
+        </div>
+        <Switch
+          checked={currentSettings.lockOnMinimize}
+          aria-label="Toggle lock on minimise"
+          onclick={() => toggleSetting('lockOnMinimize')}
+        />
+      </div>
+
+      <div class="flex flex-col gap-2 rounded-lg border border-border/60 bg-muted/20 px-4 py-4">
+        <Label class="text-sm font-semibold text-foreground">Auto-lock After Inactivity</Label>
+        <p class="text-sm text-muted-foreground">Lock the vault automatically after the selected idle period.</p>
+        <Select type="single" value={currentSettings.autoLockInactivity} onValueChange={updateAutoLock}>
+          <SelectTrigger aria-label="Select auto-lock inactivity" class="w-full sm:w-56">
+            <span data-slot="select-value" class="truncate text-sm">
+              {autoLockOptions.find((option) => option.value === currentSettings.autoLockInactivity)?.label ?? 'Select duration'}
+            </span>
+          </SelectTrigger>
+          <SelectContent>
+            {#each autoLockOptions as option}
+              <SelectItem value={option.value}>{option.label}</SelectItem>
+            {/each}
+          </SelectContent>
+        </Select>
+      </div>
+    </CardContent>
+  </Card>
+
+  <Card class="border-border/60 bg-background/80 backdrop-blur">
+    <CardHeader class="flex flex-row items-start gap-3 border-b border-border/40 pb-4">
+      <div class="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
+        <Fingerprint class="h-5 w-5" aria-hidden="true" />
+      </div>
+      <div>
+        <CardTitle>Biometric &amp; Session</CardTitle>
+        <CardDescription>Control biometric unlock availability and session persistence.</CardDescription>
+      </div>
+    </CardHeader>
+    <CardContent class="flex flex-col gap-4 pt-4">
+      <div class="flex items-start justify-between gap-4 rounded-lg border border-border/60 bg-muted/20 px-4 py-3">
+        <div>
+          <p class="text-sm font-semibold text-foreground">Biometric Unlock</p>
+          <p class="text-sm text-muted-foreground">Allow fingerprint or face recognition to unlock the vault.</p>
+        </div>
+        <Switch
+          checked={currentSettings.biometricUnlock}
+          aria-label="Toggle biometric unlock"
+          onclick={() => toggleSetting('biometricUnlock')}
+        />
+      </div>
+
+      <div class="flex items-start justify-between gap-4 rounded-lg border border-border/60 bg-muted/20 px-4 py-3">
+        <div>
+          <p class="text-sm font-semibold text-foreground">Session Persistence</p>
+          <p class="text-sm text-muted-foreground">Remember the unlocked session between restarts.</p>
+        </div>
+        <Switch
+          checked={currentSettings.sessionPersistence}
+          aria-label="Toggle session persistence"
+          onclick={() => toggleSetting('sessionPersistence')}
+        />
+      </div>
+    </CardContent>
+  </Card>
+
+  <Card class="border-border/60 bg-background/80 backdrop-blur">
+    <CardHeader class="flex flex-row items-start gap-3 border-b border-border/40 pb-4">
+      <div class="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
+        <MonitorSmartphone class="h-5 w-5" aria-hidden="true" />
+      </div>
+      <div class="flex w-full flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <CardTitle>Paired Devices</CardTitle>
+          <CardDescription>Review devices authorised for biometric or key-based unlock.</CardDescription>
+        </div>
+        <Button variant="outline" size="sm" onclick={() => {}}>
+          Pair New Device
+        </Button>
+      </div>
+    </CardHeader>
+    <CardContent class="flex flex-col gap-4 pt-4">
+      {#each pairedDevices as device}
+        <div
+          class={cn(
+            'flex items-start justify-between gap-4 rounded-lg border border-border/60 bg-muted/20 px-4 py-4 sm:items-center',
+            device.isCurrent ? 'border-primary/60 bg-primary/10' : ''
+          )}
+        >
+          <div class="flex items-start gap-3">
+            <div class="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
+              <device.Icon class="h-5 w-5" aria-hidden="true" />
+            </div>
+            <div>
+              <p class="text-sm font-semibold text-foreground">{device.name}</p>
+              <p class="text-xs text-muted-foreground">
+                {device.lastSeen}{device.isCurrent ? ' � Current device' : ''}
+              </p>
             </div>
           </div>
+          <div class="flex items-center gap-3">
+            <Badge variant="secondary">{device.type}</Badge>
+            <Button variant="ghost" size="icon" onclick={() => {}} aria-label={`Remove ${device.name}`}>
+              <Trash2 class="h-4 w-4" aria-hidden="true" />
+            </Button>
+          </div>
         </div>
-        <div class="device-actions">
-          <span class="badge badge-primary">Biometric</span>
-          <button class="btn btn-outline btn-sm" aria-label="Remove device">
-            <svg class="icon icon-sm" style="color: hsl(var(--destructive))" viewBox="0 0 24 24">
-              <path d="M3 6h18"/>
-              <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/>
-              <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
-            </svg>
-          </button>
-        </div>
-      </div>
-      </div>
-    <div style="margin-top: 1rem;">
-      <button class="btn btn-destructive btn-sm">Revoke All Devices</button>
-    </div>
-  </SettingsCard>
+      {/each}
 
-  <SettingsCard icon={iconPaths.eyeOff} title="Privacy Controls" description="Manage your privacy settings.">
-    <div style="margin-bottom: 1.5rem;">
-      <div class="setting-row">
-        <div class="setting-info">
-          <div class="setting-label">External Breach Check</div>
-          <div class="setting-description">Check passwords against known breach databases (opt-in)</div>
-        </div>
-        <Switch checked={currentSecuritySettings.externalBreachCheck} ariaLabel="Toggle external breach check" on:click={() => toggleSwitch('externalBreachCheck')} />
+      <div class="flex justify-end">
+        <Button variant="destructive" size="sm" onclick={() => {}}>
+          Revoke All Devices
+        </Button>
       </div>
-      <div class="setting-row">
-        <div class="setting-info">
-          <div class="setting-label">Local Reuse Detection</div>
-          <div class="setting-description">Detect password reuse within your vault</div>
-        </div>
-        <Switch checked={currentSecuritySettings.localReuseDetection} ariaLabel="Toggle local reuse detection" on:click={() => toggleSwitch('localReuseDetection')} />
+    </CardContent>
+  </Card>
+
+  <Card class="border-border/60 bg-background/80 backdrop-blur">
+    <CardHeader class="flex flex-row items-start gap-3 border-b border-border/40 pb-4">
+      <div class="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
+        <EyeOff class="h-5 w-5" aria-hidden="true" />
       </div>
-      <div class="setting-row">
-        <div class="setting-info">
-          <div class="setting-label">Secure RAM Handling</div>
-          <div class="setting-description">Use secure memory allocation for sensitive data</div>
-        </div>
-        <Switch checked={currentSecuritySettings.secureRAMHandling} ariaLabel="Toggle secure RAM handling" on:click={() => toggleSwitch('secureRAMHandling')} />
+      <div>
+        <CardTitle>Privacy Controls</CardTitle>
+        <CardDescription>Fine-tune privacy and diagnostic data handling.</CardDescription>
       </div>
-      <div class="grid grid-2" style="margin-bottom: 1.5rem;">
-        <button class="btn btn-outline">
-          <svg class="icon" viewBox="0 0 24 24">
-            <ellipse cx="12" cy="5" rx="9" ry="3"/>
-            <path d="m3 5 9 9 9-9"/>
-            <path d="M3 12l9 9 9-9"/>
-            <path d="M3 5v14l9-9 9 9V5"/>
-          </svg>
+    </CardHeader>
+    <CardContent class="flex flex-col gap-5 pt-4">
+      <div class="flex flex-col gap-3">
+        {#each privacyToggles as toggle}
+          <div class="flex items-start justify-between gap-4 rounded-lg border border-border/60 bg-muted/20 px-4 py-3">
+            <div>
+              <p class="text-sm font-semibold text-foreground">{toggle.title}</p>
+              <p class="text-sm text-muted-foreground">{toggle.description}</p>
+            </div>
+            <Switch
+              checked={currentSettings[toggle.key]}
+              aria-label={`Toggle ${toggle.title}`}
+              onclick={() => toggleSetting(toggle.key)}
+            />
+          </div>
+        {/each}
+      </div>
+
+      <div class="grid gap-3 sm:grid-cols-2">
+        <Button variant="outline" class="justify-start gap-3" onclick={() => {}}>
+          <HardDrive class="h-4 w-4" aria-hidden="true" />
           Access Local Logs
-        </button>
-        <button class="btn btn-outline">
-          <svg class="icon" viewBox="0 0 24 24">
-            <path d="M3 6h18"/>
-            <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/>
-            <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
-          </svg>
+        </Button>
+        <Button variant="outline" class="justify-start gap-3" onclick={() => {}}>
+          <Trash2 class="h-4 w-4" aria-hidden="true" />
           Clear Local Logs
-        </button>
+        </Button>
       </div>
-      <div class="data-retention">
-        <h4>Data Retention Summary</h4>
-        <ul>
-          <li>• Vault data: Encrypted locally, never sent to servers</li>
-          <li>• Activity logs: Kept locally for 30 days, then purged</li>
-          <li>• Crash reports: Anonymous, retained for 90 days</li>
+
+      <div class="rounded-lg border border-border/60 bg-muted/10 p-4">
+        <p class="text-sm font-semibold text-foreground">Data Retention Summary</p>
+        <ul class="mt-2 list-disc space-y-1 pl-5 text-sm text-muted-foreground">
+          <li>Vault data remains encrypted locally and is never uploaded.</li>
+          <li>Activity logs rotate every 30 days unless cleared sooner.</li>
+          <li>Crash reports are anonymised and retained for up to 90 days.</li>
         </ul>
       </div>
-    </div>
-  </SettingsCard>
+    </CardContent>
+  </Card>
 
-  <SettingsCard icon={iconPaths.settings} title="Security Actions" description="Perform security-related actions.">
-    <div class="grid grid-3">
-      <button class="btn btn-outline btn-card">
-        <svg class="icon icon-lg" viewBox="0 0 24 24">
-          <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>
-          <path d="M21 3v5h-5"/>
-          <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/>
-          <path d="M8 16H3v5"/>
-        </svg>
-        <span>Re-key Vault</span>
-        <span style="font-size: 0.75rem; color: hsl(var(--muted-foreground));">Generate new encryption keys</span>
-      </button>
-      <button class="btn btn-outline btn-card">
-        <svg class="icon icon-lg" viewBox="0 0 24 24">
-          <path d="M3 6h18"/>
-          <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/>
-          <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
-        </svg>
-        <span>Clear Memory</span>
-        <span style="font-size: 0.75rem; color: hsl(var(--muted-foreground));">Force clear sensitive data</span>
-      </button>
-      <button class="btn btn-outline btn-card">
-        <svg class="icon icon-lg" viewBox="0 0 24 24">
-          <path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/>
-          <path d="m9 12 2 2 4-4"/>
-        </svg>
-        <span>Integrity Check</span>
-        <span style="font-size: 0.75rem; color: hsl(var(--muted-foreground));">Verify vault integrity</span>
-      </button>
-    </div>
-  </SettingsCard>
+  <Card class="border-border/60 bg-background/80 backdrop-blur">
+    <CardHeader class="flex flex-row items-start gap-3 border-b border-border/40 pb-4">
+      <div class="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
+        <Shield class="h-5 w-5" aria-hidden="true" />
+      </div>
+      <div>
+        <CardTitle>Security Actions</CardTitle>
+        <CardDescription>Execute advanced maintenance and security tasks.</CardDescription>
+      </div>
+    </CardHeader>
+    <CardContent class="pt-4">
+      <div class="grid gap-3 md:grid-cols-3">
+        {#each securityActions as action}
+          <Button
+            type="button"
+            variant="outline"
+            class="h-full w-full flex-col items-start gap-3 rounded-xl border-border/60 bg-muted/20 p-4 text-left transition-colors hover:border-primary/50 hover:text-primary"
+            onclick={() => {}}
+          >
+            <action.Icon class="h-5 w-5 text-primary" aria-hidden="true" />
+            <div>
+              <p class="text-sm font-semibold text-foreground">{action.title}</p>
+              <p class="text-sm text-muted-foreground">{action.description}</p>
+            </div>
+          </Button>
+        {/each}
+      </div>
+    </CardContent>
+  </Card>
 </div>
 
-{#if passwordModalOpen}
-<div class="modal active">
-  <div class="modal-content">
-    <div class="modal-header">
-      <h3 class="modal-title">Change Master Password</h3>
-      <p class="modal-description">Enter your current password and choose a new strong master password.</p>
-    </div>
-    <div class="modal-body">
-      <div class="input-group">
-        <label class="label" for="currentPassword">Current Password</label>
-        <div class="input-with-button">
-          <input type={showCurrentPassword ? 'text' : 'password'} class="input" placeholder="Enter current password" id="currentPassword">
-          <button type="button" class="input-button" aria-label="Toggle password visibility" on:click={togglePasswordVisibility}>
-            <svg class="icon icon-sm" viewBox="0 0 24 24">
-              <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/>
-              <circle cx="12" cy="12" r="3"/>
-            </svg>
-          </button>
+<Dialog open={passwordModalOpen} onOpenChange={handleDialogChange}>
+  <DialogContent class="sm:max-w-lg">
+    <DialogHeader>
+      <DialogTitle>Change Master Password</DialogTitle>
+      <DialogDescription>
+        Provide your current master password and enter a new secure password to re-encrypt the vault.
+      </DialogDescription>
+    </DialogHeader>
+
+    <div class="space-y-4">
+      <div class="space-y-2">
+        <Label for="current-password">Current Password</Label>
+        <div class="relative">
+          <Input
+            id="current-password"
+            type={showCurrentPassword ? 'text' : 'password'}
+            placeholder="Enter current password"
+            bind:value={currentPassword}
+          />
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            class="absolute right-1 top-1/2 -translate-y-1/2"
+            aria-label={showCurrentPassword ? 'Hide current password' : 'Show current password'}
+            onclick={togglePasswordVisibility}
+          >
+            {#if showCurrentPassword}
+              <EyeOff class="h-4 w-4 text-primary" aria-hidden="true" />
+            {:else}
+              <Eye class="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+            {/if}
+          </Button>
         </div>
       </div>
-      <div class="input-group">
-        <label class="label" for="newPassword">New Password</label>
-        <input type="password" class="input" placeholder="Enter new password" id="newPassword">
+
+      <div class="space-y-2">
+        <Label for="new-password">New Password</Label>
+        <Input
+          id="new-password"
+          type="password"
+          placeholder="Enter new password"
+          bind:value={newPassword}
+        />
       </div>
-      <div class="input-group">
-        <label class="label" for="confirmPassword">Confirm New Password</label>
-        <input type="password" class="input" placeholder="Confirm new password" id="confirmPassword">
+
+      <div class="space-y-2">
+        <Label for="confirm-password">Confirm New Password</Label>
+        <Input
+          id="confirm-password"
+          type="password"
+          placeholder="Confirm new password"
+          bind:value={confirmPassword}
+        />
       </div>
-      <div class="warning-box">
-        <strong>Warning:</strong> Changing your master password will re-encrypt your entire vault.
-        This process may take several minutes.
+
+      <div class="flex items-start gap-3 rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+        <TriangleAlert class="mt-0.5 h-4 w-4" aria-hidden="true" />
+        <p>Changing the master password re-encrypts the vault. The operation may take several minutes for large vaults.</p>
       </div>
     </div>
-    <div class="modal-footer">
-      <button class="btn btn-outline" on:click={closePasswordModal}>Cancel</button>
-      <button class="btn btn-warning">Change Password</button>
-    </div>
-  </div>
-</div>
-{/if}
 
-<style>
-  
-
-  * {
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-  }
-
-  .main-content {
-    flex: 1;
-    padding: 32px;
-    overflow-y: auto;
-    position: relative;
-  }
-
-  
-
-  .setting-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 1rem;
-  }
-  .setting-row:last-child {
-    margin-bottom: 0;
-  }
-
-  .setting-info {
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
-  }
-
-  .setting-label {
-    font-weight: 500;
-  }
-  .setting-description {
-    font-size: 0.875rem;
-    color: hsl(var(--muted-foreground));
-  }
-
-  
-
-  
-
-  .btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.5rem;
-    padding: 0.5rem 1rem;
-    border-radius: calc(var(--radius));
-    font-size: 0.875rem;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all 0.2s;
-    text-decoration: none;
-    border: none;
-  }
-
-  .btn-outline {
-    background: transparent;
-    border: 1px solid hsl(var(--border));
-    color: hsl(var(--foreground));
-  }
-
-  .btn-outline:hover {
-    background: hsl(var(--accent));
-  }
-
-  .btn-destructive {
-    background: hsl(var(--destructive));
-    color: hsl(var(--destructive-foreground));
-    border: 1px solid hsl(var(--destructive));
-  }
-
-  .btn-destructive:hover {
-    background: hsl(var(--destructive) / 0.9);
-  }
-
-  .btn-warning {
-    background: hsl(var(--warning));
-    color: hsl(var(--warning-foreground));
-    border: 1px solid hsl(var(--warning));
-  }
-
-  .btn-sm {
-    padding: 0.25rem 0.75rem;
-    font-size: 0.75rem;
-  }
-
-  .btn-card {
-    height: auto;
-    padding: 1rem;
-    flex-direction: column;
-    text-align: center;
-  }
-
-  .kdf-info {
-    background: hsl(var(--muted) / 0.3);
-    border-radius: calc(var(--radius));
-    padding: 1rem;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-  }
-
-  .device-item {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 1rem;
-    border: 1px solid hsl(var(--border));
-    border-radius: calc(var(--radius));
-    margin-bottom: 0.75rem;
-  }
-
-  .device-item:last-child {
-    margin-bottom: 0;
-  }
-
-  .device-info {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-  }
-
-  .device-icon {
-    width: 2.5rem;
-    height: 2.5rem;
-    border-radius: 0.5rem;
-    background: hsl(var(--primary) / 0.1);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: hsl(var(--primary));
-  }
-
-  .device-details {
-    display: flex;
-    flex-direction: column;
-  }
-
-  .device-name {
-    font-weight: 500;
-    margin-bottom: 0.25rem;
-  }
-
-  .device-meta {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-    font-size: 0.875rem;
-    color: hsl(var(--muted-foreground));
-  }
-
-  .device-actions {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-  }
-
-  .badge {
-    padding: 0.125rem 0.5rem;
-    border-radius: calc(var(--radius) - 2px);
-    font-size: 0.75rem;
-    font-weight: 500;
-  }
-
-  .badge-primary {
-    background: hsl(var(--primary));
-    color: hsl(var(--primary-foreground));
-  }
-
-  .grid {
-    display: grid;
-    gap: 1rem;
-  }
-
-  .grid-2 {
-    grid-template-columns: repeat(2, 1fr);
-  }
-
-  .grid-3 {
-    grid-template-columns: repeat(3, 1fr);
-  }
-
-  .warning-box {
-    padding: 0.75rem;
-    background: hsl(var(--warning) / 0.1);
-    border: 1px solid hsl(var(--warning) / 0.2);
-    border-radius: calc(var(--radius));
-    font-size: 0.875rem;
-    color: hsl(var(--warning-foreground));
-  }
-
-  .data-retention {
-    background: hsl(var(--muted) / 0.3);
-    border-radius: calc(var(--radius));
-    padding: 0.75rem;
-  }
-
-  .data-retention h4 {
-    font-weight: 500;
-    margin-bottom: 0.5rem;
-  }
-
-  .data-retention ul {
-    list-style: none;
-    font-size: 0.875rem;
-    color: hsl(var(--muted-foreground));
-  }
-
-  .data-retention li {
-    margin-bottom: 0.25rem;
-  }
-
-  .icon {
-    width: 1.25rem;
-    height: 1.25rem;
-    stroke: currentColor;
-    fill: none;
-    stroke-width: 2;
-    stroke-linecap: round;
-    stroke-linejoin: round;
-  }
-
-  .icon-sm {
-    width: 1rem;
-    height: 1rem;
-  }
-
-  .icon-lg {
-    width: 1.5rem;
-    height: 1.5rem;
-  }
-
-  .modal {
-    display: none;
-    position: fixed;
-    inset: 0;
-    background: hsl(var(--background) / 0.8);
-    backdrop-filter: blur(8px);
-    z-index: 100;
-    align-items: center;
-    justify-content: center;
-  }
-
-  .modal.active {
-    display: flex;
-  }
-
-  .modal-content {
-    background: hsl(var(--card));
-    border: 1px solid hsl(var(--border));
-    border-radius: calc(var(--radius) + 4px);
-    padding: 1.5rem;
-    width: 90%;
-    max-width: 28rem;
-    max-height: 90vh;
-    overflow-y: auto;
-  }
-
-  .modal-header {
-    margin-bottom: 1rem;
-  }
-
-  .modal-title {
-    font-size: 1.125rem;
-    font-weight: 600;
-    margin-bottom: 0.5rem;
-  }
-
-  .modal-description {
-    font-size: 0.875rem;
-    color: hsl(var(--muted-foreground));
-  }
-  .modal-body {
-    margin-bottom: 1.5rem;
-  }
-
-  .input-group {
-    margin-bottom: 1rem;
-  }
-
-  .input-group:last-child {
-    margin-bottom: 0;
-  }
-
-  .label {
-    display: block;
-    font-weight: 500;
-    margin-bottom: 0.5rem;
-  }
-
-  .input {
-    width: 100%;
-    padding: 0.5rem 0.75rem;
-    background: hsl(var(--background) / 0.5);
-    border: 1px solid hsl(var(--border));
-    border-radius: calc(var(--radius));
-    color: hsl(var(--foreground));
-    font-size: 0.875rem;
-  }
-
-  .input:focus {
-    outline: none;
-    border-color: hsl(var(--ring));
-    box-shadow: 0 0 0 2px hsl(var(--ring) / 0.2);
-  }
-
-  .input-with-button {
-    position: relative;
-  }
-
-  .input-button {
-    position: absolute;
-    right: 0.5rem;
-    top: 50%;
-    transform: translateY(-50%);
-    background: transparent;
-    border: none;
-    color: hsl(var(--muted-foreground));
-    cursor: pointer;
-    padding: 0.25rem;
-  }
-
-  .modal-footer {
-    display: flex;
-    gap: 0.75rem;
-    justify-content: flex-end;
-  }
-
-  
-
-  @media (max-width: 768px) {
-    .main-content {
-      padding: 1rem;
-    }
-
-    .grid-2,
-    .grid-3 {
-      grid-template-columns: 1fr;
-    }
-
-    .setting-row {
-      flex-direction: column;
-      align-items: flex-start;
-      gap: 0.75rem;
-    }
-
-    .device-item {
-      flex-direction: column;
-      align-items: flex-start;
-      gap: 0.75rem;
-    }
-  }
-</style>
+    <DialogFooter class="gap-2">
+      <Button type="button" variant="outline" onclick={closePasswordModal}>
+        Cancel
+      </Button>
+      <Button type="button" variant="destructive" onclick={() => {}}>
+        Change Password
+      </Button>
+    </DialogFooter>
+  </DialogContent>
+</Dialog>

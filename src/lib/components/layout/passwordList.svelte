@@ -1,10 +1,13 @@
+<svelte:options runes />
+
 <script lang="ts">
-  import { createEventDispatcher, tick, onDestroy } from 'svelte';
+  import { createEventDispatcher, onDestroy, tick } from 'svelte';
   import TagIcon from "../ui/TagIcon.svelte";
   import Favicon from "../ui/Favicon.svelte";
   import { iconPaths } from "$lib/icons";
   import { invoke } from '@tauri-apps/api/core';
   import { selectedTag, filterCategory } from '$lib/stores';
+  import type { FilterCategory } from '$lib/stores';
   import type { PasswordItem } from '../../../routes/+layout.ts';
   import { Search, X } from '@lucide/svelte';
   import { Button } from '$lib/components/ui/button';
@@ -18,28 +21,37 @@
     ContextMenuSeparator,
     ContextMenuTrigger
   } from '$lib/components/ui/context-menu';
-  export let items: PasswordItem[] = [];
-  export let buttons: any[] = [];
-  export let selectedId: number | null = null;
 
-  $: tagMap = new Map(buttons.map(b => [b.text, { color: b.color, icon: b.icon }]));
+  type TagButton = {
+    id?: number;
+    text: string;
+    color: string;
+    icon: string;
+  };
 
-  function getFallback(item: any) {
-    const tagNames = item.tags ? item.tags.split(',').map((tag: string) => tag.trim()) : [];
-    if (tagNames.length > 0) {
-        const firstTag = tagMap.get(tagNames[0]);
-        if (firstTag) {
-            return { icon: firstTag.icon, color: firstTag.color };
-        }
-    }
-    return { icon: iconPaths.default, color: 'var(--sidebar-border)' };
+  type TagMeta = {
+    icon: string;
+    color: string;
+  };
+
+  type SectionTitle = 'Pinned' | 'Today' | 'Yesterday' | 'Earlier';
+
+  interface ItemSection {
+    title: SectionTitle;
+    items: PasswordItem[];
   }
 
-  let isResizing = false;
-  let navWidth = 360;
-  let startX = 0;
-  let searchTerm = '';
-  
+  interface Props {
+    items: PasswordItem[];
+    buttons: TagButton[];
+    selectedId: number | null;
+  }
+
+  let {
+    items = $bindable<PasswordItem[]>([]),
+    buttons,
+    selectedId = null
+  }: Props = $props();
 
   const dispatch = createEventDispatcher<{
     select: PasswordItem;
@@ -48,128 +60,312 @@
     removeEntry: PasswordItem;
   }>();
 
-  $: itemsCount = items.length;
+  const defaultFallback: TagMeta = {
+    icon: iconPaths.default,
+    color: 'var(--sidebar-border)'
+  };
 
-  $: filteredItems = items.filter((item) => {
-    const matchesTag =
-      $selectedTag === null ||
-      (item.tags &&
-        (typeof item.tags === 'string'
-          ? item.tags.split(',').map((tag: string) => tag.trim())
-          : item.tags
-        ).includes($selectedTag));
+  const sectionOrder: SectionTitle[] = ['Pinned', 'Today', 'Yesterday', 'Earlier'];
+  const RECENT_DAY_WINDOW = 7;
+  const DAY_IN_MS = 24 * 60 * 60 * 1000;
+  const PIN_TAG_NAMES = new Set(['pinned', 'pin']);
+  const RECENT_FILTER: FilterCategory = 'recent';
 
-    if (!matchesTag) {
-      return false;
-    }
+  let isResizing = $state(false);
+  let navWidth = 360;
+  let startX = 0;
+  let searchTerm = $state('');
+  let selectedItemId = $state<number | null>(null);
+  let showSkeleton = $state(false);
+  let skeletonTimer: ReturnType<typeof setTimeout> | null = null;
+  let lastSkeletonKey = '';
 
-    if (searchTerm === '') {
-      return true;
-    }
+  const itemsCount = $derived(items.length);
 
-    const normalizedTerm = searchTerm.toLowerCase();
-    const titleMatch = item.title?.toLowerCase().includes(normalizedTerm) ?? false;
-    const usernameMatch = item.username?.toLowerCase().includes(normalizedTerm) ?? false;
-    return titleMatch || usernameMatch;
+  const tagMap = $derived.by(() =>
+    new Map<string, TagMeta>(buttons.map((button) => [button.text, { color: button.color, icon: button.icon }]))
+  );
+
+  const filteredItems = $derived.by(() => {
+    const normalizedSearchTerm = searchTerm.trim().toLowerCase();
+
+    return items.filter((item) => {
+      const tagNames = getTagNames(item);
+
+      if ($selectedTag !== null && !tagNames.includes($selectedTag)) {
+        return false;
+      }
+
+      if ($filterCategory === RECENT_FILTER && !isRecent(item, tagNames)) {
+        return false;
+      }
+
+      if (!normalizedSearchTerm) {
+        return true;
+      }
+
+      const title = item.title?.toLowerCase() ?? '';
+      const username = item.username?.toLowerCase() ?? '';
+      return title.includes(normalizedSearchTerm) || username.includes(normalizedSearchTerm);
+    });
   });
 
-  function getTagNames(item: any): string[] {
-    return item?.tags ? (typeof item.tags === 'string' ? item.tags.split(',').map((t: string) => t.trim()) : item.tags) : [];
+  const sectionedItems = $derived.by(() => partitionItems(filteredItems));
+
+  const currentSkeletonKey = $derived(() => `${$selectedTag ?? 'all'}|${$filterCategory}`);
+
+  $effect(() => {
+    const visibleIds = new Set(filteredItems.map((item) => item.id));
+
+    if (filteredItems.length === 0) {
+      if (selectedItemId !== null) {
+        selectedItemId = null;
+      }
+      return;
+    }
+
+    if (selectedItemId === null || !visibleIds.has(selectedItemId)) {
+      const nextItem = sectionedItems.find((section) => section.items.length > 0)?.items[0];
+      if (nextItem && selectedItemId !== nextItem.id) {
+        selectedItemId = nextItem.id;
+        dispatch('select', nextItem);
+      }
+    }
+  });
+
+  $effect(() => {
+    if (currentSkeletonKey === lastSkeletonKey) {
+      return;
+    }
+
+    lastSkeletonKey = currentSkeletonKey;
+
+    if (filteredItems.length === 0) {
+      showSkeleton = false;
+      if (skeletonTimer) {
+        clearTimeout(skeletonTimer);
+        skeletonTimer = null;
+      }
+      return;
+    }
+
+    tick().then(() => {
+      if (filteredItems.length === 0) {
+        return;
+      }
+
+      showSkeleton = true;
+
+      if (skeletonTimer) {
+        clearTimeout(skeletonTimer);
+      }
+
+      skeletonTimer = setTimeout(() => {
+        showSkeleton = false;
+        skeletonTimer = null;
+      }, 200);
+    });
+  });
+
+  $effect(() => {
+    if (selectedId !== null && selectedId !== selectedItemId) {
+      selectedItemId = selectedId;
+    }
+  });
+
+  onDestroy(() => {
+    if (skeletonTimer) {
+      clearTimeout(skeletonTimer);
+      skeletonTimer = null;
+    }
+
+    cleanupResizeListeners();
+  });
+
+  function partitionItems(list: PasswordItem[]): ItemSection[] {
+    const buckets: Record<SectionTitle, PasswordItem[]> = {
+      Pinned: [],
+      Today: [],
+      Yesterday: [],
+      Earlier: []
+    };
+
+    for (const item of list) {
+      if (isPinned(item)) {
+        buckets.Pinned.push(item);
+      } else if (item.updated_at && isToday(item.updated_at)) {
+        buckets.Today.push(item);
+      } else if (item.updated_at && isYesterday(item.updated_at)) {
+        buckets.Yesterday.push(item);
+      } else {
+        buckets.Earlier.push(item);
+      }
+    }
+
+    return sectionOrder.map((title) => ({
+      title,
+      items: buckets[title]
+    }));
   }
 
-  function isPinned(item: any): boolean {
-    const tags = getTagNames(item).map((t) => t.toLowerCase());
-    return tags.includes('pinned') || tags.includes('pin');
+  function getTagNames(item: PasswordItem): string[] {
+    return item.tags
+      ? item.tags
+          .split(',')
+          .map((tag) => tag.trim())
+          .filter(Boolean)
+      : [];
+  }
+
+  function hasPinnedTag(tagNames: string[]): boolean {
+    return tagNames.some((tag) => PIN_TAG_NAMES.has(tag.toLowerCase()));
+  }
+
+  function isPinned(item: PasswordItem): boolean {
+    return hasPinnedTag(getTagNames(item));
+  }
+
+  function toDate(dateStr: string): Date | null {
+    const date = new Date(dateStr);
+    return Number.isNaN(date.getTime()) ? null : date;
   }
 
   function isSameDay(a: Date, b: Date): boolean {
-    return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+    return (
+      a.getFullYear() === b.getFullYear() &&
+      a.getMonth() === b.getMonth() &&
+      a.getDate() === b.getDate()
+    );
   }
 
   function isToday(dateStr: string): boolean {
-    const d = new Date(dateStr);
+    const date = toDate(dateStr);
+    if (!date) {
+      return false;
+    }
     const now = new Date();
-    return isSameDay(d, now);
+    return isSameDay(date, now);
   }
 
   function isYesterday(dateStr: string): boolean {
-    const d = new Date(dateStr);
-    const y = new Date();
-    y.setDate(y.getDate() - 1);
-    return isSameDay(d, y);
+    const date = toDate(dateStr);
+    if (!date) {
+      return false;
+    }
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    return isSameDay(date, yesterday);
   }
 
-  $: sectionedItems = (() => {
-    const pinned: any[] = [];
-    const today: any[] = [];
-    const yesterday: any[] = [];
-    const earlier: any[] = [];
-    for (const item of filteredItems) {
-      if (isPinned(item)) {
-        pinned.push(item);
-        continue;
-      }
-      if (item?.updated_at && isToday(item.updated_at)) {
-        today.push(item);
-      } else if (item?.updated_at && isYesterday(item.updated_at)) {
-        yesterday.push(item);
-      } else {
-        earlier.push(item);
-      }
+  function isWithinDays(dateStr: string, windowInDays: number): boolean {
+    const date = toDate(dateStr);
+    if (!date) {
+      return false;
     }
-    return [
-      { title: 'Pinned', items: pinned },
-      { title: 'Today', items: today },
-      { title: 'Yesterday', items: yesterday },
-      { title: 'Earlier', items: earlier },
-    ];
-  })();
-
-  $: {
-    const visibleIds = new Set(filteredItems.map((i) => i.id));
-    if (filteredItems.length === 0) {
-      selectedItemId = null;
-    } else if (selectedItemId === null || !visibleIds.has(selectedItemId)) {
-      const firstSection = sectionedItems.find((s) => s.items.length > 0);
-      if (firstSection) {
-        const firstItem = firstSection.items[0];
-        selectItem(firstItem);
-      }
+    const now = new Date();
+    const diff = now.getTime() - date.getTime();
+    if (diff < 0) {
+      return false;
     }
+    return diff <= windowInDays * DAY_IN_MS;
   }
 
-  function handleSearchInput(event: Event) {
-    searchTerm = (event.target as HTMLInputElement).value;
+  function isRecent(item: PasswordItem, tagNames: string[]): boolean {
+    if (hasPinnedTag(tagNames)) {
+      return true;
+    }
+
+    return item.updated_at ? isWithinDays(item.updated_at, RECENT_DAY_WINDOW) : false;
+  }
+
+  function getFallback(item: PasswordItem): TagMeta {
+    const tagNames = getTagNames(item);
+    if (tagNames.length > 0) {
+      const firstTagMeta = tagMap.get(tagNames[0]);
+      if (firstTagMeta) {
+        return firstTagMeta;
+      }
+    }
+    return defaultFallback;
   }
 
   function clearSearch() {
     searchTerm = '';
   }
 
-  let selectedItemId: number | null = null;
+  async function handlePinToggle(item: PasswordItem) {
+    const id = item.id;
+    const tagNames = getTagNames(item);
+    const pinnedIndex = tagNames.findIndex((tag) => PIN_TAG_NAMES.has(tag.toLowerCase()));
 
-  let showSkeleton = false;
-  let skeletonTimer: any = null;
-  let lastSkeletonKey = '';
-  $: currentSkeletonKey = `${$selectedTag ?? 'all'}|${$filterCategory}`;
-  $: if (currentSkeletonKey !== lastSkeletonKey) {
-    lastSkeletonKey = currentSkeletonKey;
-    (async () => {
-      await tick();
-      const count = filteredItems.length;
-      if (count > 0) {
-        showSkeleton = true;
-        clearTimeout(skeletonTimer);
-        skeletonTimer = setTimeout(() => {
-          showSkeleton = false;
-        }, 200);
+    const nextTags =
+      pinnedIndex >= 0
+        ? tagNames.filter((_, index) => index !== pinnedIndex)
+        : ['Pinned', ...tagNames];
+
+    const updatedTags = nextTags.join(',');
+
+    try {
+      await invoke('update_password_item_tags', { id, tags: updatedTags });
+      const itemIndex = items.findIndex((candidate) => candidate.id === id);
+      if (itemIndex !== -1) {
+        items = [
+          ...items.slice(0, itemIndex),
+          { ...items[itemIndex], tags: updatedTags },
+          ...items.slice(itemIndex + 1)
+        ];
       }
-    })();
+    } catch (error) {
+      console.error('Failed to toggle pin:', error);
+      alert(`Failed to ${pinnedIndex >= 0 ? 'unpin' : 'pin'} item: ${error}`);
+    }
   }
 
-  onDestroy(() => {
-    clearTimeout(skeletonTimer);
-  });
+  function skeletonPlaceholders(count: number): number[] {
+    return Array.from({ length: count }, (_, index) => index);
+  }
+
+  function cleanupResizeListeners() {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    window.removeEventListener('mousemove', resize);
+    window.removeEventListener('mouseup', stopResize);
+  }
+
+  function startResize(event: MouseEvent) {
+    isResizing = true;
+    startX = event.clientX;
+    const navElement = document.querySelector<HTMLElement>('.passwordList');
+    if (navElement) {
+      navWidth = navElement.offsetWidth;
+    }
+    cleanupResizeListeners();
+    window.addEventListener('mousemove', resize);
+    window.addEventListener('mouseup', stopResize);
+  }
+
+  function resize(event: MouseEvent) {
+    if (!isResizing) return;
+    const nextWidth = Math.max(200, Math.min(600, navWidth + (event.clientX - startX)));
+    document.documentElement.style.setProperty('--passwordList-width', `${nextWidth}px`);
+  }
+
+  function stopResize() {
+    if (!isResizing) {
+      cleanupResizeListeners();
+      return;
+    }
+
+    isResizing = false;
+    cleanupResizeListeners();
+  }
+
+  function selectItem(item: PasswordItem) {
+    selectedItemId = item.id;
+    dispatch('select', item);
+  }
 
   function handleCreateEntry() {
     dispatch('createEntry');
@@ -182,67 +378,8 @@
   function handleRemoveEntry(item: PasswordItem) {
     dispatch('removeEntry', item);
   }
-
-  async function handlePinToggle(item: PasswordItem) {
-    const id = item.id;
-    const parts = getTagNames(item);
-    const lower = parts.map((t) => t.toLowerCase());
-    const alreadyPinnedIdx = lower.findIndex((t) => t === 'pinned' || t === 'pin');
-    let newTagsArr: string[];
-    if (alreadyPinnedIdx >= 0) {
-      newTagsArr = parts.filter((t, i) => lower[i] !== 'pinned' && lower[i] !== 'pin');
-    } else {
-      newTagsArr = ['Pinned', ...parts];
-    }
-    const newTags = newTagsArr.join(',');
-    try {
-      await invoke('update_password_item_tags', { id, tags: newTags });
-      const idx = items.findIndex((it) => it.id === id);
-      if (idx !== -1) {
-        items = [
-          ...items.slice(0, idx),
-          { ...items[idx], tags: newTags },
-          ...items.slice(idx + 1)
-        ];
-      }
-    } catch (e) {
-      console.error('Failed to toggle pin:', e);
-      alert(`Failed to ${alreadyPinnedIdx >= 0 ? 'unpin' : 'pin'} item: ${e}`);
-    }
-  }
-  function startResize(e: MouseEvent) {
-    isResizing = true;
-    startX = e.clientX;
-    const navElement = document.querySelector('.passwordList') as HTMLElement;
-    if (navElement) {
-      navWidth = navElement.offsetWidth;
-    }
-    window.addEventListener('mousemove', resize);
-    window.addEventListener('mouseup', stopResize);
-  }
-
-  function resize(e: MouseEvent) {
-    if (!isResizing) return;
-    const newWidth = Math.max(200, Math.min(600, navWidth + (e.clientX - startX)));
-    document.documentElement.style.setProperty('--passwordList-width', `${newWidth}px`);
-  }
-
-  function stopResize() {
-    isResizing = false;
-    window.removeEventListener('mousemove', resize);
-    window.removeEventListener('mouseup', stopResize);
-  }
-
-  $: if (selectedId !== null && selectedId !== selectedItemId) {
-    selectedItemId = selectedId;
-  }
-
-  function selectItem(item: any) {
-    selectedItemId = item.id;
-    dispatch('select', item);
-  }
-
 </script>
+
 
 <nav class="passwordList">
   <ContextMenu>
@@ -265,7 +402,6 @@
               placeholder="Search..."
               class="searchInput h-8 border-0 bg-transparent px-2 text-sm shadow-none focus-visible:border-0 focus-visible:ring-0 focus-visible:ring-offset-0"
               bind:value={searchTerm}
-              oninput={handleSearchInput}
             />
             {#if searchTerm}
               <Button
@@ -299,8 +435,8 @@
               role="tab"
               variant="ghost"
               size="sm"
-              aria-selected={$filterCategory === 'recent'}
-              onclick={() => filterCategory.set('recent')}
+              aria-selected={$filterCategory === RECENT_FILTER}
+              onclick={() => filterCategory.set(RECENT_FILTER)}
             >
               Recently
             </Button>
@@ -325,8 +461,8 @@
                   <div class="sectionTitle" role="heading" aria-level="2">{section.title}</div>
                   <ul class="itemList" role="list">
                     {#if showSkeleton}
-                      {#each section.items as placeholder (placeholder.id)}
-                        <li class="item" aria-hidden="true">
+                      {#each skeletonPlaceholders(section.items.length) as placeholderIndex (placeholderIndex)}
+                        <li class="item" aria-hidden="true" data-placeholder-index={placeholderIndex}>
                           <div class="itemLink" role="presentation">
                             <div class="itemLeft">
                               <Skeleton class="h-7 w-7 rounded-md opacity-70" aria-hidden="true" />

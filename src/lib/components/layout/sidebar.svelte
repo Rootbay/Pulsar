@@ -70,7 +70,6 @@
 <SidebarRoot
   collapsible="none"
   class="border-r border-border/50 bg-sidebar/90 backdrop-blur"
-  style="--sidebar-width: 5.75rem;"
 >
   <SidebarHeader class="flex items-center justify-center py-5">
     <img src="/svelte.svg" alt="Pulsar logo" class="size-8" />

@@ -17,6 +17,9 @@
     color: string;
   }
 
+  const SIDEBAR_WIDTH = '5.75rem';
+  const SIDEBAR_STYLE = '--sidebar-width: ' + SIDEBAR_WIDTH + ';';
+
   let passwordItems: PasswordItem[] = [];
   let selectedPasswordItem: PasswordItem | null = null;
   let showCreatePasswordPopup = false;
@@ -195,8 +198,8 @@
 
 <div class="app-container-wrapper">
   <div class="main-app-view">
-    <div class="layout">
-      <SidebarProvider class="min-h-full w-auto" style="--sidebar-width: 5.75rem;">
+    <div class="layout" style={SIDEBAR_STYLE}>
+      <SidebarProvider class="min-h-full w-auto" style={SIDEBAR_STYLE}>
         <AppSidebar
           {buttons}
           on:openPopup={openPopup}

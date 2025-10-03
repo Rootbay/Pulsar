@@ -64,13 +64,15 @@
     calculateStrength(newMasterPassword);
   });
 
-  $: if (browser) {
-    if (!$isDatabaseLoaded) {
-      goto('/select-vault', { replaceState: true });
-    } else if (!$needsPasswordSetup) {
-      goto($isLocked ? '/login' : '/', { replaceState: true });
+  $effect(() => {
+    if (browser) {
+      if (!isDatabaseLoaded()) {
+        goto('/select-vault', { replaceState: true });
+      } else if (!needsPasswordSetup()) {
+        goto(isLocked() ? '/login' : '/', { replaceState: true });
+      }
     }
-  }
+  });
 
   function calculateStrength(password: string) {
     let score = 0;

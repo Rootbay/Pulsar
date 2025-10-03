@@ -1,0 +1,70 @@
+interface ResizeOptions {
+  cssVar?: string;
+  minWidth?: number;
+  maxWidth?: number;
+  selector?: string;
+}
+
+export function createResizeController({
+  cssVar = '--passwordList-width',
+  minWidth = 200,
+  maxWidth = 600,
+  selector = '.passwordList'
+}: ResizeOptions = {}) {
+  let isResizing = false;
+  let startX = 0;
+  let initialWidth = 0;
+
+  const cleanup = () => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    window.removeEventListener('mousemove', handleMouseMove);
+    window.removeEventListener('mouseup', handleMouseUp);
+  };
+
+  const handleMouseMove = (event: MouseEvent) => {
+    if (!isResizing) return;
+    const nextWidth = Math.max(
+      minWidth,
+      Math.min(maxWidth, initialWidth + (event.clientX - startX))
+    );
+    document.documentElement.style.setProperty(cssVar, `${nextWidth}px`);
+  };
+
+  const handleMouseUp = () => {
+    if (!isResizing) {
+      cleanup();
+      return;
+    }
+
+    isResizing = false;
+    cleanup();
+  };
+
+  const start = (event: MouseEvent) => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    const target = document.querySelector<HTMLElement>(selector);
+    if (!target) {
+      return;
+    }
+
+    isResizing = true;
+    startX = event.clientX;
+    initialWidth = target.offsetWidth;
+
+    cleanup();
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+  };
+
+  const destroy = () => {
+    cleanup();
+  };
+
+  return { start, destroy };
+}

@@ -153,12 +153,16 @@
 	}
 
 	function handleDndFinalize(e: CustomEvent<{ items: DisplayField[] }>) {
-		dndItems = e.detail.items;
-    dndItems = [...dndItems];
-    if (selectedPasswordItem) {
-      selectedPasswordItem.field_order = dndItems.map((item) => item.id);
-    }
-  }
+		const items = e.detail.items;
+		dndItems = [...items];
+		if (selectedPasswordItem) {
+			const updatedOrder = dndItems.map((item) => item.id);
+			selectedPasswordItem = {
+				...selectedPasswordItem,
+				field_order: updatedOrder
+			};
+		}
+	}
 
   let originalPasswordItem: PasswordItem | null = null;
 
@@ -203,10 +207,19 @@
       const normalizedOriginal = JSON.parse(
         JSON.stringify(originalPasswordItem)
       );
-      if (normalizedCurrent.password === '')
-        normalizedCurrent.password = 'N/A';
-      if (normalizedOriginal.password == null)
-        normalizedOriginal.password = 'N/A';
+
+      if (normalizedCurrent.password === 'N/A') {
+        normalizedCurrent.password = '';
+      }
+      if (normalizedOriginal.password === 'N/A') {
+        normalizedOriginal.password = '';
+      }
+      if (normalizedCurrent.password == null) {
+        normalizedCurrent.password = '';
+      }
+      if (normalizedOriginal.password == null) {
+        normalizedOriginal.password = '';
+      }
       if (normalizedCurrent.url === '') normalizedCurrent.url = null;
 
       hasUnsavedChanges =
@@ -232,7 +245,7 @@
     for (const item of dndItems) {
       if (
         item.id === 'password' &&
-        (item.value === 'N/A' || item.value == null)
+        (item.value === 'N/A' || item.value == null || item.value === '')
       ) {
         item.value = '';
       }
@@ -258,7 +271,7 @@
           updated.username = val.length > 0 ? val : null;
           break;
         case 'password':
-          updated.password = val.length > 0 ? val : 'N/A';
+          updated.password = val.length > 0 ? val : '';
           break;
         case 'url': {
           if (val.length === 0) {
@@ -339,24 +352,74 @@
   }
 
   async function handleConfirmAddField() {
-    if (!newFieldName.trim()) {
+    const trimmedName = newFieldName.trim();
+    if (!trimmedName) {
       alert('Please enter a name for the new field.');
       return;
     }
 
-    if (selectedPasswordItem) {
-      try {
-        await invoke('add_custom_field', {
-          itemId: selectedPasswordItem.id,
-          fieldName: newFieldName,
-          fieldType: newFieldType
-        });
-        alert('Custom field added successfully!');
-        handleCancelAddField();
-      } catch (error) {
-        console.error('Error adding custom field:', error);
-        alert(`Failed to add custom field: ${error}`);
+    if (!selectedPasswordItem) {
+      return;
+    }
+
+    try {
+      await invoke('add_custom_field', {
+        itemId: selectedPasswordItem.id,
+        fieldName: trimmedName,
+        fieldType: newFieldType
+      });
+
+      const newCustomField = { name: trimmedName, value: '', field_type: newFieldType };
+      const updatedCustomFields = [
+        ...selectedPasswordItem.custom_fields,
+        newCustomField
+      ];
+      const updatedFieldOrder = [
+        ...(selectedPasswordItem.field_order ?? []),
+        trimmedName
+      ];
+
+      const updatedItem = {
+        ...selectedPasswordItem,
+        custom_fields: updatedCustomFields,
+        field_order: updatedFieldOrder
+      };
+
+      selectedPasswordItem = updatedItem;
+      displayFields = buildDisplayFields(updatedItem, iconPaths);
+      dndItems = [
+        ...dndItems,
+        {
+          id: trimmedName,
+          name: trimmedName,
+          value: '',
+          type: newFieldType,
+          icon: iconPaths.plus
+        }
+      ];
+
+      if (originalPasswordItem) {
+        const updatedOriginalFieldOrder =
+          originalPasswordItem.field_order == null
+            ? originalPasswordItem.field_order
+            : [...originalPasswordItem.field_order, trimmedName];
+
+        originalPasswordItem = JSON.parse(
+          JSON.stringify({
+            ...originalPasswordItem,
+            custom_fields: [
+              ...originalPasswordItem.custom_fields,
+              { ...newCustomField }
+            ],
+            field_order: updatedOriginalFieldOrder
+          })
+        );
       }
+
+      handleCancelAddField();
+    } catch (error) {
+      console.error('Error adding custom field:', error);
+      alert(`Failed to add custom field: ${error}`);
     }
   }
 </script>

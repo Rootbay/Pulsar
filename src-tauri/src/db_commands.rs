@@ -23,11 +23,9 @@ pub fn validate_password_item_fields(item: &PasswordItem) -> Result<(), validato
         }
     }
 
-    // Allow placeholder password "N/A" for entries created without a real password
-    if item.password != "N/A" {
-        if item.password.is_empty() {
-            return Err(validator::ValidationError::new("password_empty"));
-        }
+    // Allow placeholder password when empty (legacy values of "N/A" are also accepted)
+    let is_placeholder_password = item.password.trim().is_empty() || item.password == "N/A";
+    if !is_placeholder_password {
         if item.password.len() < 8 {
             return Err(validator::ValidationError::new("password_too_short"));
         }

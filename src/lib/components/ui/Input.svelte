@@ -17,8 +17,8 @@
 
   let expanded: boolean = false;
 
-  // Treat literal value "N/A" in read-only mode as a placeholder
-  $: isPlaceholderValue = readOnly && (inputValue === 'N/A');
+  // Treat empty or literal "N/A" values in read-only mode as placeholders
+  $: isPlaceholderValue = readOnly && (!inputValue || inputValue === 'N/A');
 
   function resizeTextarea() {
     if (!isMultiline) return;
@@ -156,7 +156,7 @@
     cursor: inherit;
   }
 
-  /* When showing placeholder-like value ("N/A") */
+  /* When showing placeholder-like value (empty or "N/A") */
   .inputContainer.has-placeholder-value input,
   .inputContainer.has-placeholder-value textarea {
     color: #9aa0a6;

@@ -25,7 +25,7 @@
     color: string;
   }
 
-  const FIXED_PASSWORD = 'N/A';
+  const PLACEHOLDER_PASSWORD = '';
 
   const dispatch = createEventDispatcher();
 
@@ -84,7 +84,7 @@
           username: null,
           url: null,
           notes: null,
-          password: FIXED_PASSWORD,
+          password: PLACEHOLDER_PASSWORD,
           description: null,
           img: null,
           tags: tags.length ? tags.join(',') : null,

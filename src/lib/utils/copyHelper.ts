@@ -1,4 +1,4 @@
-import type { PasswordItem } from '../../routes/+layout.ts';
+import type { PasswordItem } from '$lib/types/password';
 import { writeText, readText } from '@tauri-apps/plugin-clipboard-manager';
 import { securitySettings } from '$lib/stores/security';
 import { get } from 'svelte/store';

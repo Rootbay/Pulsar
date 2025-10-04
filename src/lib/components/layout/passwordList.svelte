@@ -8,7 +8,7 @@
   import { invoke } from '@tauri-apps/api/core';
   import { selectedTag, filterCategory } from '$lib/stores';
   import type { FilterCategory } from '$lib/stores';
-  import type { PasswordItem } from '../../../routes/+layout.ts';
+  import type { PasswordItem } from '$lib/types/password';
   import { Search, X } from '@lucide/svelte';
   import { Button } from '$lib/components/ui/button';
   import { Input } from '$lib/components/ui/input';
@@ -739,4 +739,5 @@
     .resizer { width: 12px; }
   }
 </style>
+
 

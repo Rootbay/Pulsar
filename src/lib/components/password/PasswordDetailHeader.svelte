@@ -1,7 +1,7 @@
 <svelte:options runes />
 
 <script lang="ts">
-  import type { PasswordItem } from '../../../routes/+layout.ts';
+  import type { PasswordItem } from '$lib/types/password';
   import TagList from './TagList.svelte';
   import Icon from '../ui/Icon.svelte';
   import { iconPaths } from '$lib/icons';
@@ -245,3 +245,4 @@
 		background-color: #3a3a3a;
 	}
 </style>
+

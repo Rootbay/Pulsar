@@ -4,7 +4,7 @@
   import TagIcon from '../../ui/TagIcon.svelte';
   import Favicon from '../../ui/Favicon.svelte';
   import type { ItemSection, TagMeta } from './utils';
-  import type { PasswordItem } from '../../../../routes/+layout.ts';
+  import type { PasswordItem } from '$lib/types/password';
 
   export let sections: ItemSection[] = [];
   export let selectedItemId: number | null = null;
@@ -90,3 +90,4 @@
     </ul>
   {/if}
 {/each}
+

@@ -1,6 +1,6 @@
 import { iconPaths } from '$lib/icons';
 import type { FilterCategory } from '$lib/stores';
-import type { PasswordItem } from '../../../../routes/+layout.ts';
+import type { PasswordItem } from '$lib/types/password';
 
 export type TagButton = {
   id?: number;
@@ -23,6 +23,7 @@ export interface ItemSection {
 
 export const RECENT_FILTER: FilterCategory = 'recent';
 export const PIN_TAG_LABEL = 'Pinned';
+export const PIN_TAG_NAMES = new Set(['pinned', 'pin']);
 
 const DEFAULT_FALLBACK: TagMeta = {
   icon: iconPaths.default,
@@ -32,7 +33,6 @@ const DEFAULT_FALLBACK: TagMeta = {
 const SECTION_ORDER: SectionTitle[] = [PIN_TAG_LABEL, 'Today', 'Yesterday', 'Earlier'];
 const RECENT_DAY_WINDOW = 7;
 const DAY_IN_MS = 24 * 60 * 60 * 1000;
-const PIN_TAG_NAMES = new Set(['pinned', 'pin']);
 
 export function buildTagMap(buttons: TagButton[]): Map<string, TagMeta> {
   return new Map(
@@ -74,17 +74,21 @@ export function getTagNames(item: PasswordItem): string[] {
   return item.tags
     ? item.tags
         .split(',')
-        .map((tag) => tag.trim())
-        .filter(Boolean)
+        .map((tag: string) => tag.trim())
+        .filter((tag: string) => Boolean(tag))
     : [];
 }
 
 export function hasPinnedTag(tagNames: string[]): boolean {
-  return tagNames.some((tag) => PIN_TAG_NAMES.has(tag.toLowerCase()));
+  return tagNames.some((tag: string) => PIN_TAG_NAMES.has(tag.toLowerCase()));
 }
 
 export function isPinned(item: PasswordItem): boolean {
   return hasPinnedTag(getTagNames(item));
+}
+
+export function stripPinnedTags(tagNames: string[]): string[] {
+  return tagNames.filter((tag) => !PIN_TAG_NAMES.has(tag.toLowerCase()));
 }
 
 export function toDate(dateStr: string): Date | null {
@@ -150,3 +154,4 @@ export function getFallback(item: PasswordItem, tagMap: Map<string, TagMeta>): T
   }
   return DEFAULT_FALLBACK;
 }
+

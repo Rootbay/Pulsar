@@ -1,7 +1,7 @@
 <svelte:options runes />
 
 <script lang="ts">
-  import type { PasswordItem } from '../../../routes/+layout.ts';
+  import type { PasswordItem } from '$lib/types/password';
   import Icon from '../ui/Icon.svelte';
   import { iconPaths } from '$lib/icons';
   import { invoke } from '@tauri-apps/api/core';
@@ -419,3 +419,4 @@
     .chooserChip :global(svg) { width: 14px; height: 14px; display: block; }
     
 </style>
+

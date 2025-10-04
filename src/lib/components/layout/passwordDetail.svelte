@@ -1,8 +1,8 @@
 <svelte:options runes />
 
 <script lang="ts">
-	import type { PasswordItem } from '../../../routes/+layout.ts';
-	import Icon from '../ui/Icon.svelte';
+	import type { PasswordItem } from '$lib/types/password';
+	import type { DisplayField } from '$lib/types/password-fields';
 	import { iconPaths } from '$lib/icons';
 	import { invoke } from '@tauri-apps/api/core';
 	import Input from '../ui/Input.svelte';
@@ -12,11 +12,12 @@
 	import { createEventDispatcher, tick, onDestroy } from 'svelte';
 	import UnsavedChangesPopup from '../UnsavedChangesPopup.svelte';
 	import PasswordDetailHeader from '../password/PasswordDetailHeader.svelte';
+	import PasswordFieldList from './password-detail/PasswordFieldList.svelte';
+	import PasswordMetadata from './password-detail/PasswordMetadata.svelte';
 	import { selectedTag, filterCategory } from '$lib/stores';
-	import { flip } from 'svelte/animate';
-	import { dndzone } from 'svelte-dnd-action';
-	import { quintOut, cubicOut } from 'svelte/easing';
-	import { Plus, ArrowUp, ArrowDown, Eye, EyeOff, ArrowDownUp } from '@lucide/svelte';
+	import { quintOut } from 'svelte/easing';
+	import { Plus } from '@lucide/svelte';
+	import { buildDisplayFields } from '$lib/utils/passwordFields';
 
 	function modernFade(node: Element, { duration = 400 } = {}) {
 		const reduce =
@@ -74,6 +75,21 @@
 	const createTagPlaceholders = (tags?: string | null) =>
 		createPlaceholders(extractTags(tags).length, MIN_TAG_SKELETONS);
 
+
+	const detailThemeStyle = [
+		'--passworddetail-surface: color-mix(in oklch, var(--card) 90%, var(--background) 10%)',
+		'--passworddetail-elevated: color-mix(in oklch, var(--card) 80%, var(--background) 20%)',
+		'--passworddetail-hover: color-mix(in oklch, var(--passworddetail-elevated) 82%, var(--background) 18%)',
+		'--passworddetail-border: var(--border)',
+		'--passworddetail-strong-text: var(--foreground)',
+		'--passworddetail-muted-text: color-mix(in oklch, var(--foreground) 65%, transparent)',
+		'--passworddetail-subtle-text: color-mix(in oklch, var(--foreground) 40%, transparent)',
+		'--passworddetail-accent: var(--primary)',
+		'--passworddetail-accent-foreground: var(--primary-foreground)',
+		'--passworddetail-secondary-surface: color-mix(in oklch, var(--passworddetail-elevated) 85%, var(--background) 15%)',
+		'--passworddetail-secondary-hover: color-mix(in oklch, var(--passworddetail-secondary-surface) 80%, var(--passworddetail-elevated) 20%)',
+		'--passworddetail-overlay: color-mix(in oklch, var(--passworddetail-surface) 85%, transparent)'
+	].join(';') + ';';
 	let isEditing = $state(false);
 	let hasUnsavedChanges = $state(false);
 	let showTimestamps = $state(false);
@@ -125,80 +141,11 @@
 		clearTimeout(skeletonTimerDetail);
 	});
 
-	type DisplayField = {
-		id: string;
-		name: string;
-		value: any;
-		type: string;
-		icon: string;
-	};
-
 	let displayFields = $state<DisplayField[]>([]);
 
 	$effect(() => {
-		if (!selectedPasswordItem) {
-			displayFields = [];
-			return;
-		}
+		displayFields = buildDisplayFields(selectedPasswordItem, iconPaths);
 
-		const staticFields: DisplayField[] = [
-			{
-				id: 'username',
-				name: 'Username',
-				value: selectedPasswordItem.username,
-				type: 'text',
-				icon: iconPaths.user
-			},
-			{
-				id: 'password',
-				name: 'Password',
-				value: selectedPasswordItem.password,
-				type: 'password',
-				icon: iconPaths.key
-			},
-			{
-				id: 'url',
-				name: 'URL',
-				value: selectedPasswordItem.url,
-				type: 'text',
-				icon: iconPaths.link
-			},
-			{
-				id: 'notes',
-				name: 'Notes',
-				value: selectedPasswordItem.notes,
-				type: 'multiline',
-				icon: iconPaths.notes
-			}
-		];
-
-		const customFields: DisplayField[] =
-			(selectedPasswordItem.custom_fields ?? []).map((field: { name: string; value: string; field_type: string }) => ({
-				id: field.name,
-				name: field.name,
-				value: field.value,
-				type: field.field_type,
-				icon: iconPaths.plus
-			}));
-
-		let allFields: DisplayField[] = [...staticFields, ...customFields];
-
-		if (selectedPasswordItem.field_order?.length) {
-			const orderedFields: DisplayField[] = [];
-			const fieldMap = new Map(allFields.map((field) => [field.id, field]));
-
-			for (const fieldId of selectedPasswordItem.field_order) {
-				const field = fieldMap.get(fieldId);
-				if (field) {
-					orderedFields.push(field);
-					fieldMap.delete(fieldId);
-				}
-			}
-			orderedFields.push(...fieldMap.values());
-			allFields = orderedFields;
-		}
-
-		displayFields = allFields;
 	});
 
 	function handleDndConsider(e: CustomEvent<{ items: DisplayField[] }>) {
@@ -385,12 +332,6 @@
     pendingTagOrder = null;
   }
 
-  function formatTimestamp(timestamp: string | null): string {
-    if (!timestamp) return 'N/A';
-    const date = new Date(timestamp);
-    return date.toLocaleString();
-  }
-
   function handleCancelAddField() {
     addingField = false;
     newFieldName = '';
@@ -420,9 +361,9 @@
   }
 </script>
 
-<main class="passwordDetail" class:editing={isEditing}>
+<main class="relative flex h-full flex-col overflow-y-auto bg-[color:var(--passworddetail-surface)] p-5 text-[color:var(--passworddetail-strong-text)]" style={detailThemeStyle}>
     {#key selectedPasswordItem ? selectedPasswordItem.id : 'none'}
-    <div class="detail-anim detail-content" in:modernFade aria-hidden={showSkeletonDetail}>
+	<div class={`flex flex-col gap-6 ${showSkeletonDetail ? 'pointer-events-none opacity-0' : ''}`} in:modernFade aria-hidden={showSkeletonDetail}>
 	{#if selectedPasswordItem}
 		<PasswordDetailHeader
 			bind:selectedPasswordItem
@@ -437,144 +378,18 @@
 			onTagsReorderedPending={(detail) => { pendingTagOrder = detail?.tags ?? null; }}
 		/>
 
-		<div class="detail-group" aria-busy={showSkeletonDetail}>
-			{#if !isEditing}
-				{#if showSkeletonDetail}
-					{#each createPlaceholders(displayFields.length) as _}
-						<div class="flex items-center gap-4 py-2" aria-hidden="true">
-							<Skeleton class="h-5 w-5 rounded-md" />
-							<div class="flex flex-1 flex-col gap-2">
-								<Skeleton class="h-4 w-40" />
-								<Skeleton class="h-3 w-32 opacity-70" />
-							</div>
-						</div>
-					{/each}
-				{:else}
-					{#each displayFields as field (field.id)}
-						<Input
-							title={field.name}
-							inputValue={
-								field.id === 'password'
-									? (field.value && field.value.length ? field.value : 'N/A')
-									: (field.id === 'username' || field.id === 'url' || field.id === 'notes'
-										? field.value || 'N/A'
-										: field.value)
-							}
-							selectedIconPath={field.icon}
-							selectedIconName={field.id === 'username'
-								? 'user'
-								: field.id === 'password'
-									? 'key'
-									: field.id === 'url'
-										? 'link'
-										: field.id === 'notes'
-											? 'notes'
-											: field.id}
-							readOnly={true}
-							selectedColor={displayColor}
-							isMultiline={field.type === 'multiline'}
-							type={field.id === 'password'
-								? ((field.value && field.value.length && field.value !== 'N/A')
-										? (showPassword ? 'text' : 'password')
-										: 'text')
-								: (field.type === 'password' ? 'password' : 'text')}
-							isExpandable={true}
-						>
-							<div slot="rightIcon">
-								{#if field.id === 'password' && field.value && field.value.length && field.value !== 'N/A'}
-									<Button
-										type="button"
-										variant="ghost"
-										size="icon"
-										class="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
-										aria-pressed={showPassword}
-										aria-label={showPassword ? 'Hide password' : 'Show password'}
-										onclick={() => (showPassword = !showPassword)}
-									>
-										{#if showPassword}
-											<Eye class="h-5 w-5" />
-										{:else}
-											<EyeOff class="h-5 w-5" />
-										{/if}
-									</Button>
-								{/if}
-							</div>
-						</Input>
-					{/each}
-				{/if}
-			{:else}
-				{#if showSkeletonDetail}
-					{#each createPlaceholders(dndItems.length) as _}
-						<div class="flex items-center gap-4 py-2" aria-hidden="true">
-							<Skeleton class="h-5 w-5 rounded-md" />
-							<div class="flex flex-1 flex-col gap-2">
-								<Skeleton class="h-4 w-48" />
-								<Skeleton class="h-3 w-36 opacity-70" />
-							</div>
-						</div>
-					{/each}
-				{:else}
-				<div
-					class="detail-group"
-					use:dndzone={{ items: dndItems, flipDurationMs: 300, dropFromOthersDisabled: true }}
-					onconsider={handleDndConsider}
-					onfinalize={handleDndFinalize}
-				>
-					{#each dndItems as field (field.id)}
-							<div animate:flip={{ duration: 300, easing: cubicOut }} class="dnd-item">
-								<Input
-									title={field.name}
-									bind:inputValue={field.value}
-									readOnly={!isEditing}
-									selectedColor={displayColor}
-									selectedIconPath={field.icon}
-									selectedIconName={field.id}
-									isMultiline={field.type === 'multiline'}
-									type={field.id === 'url'
-										? 'url'
-										: field.id === 'password'
-											? showPassword
-												? 'text'
-												: 'password'
-											: field.type === 'password'
-												? 'password'
-												: 'text'}
-								>
-									<div
-										slot="rightIcon"
-										class="flex items-center gap-2"
-									>
-										{#if field.id === 'password'}
-											<Button
-												type="button"
-												variant="ghost"
-												size="icon"
-												class="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
-												aria-pressed={showPassword}
-												aria-label={showPassword ? 'Hide password' : 'Show password'}
-												onclick={() => (showPassword = !showPassword)}
-											>
-													{#if showPassword}
-														<Eye class="h-5 w-5" />
-													{:else}
-														<EyeOff class="h-5 w-5" />
-													{/if}
-											</Button>
-										{/if}
-										{#if isEditing}
-											<div class="drag-handle" data-dnd-handle>
-												<ArrowDownUp class="h-6 w-6" />
-											</div>
-										{/if}
-									</div>
-								</Input>
-							</div>
-						{/each}
-				</div>
-				{/if}
-			{/if}
-		</div>
-
+		<PasswordFieldList
+			isEditing={isEditing}
+			displayFields={displayFields}
+			bind:editingFields={dndItems}
+			displayColor={displayColor}
+			bind:showPassword
+			showSkeleton={showSkeletonDetail}
+			viewSkeletonPlaceholders={showSkeletonDetail ? createPlaceholders(displayFields.length) : []}
+			editSkeletonPlaceholders={showSkeletonDetail ? createPlaceholders(dndItems.length) : []}
+			on:consider={handleDndConsider}
+			on:finalize={handleDndFinalize}
+		/>
 		{#if isEditing}
 			{#if !addingField}
 				<Button
@@ -635,59 +450,10 @@
 			{/if}
 		{/if}
 
-		<div class="collapsible-section">
-			<button
-				type="button"
-				class="collapsible-header"
-				class:expanded={showTimestamps}
-				onclick={() => (showTimestamps = !showTimestamps)}
-			>
-				<h3>Metadata</h3>
-				{#if showTimestamps}
-					<ArrowUp class="h-5 w-5" />
-				{:else}
-					<ArrowDown class="h-5 w-5" />
-				{/if}
-			</button>
-			<div class="detail-group timestamps collapsible-content" class:collapsed={!showTimestamps}>
-				<div class="detail-section">
-					<h3>Password ID</h3>
-					<p>{selectedPasswordItem.id}</p>
-				</div>
+	<PasswordMetadata item={selectedPasswordItem} bind:expanded={showTimestamps} />
 
-					<div class="detail-section">
-						<h3>Created At</h3>
-						<p class:placeholder-value={formatTimestamp(selectedPasswordItem.created_at) === 'N/A'}>{formatTimestamp(selectedPasswordItem.created_at)}</p>
-					</div>
-
-					<div class="detail-section">
-						<h3>Last Modified</h3>
-						<p class:placeholder-value={formatTimestamp(selectedPasswordItem.updated_at) === 'N/A'}>{formatTimestamp(selectedPasswordItem.updated_at)}</p>
-					</div>
-
-				<div class="detail-section">
-					<h3>Key Derivation Function</h3>
-					<p>Argon2id</p>
-				</div>
-
-				<div class="detail-section">
-					<h3>Encryption Algorithm</h3>
-					<p>ChaCha20-Poly1305 (Default) / AES-256-GCM (if AES-NI)</p>
-				</div>
-
-				<div class="detail-section">
-					<h3>Nonce Size</h3>
-					<p>12-byte random per record</p>
-				</div>
-
-					<div class="detail-section">
-						<h3>Last Accessed</h3>
-						<p class="placeholder-value">N/A (Placeholder)</p>
-					</div>
-			</div>
-		</div>
 	{:else}
-		<p class="no-selection">Select a password entry to view details.</p>
+		<p class="mt-12 text-center text-sm text-[color:var(--passworddetail-subtle-text)]">Select a password entry to view details.</p>
     {/if}
     </div>
     {/key}
@@ -740,141 +506,7 @@
 	{/if}
 </main>
 
-<style>
-	.detail-group[aria-busy="true"] {
-		pointer-events: none;
-	}
 
-	.detail-anim {
-		will-change: opacity, transform;
-	}
 
-	.passwordDetail {
-		--passworddetail-surface: color-mix(in oklch, var(--card) 90%, var(--background) 10%);
-		--passworddetail-elevated: color-mix(in oklch, var(--card) 80%, var(--background) 20%);
-		--passworddetail-hover: color-mix(in oklch, var(--passworddetail-elevated) 82%, var(--background) 18%);
-		--passworddetail-border: var(--border);
-		--passworddetail-strong-text: var(--foreground);
-		--passworddetail-muted-text: color-mix(in oklch, var(--foreground) 65%, transparent);
-		--passworddetail-subtle-text: color-mix(in oklch, var(--foreground) 40%, transparent);
-		--passworddetail-accent: var(--primary);
-		--passworddetail-accent-foreground: var(--primary-foreground);
-		--passworddetail-secondary-surface: color-mix(in oklch, var(--passworddetail-elevated) 85%, var(--background) 15%);
-		--passworddetail-secondary-hover: color-mix(in oklch, var(--passworddetail-secondary-surface) 80%, var(--passworddetail-elevated) 20%);
-		--passworddetail-overlay: color-mix(in oklch, var(--passworddetail-surface) 85%, transparent);
-		padding: 20px;
-		background-color: var(--passworddetail-surface);
-		color: var(--passworddetail-strong-text);
-		display: flex;
-		flex-direction: column;
-		height: 100%;
-		box-sizing: border-box;
-		overflow-y: auto;
-		position: relative;
-	}
 
-	.detail-group {
-		display: flex;
-		flex-direction: column;
-		gap: 6px;
-		outline: none !important;
-	}
 
-	.dnd-item {
-		will-change: transform;
-		touch-action: none;
-	}
-
-	.detail-group.timestamps {
-		flex-direction: row;
-		flex-wrap: wrap;
-		gap: 30px;
-	}
-
-	.detail-section {
-		margin-bottom: 10px;
-	}
-
-	.detail-section h3 {
-		margin-top: 0;
-		margin-bottom: 5px;
-		color: var(--passworddetail-muted-text);
-		font-size: 14px;
-		display: flex;
-		align-items: center;
-		gap: 5px;
-	}
-
-	.detail-section p {
-		margin: 0;
-		font-size: 16px;
-		word-wrap: break-word;
-	}
-
-	.no-selection {
-		text-align: center;
-		color: var(--passworddetail-subtle-text);
-		margin-top: 50px;
-	}
-
-	.collapsible-section {
-		margin-top: 20px;
-		border: 1px solid var(--passworddetail-border);
-		border-radius: 8px;
-	}
-
-	.collapsible-header {
-		display: flex;
-		justify-content: space-between;
-		align-items: center;
-		padding: 10px 15px;
-		background-color: var(--passworddetail-elevated);
-		cursor: pointer;
-		font-weight: 500;
-		color: var(--passworddetail-strong-text);
-		border: none;
-		width: 100%;
-	}
-
-	.collapsible-header:hover {
-		background-color: var(--passworddetail-hover);
-	}
-
-	.collapsible-header h3 {
-		margin: 0;
-		font-size: 16px;
-	}
-
-	.collapsible-header :global(svg) {
-		transition: transform 0.2s ease-in-out;
-	}
-
-	.collapsible-header.expanded :global(svg) {
-		transform: rotate(180deg);
-	}
-
-	.collapsible-content {
-		padding: 15px;
-		background-color: var(--passworddetail-surface);
-		overflow-y: auto;
-		max-height: 169px;
-		transition: max-height 0.3s ease-out;
-	}
-
-	.collapsible-content.collapsed {
-		max-height: 0;
-		padding-top: 0;
-		padding-bottom: 0;
-		overflow-y: hidden;
-	}
-
-	.drag-handle {
-		cursor: grab;
-		margin-left: 10px;
-	}
-
-	.detail-content[aria-hidden="true"] {
-		visibility: hidden;
-		pointer-events: none;
-	}
-</style>

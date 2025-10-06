@@ -1,24 +1,56 @@
 <script lang="ts">
   import Icon from "../ui/Icon.svelte";
   import { onMount, tick } from "svelte";
+  import type { Snippet } from "svelte";
 
-  export let selectedColor: string | undefined = undefined;
-  export let inputValue: string;
-  export let placeholder: string = "";
-  export let initialInput: HTMLInputElement | HTMLTextAreaElement | null = null;
-  export let title: string;
-  export let showTitle: boolean = true;
-  export let selectedIconPath: string | undefined = undefined;
-  export let selectedIconName: string | undefined = undefined;
-  export let readOnly: boolean = false;
-  export let isMultiline: boolean = false;
-  export let type: string = "text";
-  export let isExpandable: boolean = false;
+  interface $$Slots {
+    default?: Snippet;
+    rightIcon?: Snippet;
+  }
 
-  let expanded: boolean = false;
+  interface Props {
+    selectedColor?: string;
+    inputValue?: string | null;
+    placeholder?: string;
+    initialInput?: HTMLInputElement | HTMLTextAreaElement | null;
+    title: string;
+    showTitle?: boolean;
+    selectedIconPath?: string;
+    selectedIconName?: string;
+    readOnly?: boolean;
+    isMultiline?: boolean;
+    type?: string;
+    isExpandable?: boolean;
+    rightIcon?: Snippet;
+    children?: Snippet;
+  }
+
+  let {
+    selectedColor = undefined,
+    inputValue = $bindable<string | null>(null),
+    placeholder = "",
+    initialInput = null,
+    title,
+    showTitle = true,
+    selectedIconPath = undefined,
+    selectedIconName = undefined,
+    readOnly = false,
+    isMultiline = false,
+    type = "text",
+    isExpandable = false,
+    rightIcon
+  }: Props = $props();
+
+  let expanded =  $state(false); 
+
+  $effect(() => {
+    if (inputValue == null) {
+      inputValue = '';
+    }
+  });
 
   // Treat empty or literal "N/A" values in read-only mode as placeholders
-  $: isPlaceholderValue = readOnly && (!inputValue || inputValue === 'N/A');
+  const isPlaceholderValue = $derived(() => readOnly && (!inputValue || inputValue === 'N/A'));
 
   function resizeTextarea() {
     if (!isMultiline) return;
@@ -32,9 +64,11 @@
     resizeTextarea();
   });
 
-  $: if (isMultiline) {
-    tick().then(() => resizeTextarea());
-  }
+  $effect(() => {
+    if (isMultiline) {
+      tick().then(() => resizeTextarea());
+    }
+  });
 
   function focusInnerInput() {
     const node = initialInput as HTMLInputElement | HTMLTextAreaElement | null;
@@ -68,10 +102,10 @@
   style="color: {selectedColor || '#8aa0ff'}"
   class:multiline-expanded={expanded && isMultiline}
   class:multiline-collapsed={!expanded && isMultiline}
-  on:click={handleContainerClick}
+  onclick={handleContainerClick}
   role="button"
   tabindex="0"
-  on:keydown={(e) => {
+  onkeydown={(e) => {
     if (!isExpandable || !isMultiline) return;
     if (e.target !== e.currentTarget) return;
     if (e.key === 'Enter' || e.key === ' ') {
@@ -93,7 +127,7 @@
           bind:this={initialInput}
           placeholder={placeholder}
           bind:value={inputValue}
-          on:input={resizeTextarea}
+          oninput={resizeTextarea}
           readonly={readOnly}
         ></textarea>
       </div>
@@ -108,7 +142,7 @@
     {/if}
   </div>
   <div class="right-icon-wrapper">
-    <slot name="rightIcon"></slot>
+    {@render rightIcon?.()}
   </div>
 </div>
 

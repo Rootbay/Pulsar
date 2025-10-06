@@ -7,10 +7,10 @@
     isDatabaseLoaded,
     needsPasswordSetup,
     isLocked,
-    totpVerified
+    totpVerified,
+    totpRequired
   } from '$lib/stores';
   import { appearanceSettings } from '$lib/stores/appearance';
-  import { securitySettings } from '$lib/stores/security';
 
   const AUTH_ROUTES = new Set(['/select-vault', '/setup', '/login', '/totp']);
 
@@ -29,7 +29,7 @@
   }
 
   $: needsTotp =
-    $securitySettings.useTotp &&
+    $totpRequired &&
     !$totpVerified &&
     $isDatabaseLoaded &&
     !$isLocked &&

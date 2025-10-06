@@ -118,24 +118,25 @@
 					type={getInputType(field, true)}
 					isExpandable
 				>
-					{#if field.id === 'password' && field.value && field.value.length && field.value !== 'N/A'}
-						<Button
-							slot="rightIcon"
-							type="button"
-							variant="ghost"
-							size="icon"
-							class="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
-							aria-pressed={showPassword}
-							aria-label={showPassword ? 'Hide password' : 'Show password'}
-							onclick={togglePasswordVisibility}
-						>
-							{#if showPassword}
-								<Eye class="h-5 w-5" />
-							{:else}
-								<EyeOff class="h-5 w-5" />
-							{/if}
-						</Button>
-					{/if}
+					{#snippet rightIcon()}
+						{#if field.id === 'password' && field.value && field.value.length && field.value !== 'N/A'}
+							<Button
+								type="button"
+								variant="ghost"
+								size="icon"
+								class="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
+								aria-pressed={showPassword}
+								aria-label={showPassword ? 'Hide password' : 'Show password'}
+								onclick={togglePasswordVisibility}
+							>
+								{#if showPassword}
+									<Eye class="h-5 w-5" />
+								{:else}
+									<EyeOff class="h-5 w-5" />
+								{/if}
+							</Button>
+						{/if}
+					{/snippet}
 				</Input>
 			{/each}
 		{/if}
@@ -173,30 +174,32 @@
 							isMultiline={field.type === 'multiline'}
 							type={getInputType(field, false)}
 						>
-							<div slot="rightIcon" class="flex items-center gap-2">
-								{#if field.id === 'password'}
-									<Button
-										type="button"
-										variant="ghost"
-										size="icon"
-										class="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
-										aria-pressed={showPassword}
-										aria-label={showPassword ? 'Hide password' : 'Show password'}
-										onclick={togglePasswordVisibility}
-									>
-										{#if showPassword}
-											<Eye class="h-5 w-5" />
-										{:else}
-											<EyeOff class="h-5 w-5" />
-										{/if}
-									</Button>
-								{/if}
-								{#if isEditing}
-									<div class="ml-2 cursor-grab" data-dnd-handle>
-										<ArrowDownUp class="h-6 w-6" />
-									</div>
-								{/if}
-							</div>
+							{#snippet rightIcon()}
+								<div class="flex items-center gap-2">
+									{#if field.id === 'password'}
+										<Button
+											type="button"
+											variant="ghost"
+											size="icon"
+											class="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
+											aria-pressed={showPassword}
+											aria-label={showPassword ? 'Hide password' : 'Show password'}
+											onclick={togglePasswordVisibility}
+										>
+											{#if showPassword}
+												<Eye class="h-5 w-5" />
+											{:else}
+												<EyeOff class="h-5 w-5" />
+											{/if}
+										</Button>
+									{/if}
+									{#if isEditing}
+										<div class="ml-2 cursor-grab" data-dnd-handle>
+											<ArrowDownUp class="h-6 w-6" />
+										</div>
+									{/if}
+								</div>
+							{/snippet}
 						</Input>
 					</div>
 				{/each}

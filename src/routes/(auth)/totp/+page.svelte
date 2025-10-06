@@ -24,9 +24,9 @@
     isDatabaseLoaded,
     isLocked,
     needsPasswordSetup,
-    totpVerified
+    totpVerified,
+    totpRequired
   } from '$lib/stores';
-  import { securitySettings } from '$lib/stores/security';
 
   let hiddenInput: HTMLInputElement | null = null;
   let code = '';
@@ -34,7 +34,7 @@
   $: {
     if (
       browser &&
-      (!($securitySettings.useTotp && !$totpVerified && $isDatabaseLoaded && !$isLocked && !$needsPasswordSetup))
+      (!($totpRequired && !$totpVerified && $isDatabaseLoaded && !$isLocked && !$needsPasswordSetup))
     ) {
       goto('/', { replaceState: true });
     }
@@ -54,11 +54,11 @@
     }
 
     try {
-      const isValid = await invoke<boolean>('verify_totp', { token: code });
-      if (isValid) {
-        totpVerified.set(true);
-        await goto('/', { replaceState: true });
-      }
+      await invoke('verify_login_totp', { token: code });
+      isLocked.set(false);
+      totpVerified.set(true);
+      totpRequired.set(false);
+      await goto('/', { replaceState: true });
     } catch (cause) {
       console.error('Failed to verify TOTP:', cause);
     }

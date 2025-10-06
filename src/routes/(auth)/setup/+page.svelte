@@ -27,7 +27,8 @@
     isDatabaseLoaded,
     isLocked,
     needsPasswordSetup,
-    totpVerified
+    totpVerified,
+    totpRequired
   } from '$lib/stores';
 
   let newMasterPassword = $state('');
@@ -65,12 +66,14 @@
   });
 
   $effect(() => {
-    if (browser) {
-      if (!isDatabaseLoaded()) {
-        goto('/select-vault', { replaceState: true });
-      } else if (!needsPasswordSetup()) {
-        goto(isLocked() ? '/login' : '/', { replaceState: true });
-      }
+    if (!browser) {
+      return;
+    }
+
+    if (!$isDatabaseLoaded) {
+      goto('/select-vault', { replaceState: true });
+    } else if (!$needsPasswordSetup) {
+      goto($isLocked ? '/login' : '/', { replaceState: true });
     }
   });
 
@@ -112,6 +115,7 @@
       needsPasswordSetup.set(false);
       isLocked.set(false);
       totpVerified.set(false);
+      totpRequired.set(false);
     } catch (cause) {
       console.error('Set master password failed:', cause);
       loginError = typeof cause === 'string' ? cause : 'An unknown error occurred.';

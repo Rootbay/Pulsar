@@ -44,7 +44,7 @@
             <ContextMenu>
               <ContextMenuTrigger>
                 <a
-                  href={item.url}
+                  href={item.url ?? '#'}
                   class="itemLink"
                   onclick={(event: MouseEvent) => {
                     event.preventDefault();
@@ -54,7 +54,7 @@
                 >
                   <div class="itemLeft">
                     <Favicon
-                      url={item.url}
+                      url={item.url ?? undefined}
                       title={item.title}
                       fallbackIcon={fallback.icon}
                       fallbackColor={fallback.color}

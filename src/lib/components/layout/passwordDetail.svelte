@@ -183,7 +183,7 @@
             currentItemState.username = item.value;
             break;
           case 'password':
-            currentItemState.password = item.value;
+            currentItemState.password = item.value ?? '';
             break;
           case 'url':
             currentItemState.url = item.value;
@@ -194,7 +194,7 @@
           default:
             newCustomFields.push({
               name: item.name,
-              value: item.value,
+              value: item.value ?? '',
               field_type: item.type
             });
             break;
@@ -289,7 +289,7 @@
         default:
           newCustomFields.push({
             name: item.name,
-            value: item.value,
+            value: val,
             field_type: item.type
           });
           break;

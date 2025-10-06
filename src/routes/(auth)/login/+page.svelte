@@ -26,7 +26,8 @@
     isDatabaseLoaded,
     isLocked,
     needsPasswordSetup,
-    totpVerified
+    totpVerified,
+    totpRequired
   } from '$lib/stores';
 
   let password = '';
@@ -53,11 +54,22 @@
     loginError = null;
 
     try {
-      await invoke('unlock', { password: trimmedPassword });
-      totpVerified.set(false);
-      isLocked.set(false);
+      const result = await invoke<{ totp_required: boolean }>('unlock', { password: trimmedPassword });
+      if (result?.totp_required) {
+        totpRequired.set(true);
+        totpVerified.set(false);
+        isLocked.set(false);
+        await goto('/totp', { replaceState: true });
+      } else {
+        totpRequired.set(false);
+        totpVerified.set(true);
+        isLocked.set(false);
+        await goto('/', { replaceState: true });
+      }
     } catch (error) {
       console.error('Unlock failed:', error);
+      totpRequired.set(false);
+      totpVerified.set(false);
       loginError = typeof error === 'string' ? error : 'An unknown error occurred.';
     } finally {
       isUnlocking = false;
@@ -68,6 +80,7 @@
     await invoke('lock');
     isDatabaseLoaded.set(false);
     isLocked.set(true);
+    totpRequired.set(false);
     totpVerified.set(false);
   };
 

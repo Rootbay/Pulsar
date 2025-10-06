@@ -134,11 +134,12 @@
   });
 
   $effect(() => {
-    if (currentSkeletonKey === lastSkeletonKey) {
+    const skeletonKey = currentSkeletonKey();
+    if (skeletonKey === lastSkeletonKey) {
       return;
     }
 
-    lastSkeletonKey = currentSkeletonKey;
+    lastSkeletonKey = skeletonKey;
 
     if (filteredItems.length === 0) {
       showSkeleton = false;
@@ -481,14 +482,14 @@
                           <ContextMenu>
                             <ContextMenuTrigger>
                               <a
-                                href={item.url}
+                                href={item.url ?? '#'}
                                 class="itemLink"
                                 onclick={(event: MouseEvent) => { event.preventDefault(); selectItem(item); }}
                                 draggable="false"
                               >
                                 <div class="itemLeft">
                                   <Favicon
-                                    url={item.url}
+                                    url={item.url ?? undefined}
                                     title={item.title}
                                     fallbackIcon={fallback.icon}
                                     fallbackColor={fallback.color}

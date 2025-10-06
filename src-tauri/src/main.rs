@@ -11,9 +11,9 @@ mod encryption;
 mod auth;
 mod backup_commands;
 
+use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use std::path::PathBuf;
 
 use crate::state::AppState;
 use tauri::State;
@@ -47,19 +47,33 @@ async fn switch_database(db_path: PathBuf, app_state: State<'_, AppState>) -> Re
     }
 
     {
+        let mut path_guard = app_state.db_path.lock().await;
+        *path_guard = Some(db_path.clone());
+    }
+
+    {
         let mut kg = app_state.key.lock().await;
         *kg = None;
+    }
+
+    {
+        let mut pending = app_state.pending_key.lock().await;
+        *pending = None;
     }
 
     Ok(())
 }
 
 fn main() {
-    let db_pool = Arc::new(Mutex::new(None));
-
     let context = tauri::generate_context!();
     tauri::Builder::default()
-        .manage(AppState { db: db_pool, key: Arc::new(Mutex::new(None)), rekey: Arc::new(Mutex::new(())) })
+        .manage(AppState {
+            db: Arc::new(Mutex::new(None)),
+            key: Arc::new(Mutex::new(None)),
+            pending_key: Arc::new(Mutex::new(None)),
+            db_path: Arc::new(Mutex::new(None)),
+            rekey: Arc::new(Mutex::new(())),
+        })
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_store::Builder::new().build())
@@ -69,6 +83,10 @@ fn main() {
             // Auth commands
             auth::set_master_password,
             auth::unlock,
+            auth::verify_login_totp,
+            auth::configure_login_totp,
+            auth::disable_login_totp,
+            auth::is_login_totp_configured,
             auth::lock,
             auth::is_locked,
             auth::is_master_password_configured,
@@ -92,7 +110,7 @@ fn main() {
             crypto::generate_x25519_keypair,
             crypto::export_password_entry_to_public_key,
             crypto::import_password_entry_with_private_key,
-            // TOTP commands
+            // TOTP commands for vault items
             totp::generate_totp_secret,
             totp::generate_totp,
             totp::verify_totp,

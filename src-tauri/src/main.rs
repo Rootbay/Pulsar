@@ -1,15 +1,16 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-mod state;
-mod types;
-mod db;
-mod db_commands;
-mod file_dialog;
-mod crypto;
-mod totp;
-mod encryption;
 mod auth;
 mod backup_commands;
+mod crypto;
+mod db;
+mod db_commands;
+mod encryption;
+mod file_dialog;
+mod security;
+mod state;
+mod totp;
+mod types;
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -36,7 +37,11 @@ async fn switch_database(db_path: PathBuf, app_state: State<'_, AppState>) -> Re
     let new_pool = match crate::db::init_db(&db_path, key_slice_opt).await {
         Ok(pool) => pool,
         Err(e) => {
-            eprintln!("Failed to initialize database at {}: {}", db_path.display(), e);
+            eprintln!(
+                "Failed to initialize database at {}: {}",
+                db_path.display(),
+                e
+            );
             return Err(e);
         }
     };
@@ -87,6 +92,9 @@ fn main() {
             auth::configure_login_totp,
             auth::disable_login_totp,
             auth::is_login_totp_configured,
+            auth::get_argon2_params,
+            auth::rotate_master_password,
+            auth::update_argon2_params,
             auth::lock,
             auth::is_locked,
             auth::is_master_password_configured,
@@ -122,6 +130,12 @@ fn main() {
             // Backup commands
             backup_commands::export_vault,
             backup_commands::import_vault,
+            // Security commands
+            security::list_devices,
+            security::remove_device,
+            security::revoke_all_devices,
+            security::wipe_memory,
+            security::run_integrity_check,
             get_all_settings,
             set_all_settings,
         ])
@@ -131,20 +145,24 @@ fn main() {
 
 #[tauri::command]
 async fn get_all_settings(app_handle: tauri::AppHandle) -> Result<Option<String>, String> {
-    let store = StoreBuilder::new(&app_handle, ".settings.dat".parse::<PathBuf>().unwrap()).build().map_err(|e| e.to_string())?;
+    let store = StoreBuilder::new(&app_handle, ".settings.dat".parse::<PathBuf>().unwrap())
+        .build()
+        .map_err(|e| e.to_string())?;
     store.reload().map_err(|e| e.to_string())?; // Changed load() to reload()
     Ok(store.get("settings").map(|v| v.to_string()))
 }
 
 #[tauri::command]
 async fn set_all_settings(app_handle: tauri::AppHandle, settings: String) -> Result<(), String> {
-    let store = StoreBuilder::new(&app_handle, ".settings.dat".parse::<PathBuf>().unwrap()).build().map_err(|e| e.to_string())?;
+    let store = StoreBuilder::new(&app_handle, ".settings.dat".parse::<PathBuf>().unwrap())
+        .build()
+        .map_err(|e| e.to_string())?;
     store.reload().map_err(|e| e.to_string())?;
 
     (*store).set("settings".to_string(), settings);
 
     match (*store).save() {
-        Ok(()) => {},
+        Ok(()) => {}
         Err(e) => return Err(e.to_string()),
     }
     Ok(())

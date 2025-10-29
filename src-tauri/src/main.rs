@@ -11,6 +11,7 @@ mod security;
 mod state;
 mod totp;
 mod types;
+mod vault_commands;
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -131,6 +132,7 @@ fn main() {
             backup_commands::export_vault,
             backup_commands::import_vault,
             backup_commands::restore_vault_snapshot,
+            vault_commands::list_vaults,
             // Security commands
             security::list_devices,
             security::remove_device,

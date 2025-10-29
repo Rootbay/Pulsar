@@ -1,30 +1,74 @@
-import { derived } from 'svelte/store';
+import { derived, writable } from 'svelte/store';
 import { appSettings } from './appSettings';
-import type { VaultSettings } from '../config/settings';
+import { defaultVaultSettings, type VaultSettings } from '../config/settings';
 
 function createVaultSettingsStore() {
-    const { subscribe } = derived(appSettings, ($appSettings) => $appSettings.vault);
+    const currentVaultId = writable<string | null>(null);
+    let activeVaultId: string | null = null;
+
+    currentVaultId.subscribe((id) => {
+        activeVaultId = id;
+    });
+
+    const store = derived([appSettings, currentVaultId], ([$appSettings, id]) => {
+        if (!id) {
+            return { ...defaultVaultSettings };
+        }
+
+        const existing = $appSettings.vaultSettingsById[id];
+        return { ...defaultVaultSettings, ...existing };
+    });
 
     return {
-        subscribe,
-        set: (value: VaultSettings) => {
+        subscribe: store.subscribe,
+        selectVault: (vaultId: string, defaults: Partial<VaultSettings> = {}) => {
+            currentVaultId.set(vaultId);
             appSettings.update((settings) => {
-                settings.vault = value;
+                const existing = settings.vaultSettingsById[vaultId];
+                settings.vaultSettingsById = {
+                    ...settings.vaultSettingsById,
+                    [vaultId]: {
+                        ...defaultVaultSettings,
+                        ...existing,
+                        ...defaults,
+                    },
+                };
                 return settings;
             });
         },
-        loadSettings: (newSettings: VaultSettings) => {
+        update: (updater: (settings: VaultSettings) => VaultSettings) => {
+            if (!activeVaultId) {
+                return;
+            }
+
             appSettings.update((settings) => {
-                settings.vault = newSettings;
+                const existing = settings.vaultSettingsById[activeVaultId];
+                settings.vaultSettingsById = {
+                    ...settings.vaultSettingsById,
+                    [activeVaultId]: updater({
+                        ...defaultVaultSettings,
+                        ...existing,
+                    }),
+                };
                 return settings;
             });
         },
-        update: (callback: (settings: VaultSettings) => VaultSettings) => {
+        clear: (vaultId: string) => {
             appSettings.update((settings) => {
-                settings.vault = callback(settings.vault);
+                if (!(vaultId in settings.vaultSettingsById)) {
+                    return settings;
+                }
+
+                const { [vaultId]: _removed, ...rest } = settings.vaultSettingsById;
+                settings.vaultSettingsById = rest;
                 return settings;
             });
-        }
+
+            if (activeVaultId === vaultId) {
+                currentVaultId.set(null);
+            }
+        },
+        getCurrentVaultId: () => activeVaultId,
     };
 }
 

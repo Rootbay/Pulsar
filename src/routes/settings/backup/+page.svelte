@@ -20,6 +20,11 @@
   } from '$lib/components/ui/select';
   import { Badge } from '$lib/components/ui/badge';
   import { Separator } from '$lib/components/ui/separator';
+  import {
+    Alert,
+    AlertDescription,
+    AlertTitle
+  } from '$lib/components/ui/alert';
   import { cn } from '$lib/utils';
   import {
     Archive,
@@ -33,11 +38,16 @@
     CloudUpload,
     Zap,
     ShieldCheck,
-    Shield
+    Shield,
+    Loader2
   } from '@lucide/svelte';
   import { fade, slide } from 'svelte/transition';
   import { quintOut } from 'svelte/easing';
-  import { invoke } from '@tauri-apps/api/core';
+  import {
+    exportVaultBackup,
+    importVaultBackup,
+    notifyVaultRefresh
+  } from '$lib/utils/backup';
 
   const frequencies = [
     { value: 'daily', label: 'Daily (Default)' },
@@ -100,41 +110,38 @@
   let modalDescription = '';
   let modalConfirmLabel = 'Continue';
   let modalDanger = false;
-  let modalOnConfirm: (() => Promise<void> | void) | null = null;
+  type ModalConfirmHandler = (passphrase: string) => Promise<void> | void;
 
-  const dummyVaultData = JSON.stringify(
-    {
-      passwords: [
-        {
-          id: '1',
-          name: 'Example Password',
-          username: 'user',
-          password: 'password123',
-          url: 'https://example.com'
-        }
-      ]
-    },
-    null,
-    2
-  );
+  let modalOnConfirm: ModalConfirmHandler | null = null;
+  let modalPassphrase = '';
+  let modalBusy = false;
+  let modalError: string | null = null;
+  let modalRequiresPassphrase = true;
+  let feedback: { type: 'success' | 'error'; message: string } | null = null;
 
   function openModal({
     title,
     description,
     confirmLabel = 'Continue',
     danger = false,
+    requiresPassphrase = true,
     onConfirm
   }: {
     title: string;
     description: string;
     confirmLabel?: string;
     danger?: boolean;
-    onConfirm: () => Promise<void> | void;
+    requiresPassphrase?: boolean;
+    onConfirm: ModalConfirmHandler;
   }) {
     modalTitle = title;
     modalDescription = description;
     modalConfirmLabel = confirmLabel;
     modalDanger = danger;
+    modalPassphrase = '';
+    modalError = null;
+    modalBusy = false;
+    modalRequiresPassphrase = requiresPassphrase;
     modalOnConfirm = onConfirm;
     showModal = true;
   }
@@ -142,18 +149,19 @@
   function closeModal() {
     showModal = false;
     modalOnConfirm = null;
+    modalPassphrase = '';
+    modalError = null;
+    modalBusy = false;
   }
 
   async function handleManualBackup() {
     openModal({
       title: 'Create manual backup?',
       description: 'This creates a fresh encrypted backup of your vault using the active settings.',
-      onConfirm: async () => {
-        await invoke('export_vault', {
-          vaultData: dummyVaultData,
-          isPlaintext: false,
-          passphrase: 'users-chosen-password'
-        });
+      confirmLabel: 'Export backup',
+      onConfirm: async (passphrase) => {
+        const message = await exportVaultBackup(passphrase);
+        feedback = { type: 'success', message };
       }
     });
   }
@@ -162,12 +170,10 @@
     openModal({
       title: 'Export encrypted data?',
       description: 'Export your vault in encrypted form. Keep the generated file secure.',
-      onConfirm: async () => {
-        await invoke('export_vault', {
-          vaultData: dummyVaultData,
-          isPlaintext: false,
-          passphrase: 'users-chosen-password'
-        });
+      confirmLabel: 'Export encrypted',
+      onConfirm: async (passphrase) => {
+        const message = await exportVaultBackup(passphrase);
+        feedback = { type: 'success', message };
       }
     });
   }
@@ -179,12 +185,9 @@
         'WARNING: This exports all vault contents without encryption. Only proceed on trusted devices.',
       confirmLabel: 'Export plaintext',
       danger: true,
-      onConfirm: async () => {
-        await invoke('export_vault', {
-          vaultData: dummyVaultData,
-          isPlaintext: true,
-          passphrase: 'users-chosen-password'
-        });
+      onConfirm: async (passphrase) => {
+        const message = await exportVaultBackup(passphrase, { plaintext: true });
+        feedback = { type: 'success', message };
       }
     });
   }
@@ -192,9 +195,16 @@
   async function handleImport() {
     openModal({
       title: 'Start import process?',
-      description: 'The import wizard assists with selecting a file and mapping data safely.',
-      onConfirm: async () => {
-        await invoke('import_vault', { passphrase: 'users-chosen-password' });
+      description:
+        'Select a previous Pulsar backup and provide its passphrase to restore your vault contents.',
+      confirmLabel: 'Import backup',
+      onConfirm: async (passphrase) => {
+        const snapshot = await importVaultBackup(passphrase);
+        const totalItems = snapshot.passwordItems.length;
+        const tagCount = snapshot.buttons.length;
+        const message = `Imported ${totalItems} saved item${totalItems === 1 ? '' : 's'} and ${tagCount} tag${tagCount === 1 ? '' : 's'}.`;
+        feedback = { type: 'success', message };
+        notifyVaultRefresh('import');
       }
     });
   }
@@ -236,6 +246,16 @@
 </script>
 
 <div class="flex-1 space-y-6 overflow-y-auto px-6 py-8">
+  {#if feedback}
+    <Alert
+      variant={feedback.type === 'error' ? 'destructive' : 'default'}
+      class="border-border/60 bg-card/80 backdrop-blur supports-[backdrop-filter]:bg-card/70"
+    >
+      <AlertTitle>{feedback.type === 'error' ? 'Something went wrong' : 'Action completed'}</AlertTitle>
+      <AlertDescription>{feedback.message}</AlertDescription>
+    </Alert>
+  {/if}
+
   <Card class="border-border/60 bg-card/80 backdrop-blur supports-[backdrop-filter]:bg-card/70">
     <CardHeader class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
       <div class="flex items-center gap-3">
@@ -441,18 +461,73 @@
         </div>
       </div>
 
+      {#if modalRequiresPassphrase}
+        <div class="mt-6 space-y-2">
+          <Label for="backup-passphrase" class="text-sm font-medium text-foreground">Backup passphrase</Label>
+          <Input
+            id="backup-passphrase"
+            type="password"
+            autocomplete="new-password"
+            value={modalPassphrase}
+            oninput={(event) => {
+              modalPassphrase = (event.target as HTMLInputElement).value;
+              modalError = null;
+            }}
+          />
+          <p class="text-xs text-muted-foreground">
+            This passphrase encrypts or decrypts your vault backup. Use the same passphrase you will remember later.
+          </p>
+        </div>
+      {/if}
+
+      {#if modalError}
+        <p class="mt-4 text-sm text-destructive">{modalError}</p>
+      {/if}
+
       <div class="mt-6 flex justify-end gap-2">
         <Button type="button" variant="ghost" onclick={closeModal}>Cancel</Button>
         <Button
           type="button"
           variant={modalDanger ? 'destructive' : 'default'}
+          class="gap-2"
+          disabled={
+            modalBusy || (modalRequiresPassphrase && modalPassphrase.trim().length === 0)
+          }
           onclick={async () => {
-            if (modalOnConfirm) {
-              await modalOnConfirm();
+            if (!modalOnConfirm) {
+              closeModal();
+              return;
             }
-            closeModal();
+
+            const trimmed = modalPassphrase.trim();
+            if (modalRequiresPassphrase && trimmed.length === 0) {
+              modalError = 'A passphrase is required.';
+              return;
+            }
+
+            modalBusy = true;
+            modalError = null;
+
+            try {
+              await modalOnConfirm(trimmed);
+              closeModal();
+            } catch (error) {
+              if (typeof error === 'string') {
+                modalError = error;
+              } else if (error instanceof Error) {
+                modalError = error.message;
+              } else {
+                modalError = 'An unexpected error occurred while processing the request.';
+              }
+              feedback = { type: 'error', message: modalError };
+            } finally {
+              modalBusy = false;
+            }
           }}
         >
+          {#if modalBusy}
+            <Loader2 class="size-4 animate-spin" aria-hidden="true" />
+          {/if}
           {modalConfirmLabel}
         </Button>
       </div>

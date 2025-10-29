@@ -9,6 +9,7 @@
   import Settings from '../settings/+page.svelte';
   import { invoke } from '@tauri-apps/api/core';
   import type { PasswordItem } from '../+layout.ts';
+  import { onMount } from 'svelte';
 
   interface Button {
     id: number;
@@ -52,6 +53,22 @@
       console.error('Failed to load vault items:', error);
     }
   }
+
+  function handleVaultRefreshEvent() {
+    void loadPasswordItems();
+  }
+
+  onMount(() => {
+    if (typeof window !== 'undefined') {
+      window.addEventListener('pulsar:reload-vault', handleVaultRefreshEvent);
+
+      return () => {
+        window.removeEventListener('pulsar:reload-vault', handleVaultRefreshEvent);
+      };
+    }
+
+    return undefined;
+  });
 
   $: if (!$isLocked) {
     loadPasswordItems();

@@ -1,5 +1,23 @@
 import type { PasswordItem } from '$lib/types/password';
-import type { DisplayField } from '$lib/types/password-fields';
+import type { DisplayField, TotpDisplayField } from '$lib/types/password-fields';
+
+const DEFAULT_TOTP_DIGITS = 6;
+const DEFAULT_TOTP_PERIOD = 30;
+
+function createTotpField(secret: string, icon: string): TotpDisplayField {
+	return {
+		id: 'totp',
+		name: 'Authenticator (TOTP)',
+		value: secret,
+		type: 'totp',
+		icon,
+		meta: {
+			secret,
+			digits: DEFAULT_TOTP_DIGITS,
+			period: DEFAULT_TOTP_PERIOD
+		}
+	};
+}
 
 export function buildDisplayFields(
 	item: PasswordItem | null,
@@ -24,6 +42,9 @@ export function buildDisplayFields(
 			type: 'password',
 			icon: icons.key
 		},
+		...(item.totp_secret
+			? [createTotpField(item.totp_secret, icons.security)]
+			: []),
 		{
 			id: 'url',
 			name: 'URL',

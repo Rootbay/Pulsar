@@ -281,10 +281,25 @@ pub async fn update_password_item_tags(state: State<'_, AppState>, id: i64, tags
 }
 
 #[tauri::command]
-pub async fn update_password_item_totp_secret(state: State<'_, AppState>, id: i64, totp_secret: String) -> Result<(), String> {
+pub async fn update_password_item_totp_secret(
+    state: State<'_, AppState>,
+    id: i64,
+    totp_secret: Option<String>,
+) -> Result<(), String> {
     let key = get_key(&state).await?;
     let now = Utc::now().to_rfc3339();
-    let totp_secret_enc = encrypt(&totp_secret, key.as_slice())?;
+    let totp_secret_clean = totp_secret.and_then(|secret| {
+        let trimmed = secret.trim().to_string();
+        if trimmed.is_empty() {
+            None
+        } else {
+            Some(trimmed)
+        }
+    });
+    let totp_secret_enc = match totp_secret_clean {
+        Some(secret) => Some(encrypt(&secret, key.as_slice())?),
+        None => None,
+    };
     let db_pool = get_db_pool(&state).await?;
     sqlx::query("UPDATE password_items SET totp_secret = ?, updated_at = ? WHERE id = ?")
         .bind(totp_secret_enc)

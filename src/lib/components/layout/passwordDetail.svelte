@@ -382,7 +382,7 @@
     }
   });
 
-  function enterEditMode() {
+  export function enterEditMode() {
     originalPasswordItem = JSON.parse(
       JSON.stringify(selectedPasswordItem)
     );

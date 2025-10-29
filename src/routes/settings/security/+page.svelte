@@ -2,9 +2,11 @@
   import { get } from 'svelte/store';
   import { onDestroy, onMount } from 'svelte';
   import { invoke } from '@tauri-apps/api/core';
-  import { toast } from 'svelte-sonner';
+  import { writeText } from '@tauri-apps/plugin-clipboard-manager';
   import { securitySettings } from '$lib/stores/security';
   import type { SecuritySettings } from '$lib/config/settings';
+  import { totpRequired, totpVerified } from '$lib/stores';
+  import { loginTotpSecret, loginTotpConfigured } from '$lib/stores/totp';
   import { Button } from '$lib/components/ui/button';
   import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '$lib/components/ui/card';
   import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '$lib/components/ui/dialog';
@@ -13,6 +15,7 @@
   import { Select, SelectContent, SelectItem, SelectTrigger } from '$lib/components/ui/select';
   import { Switch } from '$lib/components/ui/switch';
   import { Badge } from '$lib/components/ui/badge';
+  import { Alert, AlertDescription, AlertTitle } from '$lib/components/ui/alert';
   import { cn } from '$lib/utils';
   import {
     Lock,
@@ -28,9 +31,14 @@
     TriangleAlert,
     HardDrive,
     Shield,
-    Loader2
+    Copy,
+    Loader2,
+    AlertCircle,
+    QrCode,
+    Check,
+    Link2
   } from '@lucide/svelte';
-
+  
   type BooleanSettingKey = {
     [K in keyof SecuritySettings]: SecuritySettings[K] extends boolean ? K : never;
   }[keyof SecuritySettings];
@@ -114,6 +122,42 @@
     }
   ];
 
+  const TOTP_CODE_LENGTH = 6;
+  const TOTP_ISSUER = 'Pulsar';
+  const TOTP_ACCOUNT = 'vault-login';
+
+  let isTotpStatusLoading = true;
+  let totpStatusError: string | null = null;
+  let pendingTotpSecret: string | null = null;
+  let pendingProvisioningUri: string | null = null;
+  let totpSetupSuccess: string | null = null;
+  let totpDisableSuccess: string | null = null;
+  let totpGenerationError: string | null = null;
+  let totpVerificationError: string | null = null;
+  let totpVerificationCode = '';
+  let isGeneratingTotpSecret = false;
+  let isConfirmingTotp = false;
+  let isDisablingTotp = false;
+
+  type CopyFeedback = {
+    context: 'pending' | 'stored';
+    message: string;
+    variant: 'success' | 'error';
+  };
+
+  let secretCopyFeedback: CopyFeedback | null = null;
+  let uriCopyFeedback: CopyFeedback | null = null;
+  let secretCopyTimeout: ReturnType<typeof setTimeout> | null = null;
+  let uriCopyTimeout: ReturnType<typeof setTimeout> | null = null;
+  let currentProvisioningUri: string | null = null;
+
+  $: currentProvisioningUri = $loginTotpSecret ? buildProvisioningUri($loginTotpSecret) : null;
+  $: generateButtonLabel = pendingTotpSecret
+    ? 'Generate different secret'
+    : $loginTotpConfigured
+      ? 'Rotate secret'
+      : 'Generate secret';
+
   let currentSettings: SecuritySettings = get(securitySettings);
   let passwordModalOpen = false;
   let showCurrentPassword = false;
@@ -153,6 +197,226 @@
   const memoryFormatter = new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 });
   const gigabyteFormatter = new Intl.NumberFormat(undefined, { maximumFractionDigits: 1 });
 
+  const toErrorMessage = (error: unknown): string => {
+    if (typeof error === 'string') return error;
+    if (error instanceof Error) return error.message;
+    return 'An unexpected error occurred.';
+  };
+
+  const formatSecret = (secret: string) => secret.replace(/(.{4})/g, '$1 ').trim();
+
+  function buildProvisioningUri(secret: string) {
+    const label = encodeURIComponent(`${TOTP_ISSUER}:${TOTP_ACCOUNT}`);
+    const issuer = encodeURIComponent(TOTP_ISSUER);
+    return `otpauth://totp/${label}?secret=${secret}&issuer=${issuer}`;
+  }
+
+  function setSecretCopyFeedback(
+    context: CopyFeedback['context'],
+    message: string,
+    variant: CopyFeedback['variant']
+  ) {
+    secretCopyFeedback = { context, message, variant };
+    if (secretCopyTimeout) {
+      clearTimeout(secretCopyTimeout);
+    }
+
+    secretCopyTimeout = setTimeout(() => {
+      secretCopyFeedback = null;
+    }, 2500);
+  }
+
+  function setUriCopyFeedback(
+    context: CopyFeedback['context'],
+    message: string,
+    variant: CopyFeedback['variant']
+  ) {
+    uriCopyFeedback = { context, message, variant };
+    if (uriCopyTimeout) {
+      clearTimeout(uriCopyTimeout);
+    }
+
+    uriCopyTimeout = setTimeout(() => {
+      uriCopyFeedback = null;
+    }, 2500);
+  }
+
+  function clearCopyTimeouts() {
+    if (secretCopyTimeout) {
+      clearTimeout(secretCopyTimeout);
+      secretCopyTimeout = null;
+    }
+    if (uriCopyTimeout) {
+      clearTimeout(uriCopyTimeout);
+      uriCopyTimeout = null;
+    }
+  }
+
+  function sanitizeTotpCode() {
+    const cleaned = totpVerificationCode.replace(/\D/g, '').slice(0, TOTP_CODE_LENGTH);
+    if (cleaned !== totpVerificationCode) {
+      totpVerificationCode = cleaned;
+    }
+
+    if (totpVerificationError && totpVerificationCode.length < TOTP_CODE_LENGTH) {
+      totpVerificationError = null;
+    }
+  }
+
+  function cancelTotpSetup() {
+    pendingTotpSecret = null;
+    pendingProvisioningUri = null;
+    totpVerificationCode = '';
+    totpVerificationError = null;
+    totpGenerationError = null;
+
+    if (secretCopyFeedback?.context === 'pending') {
+      secretCopyFeedback = null;
+    }
+    if (uriCopyFeedback?.context === 'pending') {
+      uriCopyFeedback = null;
+    }
+  }
+
+  async function refreshTotpStatus() {
+    isTotpStatusLoading = true;
+    totpStatusError = null;
+
+    try {
+      const configured = await invoke<boolean>('is_login_totp_configured');
+      loginTotpConfigured.set(configured);
+      if (!configured) {
+        loginTotpSecret.set(null);
+      }
+    } catch (error) {
+      totpStatusError = toErrorMessage(error);
+    } finally {
+      isTotpStatusLoading = false;
+    }
+  }
+
+  async function handleGenerateTotpSecret() {
+    if (isGeneratingTotpSecret) return;
+
+    totpGenerationError = null;
+    totpStatusError = null;
+    totpSetupSuccess = null;
+    totpDisableSuccess = null;
+
+    isGeneratingTotpSecret = true;
+
+    try {
+      const secret = await invoke<string>('generate_totp_secret');
+      pendingTotpSecret = secret;
+      pendingProvisioningUri = buildProvisioningUri(secret);
+      totpVerificationCode = '';
+      totpVerificationError = null;
+
+      if (secretCopyFeedback?.context === 'pending') {
+        secretCopyFeedback = null;
+      }
+      if (uriCopyFeedback?.context === 'pending') {
+        uriCopyFeedback = null;
+      }
+    } catch (error) {
+      totpGenerationError = toErrorMessage(error);
+    } finally {
+      isGeneratingTotpSecret = false;
+    }
+  }
+
+  async function copySecret(secret: string | null, context: CopyFeedback['context']) {
+    if (!secret) return;
+
+    try {
+      await writeText(secret);
+      setSecretCopyFeedback(context, 'Secret copied to clipboard.', 'success');
+    } catch (error) {
+      setSecretCopyFeedback(context, toErrorMessage(error), 'error');
+    }
+  }
+
+  async function copyProvisioningUri(uri: string | null, context: CopyFeedback['context']) {
+    if (!uri) return;
+
+    try {
+      await writeText(uri);
+      setUriCopyFeedback(context, 'Setup link copied to clipboard.', 'success');
+    } catch (error) {
+      setUriCopyFeedback(context, toErrorMessage(error), 'error');
+    }
+  }
+
+  async function handleConfirmTotp() {
+    if (!pendingTotpSecret || isConfirmingTotp) {
+      return;
+    }
+
+    if (totpVerificationCode.length !== TOTP_CODE_LENGTH) {
+      totpVerificationError = 'Enter the 6-digit token from your authenticator.';
+      return;
+    }
+
+    isConfirmingTotp = true;
+    totpVerificationError = null;
+
+    try {
+      const expectedToken = await invoke<string>('generate_totp', { secret_b32: pendingTotpSecret });
+      if (expectedToken !== totpVerificationCode) {
+        totpVerificationError =
+          'The verification code did not match. Wait for the next code window and try again.';
+        return;
+      }
+
+      await invoke('configure_login_totp', { secret_b32: pendingTotpSecret });
+      loginTotpSecret.set(pendingTotpSecret);
+      loginTotpConfigured.set(true);
+      totpSetupSuccess = 'Login TOTP is now enabled. The new secret has been stored on this device.';
+      totpDisableSuccess = null;
+      pendingTotpSecret = null;
+      pendingProvisioningUri = null;
+      totpVerificationCode = '';
+      totpRequired.set(false);
+      totpVerified.set(true);
+      await refreshTotpStatus();
+    } catch (error) {
+      totpVerificationError = toErrorMessage(error);
+    } finally {
+      isConfirmingTotp = false;
+    }
+  }
+
+  async function handleDisableTotp() {
+    if (isDisablingTotp) return;
+
+    isDisablingTotp = true;
+    totpStatusError = null;
+    totpGenerationError = null;
+    totpVerificationError = null;
+    totpSetupSuccess = null;
+
+    try {
+      await invoke('disable_login_totp');
+      loginTotpConfigured.set(false);
+      loginTotpSecret.set(null);
+      pendingTotpSecret = null;
+      pendingProvisioningUri = null;
+      totpVerificationCode = '';
+      totpDisableSuccess = 'Login TOTP disabled. Unlocking will only require your master password.';
+      totpRequired.set(false);
+      totpVerified.set(false);
+      await refreshTotpStatus();
+    } catch (error) {
+      totpStatusError = toErrorMessage(error);
+    } finally {
+      isDisablingTotp = false;
+    }
+  }
+
+  onMount(() => {
+    void refreshTotpStatus();
+  });
+
   const unsubscribe = securitySettings.subscribe((settings) => {
     currentSettings = settings;
   });
@@ -164,6 +428,7 @@
 
   onDestroy(() => {
     unsubscribe();
+    clearCopyTimeouts();
   });
 
   function applyChanges(partial: Partial<SecuritySettings>) {
@@ -461,6 +726,314 @@
 </script>
 
 <div class="flex flex-1 flex-col gap-6 overflow-y-auto px-8 py-8">
+  <Card class="border-border/60 bg-background/80 backdrop-blur">
+    <CardHeader class="flex flex-row items-start gap-3 border-b border-border/40 pb-4">
+      <div class="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
+        <ShieldCheck class="h-5 w-5" aria-hidden="true" />
+      </div>
+      <div>
+        <CardTitle>Two-factor authentication</CardTitle>
+        <CardDescription>Protect vault unlocks with a time-based one-time password.</CardDescription>
+      </div>
+    </CardHeader>
+    <CardContent class="space-y-5 pt-4">
+      {#if totpSetupSuccess}
+        <Alert>
+          <Check class="h-4 w-4 text-primary" aria-hidden="true" />
+          <div class="space-y-1">
+            <AlertTitle>Authenticator enabled</AlertTitle>
+            <AlertDescription>{totpSetupSuccess}</AlertDescription>
+          </div>
+        </Alert>
+      {/if}
+
+      {#if totpDisableSuccess}
+        <Alert>
+          <Shield class="h-4 w-4 text-primary" aria-hidden="true" />
+          <div class="space-y-1">
+            <AlertTitle>Authenticator disabled</AlertTitle>
+            <AlertDescription>{totpDisableSuccess}</AlertDescription>
+          </div>
+        </Alert>
+      {/if}
+
+      {#if totpStatusError}
+        <Alert variant="destructive">
+          <AlertCircle class="h-4 w-4" aria-hidden="true" />
+          <div class="space-y-1">
+            <AlertTitle>Unable to load status</AlertTitle>
+            <AlertDescription>{totpStatusError}</AlertDescription>
+          </div>
+        </Alert>
+      {/if}
+
+      {#if totpGenerationError && !pendingTotpSecret}
+        <Alert variant="destructive">
+          <AlertCircle class="h-4 w-4" aria-hidden="true" />
+          <div class="space-y-1">
+            <AlertTitle>Unable to generate secret</AlertTitle>
+            <AlertDescription>{totpGenerationError}</AlertDescription>
+          </div>
+        </Alert>
+      {/if}
+
+      <div class="space-y-3 rounded-lg border border-border/60 bg-muted/20 p-4">
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p class="text-sm font-semibold text-foreground">Current status</p>
+            <p class="text-sm text-muted-foreground">
+              {$loginTotpConfigured
+                ? 'Unlocking requires both your master password and an authenticator token.'
+                : 'Generate a secret to require an authenticator token when unlocking the vault.'}
+            </p>
+          </div>
+          <Badge
+            class={cn(
+              'px-3 py-1 text-xs font-medium',
+              $loginTotpConfigured ? 'bg-emerald-500/15 text-emerald-500' : 'bg-muted text-muted-foreground'
+            )}
+          >
+            {$loginTotpConfigured ? 'Enabled' : 'Disabled'}
+          </Badge>
+        </div>
+
+        <div class="flex flex-wrap gap-2">
+          <Button
+            type="button"
+            class="gap-2"
+            onclick={handleGenerateTotpSecret}
+            disabled={isGeneratingTotpSecret || isTotpStatusLoading}
+          >
+            {#if isGeneratingTotpSecret}
+              <Loader2 class="h-4 w-4 animate-spin" aria-hidden="true" />
+            {:else}
+              <QrCode class="h-4 w-4" aria-hidden="true" />
+            {/if}
+            {generateButtonLabel}
+          </Button>
+
+          {#if $loginTotpConfigured}
+            <Button
+              type="button"
+              variant="outline"
+              class="gap-2"
+              onclick={handleDisableTotp}
+              disabled={isDisablingTotp}
+            >
+              {#if isDisablingTotp}
+                <Loader2 class="h-4 w-4 animate-spin" aria-hidden="true" />
+              {:else}
+                <Shield class="h-4 w-4" aria-hidden="true" />
+              {/if}
+              Disable TOTP
+            </Button>
+          {/if}
+
+          <Button
+            type="button"
+            variant="ghost"
+            class="gap-2"
+            onclick={refreshTotpStatus}
+            disabled={isTotpStatusLoading}
+          >
+            <RefreshCw class={`h-4 w-4 ${isTotpStatusLoading ? 'animate-spin' : ''}`} aria-hidden="true" />
+            Refresh status
+          </Button>
+        </div>
+
+        {#if isTotpStatusLoading}
+          <p class="flex items-center gap-2 text-xs text-muted-foreground">
+            <Loader2 class="h-3 w-3 animate-spin" aria-hidden="true" />
+            Checking configuration…
+          </p>
+        {/if}
+      </div>
+
+      {#if pendingTotpSecret}
+        <div class="space-y-4 rounded-lg border border-primary/40 bg-primary/5 p-4">
+          <div class="flex items-center gap-2">
+            <QrCode class="h-5 w-5 text-primary" aria-hidden="true" />
+            <div>
+              <p class="text-sm font-semibold text-foreground">Step 1 — Add the secret to your authenticator</p>
+              <p class="text-sm text-muted-foreground">
+                Scan the QR code or copy the secret, then confirm a code to finish enabling TOTP.
+              </p>
+            </div>
+          </div>
+
+          <div class="rounded-md border border-border/60 bg-background p-4">
+            <p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Secret</p>
+            <p class="mt-2 font-mono text-lg text-foreground break-words">{formatSecret(pendingTotpSecret)}</p>
+            <div class="mt-3 flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                class="gap-2"
+                onclick={() => copySecret(pendingTotpSecret, 'pending')}
+              >
+                <Copy class="h-4 w-4" aria-hidden="true" />
+                Copy secret
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                class="gap-2"
+                onclick={() => copyProvisioningUri(pendingProvisioningUri, 'pending')}
+                disabled={!pendingProvisioningUri}
+              >
+                <Link2 class="h-4 w-4" aria-hidden="true" />
+                Copy setup link
+              </Button>
+            </div>
+            {#if secretCopyFeedback?.context === 'pending'}
+              <p
+                class={`mt-2 text-xs ${secretCopyFeedback.variant === 'success' ? 'text-primary' : 'text-destructive'}`}
+                aria-live="polite"
+              >
+                {secretCopyFeedback.message}
+              </p>
+            {/if}
+            {#if uriCopyFeedback?.context === 'pending'}
+              <p
+                class={`mt-1 text-xs ${uriCopyFeedback.variant === 'success' ? 'text-primary' : 'text-destructive'}`}
+                aria-live="polite"
+              >
+                {uriCopyFeedback.message}
+              </p>
+            {/if}
+          </div>
+
+          <div class="space-y-2">
+            <Label for="totp-verification">Step 2 — Confirm a code</Label>
+            <Input
+              id="totp-verification"
+              type="text"
+              inputmode="numeric"
+              maxlength={TOTP_CODE_LENGTH}
+              autocomplete="one-time-code"
+              placeholder="Enter 6-digit code"
+              bind:value={totpVerificationCode}
+              oninput={sanitizeTotpCode}
+            />
+            {#if totpVerificationError}
+              <p class="text-sm text-destructive">{totpVerificationError}</p>
+            {/if}
+          </div>
+
+          {#if totpGenerationError}
+            <Alert variant="destructive">
+              <AlertCircle class="h-4 w-4" aria-hidden="true" />
+              <div class="space-y-1">
+                <AlertTitle>Unable to generate secret</AlertTitle>
+                <AlertDescription>{totpGenerationError}</AlertDescription>
+              </div>
+            </Alert>
+          {/if}
+
+          <div class="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              class="gap-2"
+              onclick={handleConfirmTotp}
+              disabled={isConfirmingTotp || totpVerificationCode.length !== TOTP_CODE_LENGTH}
+            >
+              {#if isConfirmingTotp}
+                <Loader2 class="h-4 w-4 animate-spin" aria-hidden="true" />
+              {:else}
+                <Check class="h-4 w-4" aria-hidden="true" />
+              {/if}
+              {isConfirmingTotp ? 'Verifying…' : 'Verify & enable'}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              class="gap-2"
+              onclick={handleGenerateTotpSecret}
+              disabled={isGeneratingTotpSecret}
+            >
+              <RefreshCw class={`h-4 w-4 ${isGeneratingTotpSecret ? 'animate-spin' : ''}`} aria-hidden="true" />
+              Generate another secret
+            </Button>
+            <Button type="button" variant="ghost" onclick={cancelTotpSetup}>Cancel</Button>
+          </div>
+
+          <p class="text-xs text-muted-foreground">
+            Codes rotate every 30 seconds. If verification fails, wait for the next code before trying again.
+          </p>
+        </div>
+      {/if}
+
+      {#if $loginTotpConfigured && !pendingTotpSecret}
+        {@const storedSecret = $loginTotpSecret}
+        <div class="space-y-3 rounded-lg border border-border/60 bg-muted/10 p-4">
+          <div class="flex items-center gap-2">
+            <Shield class="h-5 w-5 text-primary" aria-hidden="true" />
+            <div>
+              <p class="text-sm font-semibold text-foreground">Stored secret on this device</p>
+              <p class="text-sm text-muted-foreground">
+                {storedSecret
+                  ? 'Copy the secret if you need to enrol another authenticator or keep an offline backup.'
+                  : 'This device does not have a local copy of the secret. Rotate the secret to capture it again.'}
+              </p>
+            </div>
+          </div>
+
+          {#if storedSecret}
+            <div class="rounded-md border border-border/60 bg-background p-4">
+              <p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Secret</p>
+              <p class="mt-2 font-mono text-lg text-foreground break-words">{formatSecret(storedSecret)}</p>
+              <div class="mt-3 flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  class="gap-2"
+                  onclick={() => copySecret(storedSecret, 'stored')}
+                >
+                  <Copy class="h-4 w-4" aria-hidden="true" />
+                  Copy secret
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  class="gap-2"
+                  onclick={() => copyProvisioningUri(currentProvisioningUri, 'stored')}
+                  disabled={!currentProvisioningUri}
+                >
+                  <Link2 class="h-4 w-4" aria-hidden="true" />
+                  Copy setup link
+                </Button>
+              </div>
+              {#if secretCopyFeedback?.context === 'stored'}
+                <p
+                  class={`mt-2 text-xs ${secretCopyFeedback.variant === 'success' ? 'text-primary' : 'text-destructive'}`}
+                  aria-live="polite"
+                >
+                  {secretCopyFeedback.message}
+                </p>
+              {/if}
+              {#if uriCopyFeedback?.context === 'stored'}
+                <p
+                  class={`mt-1 text-xs ${uriCopyFeedback.variant === 'success' ? 'text-primary' : 'text-destructive'}`}
+                  aria-live="polite"
+                >
+                  {uriCopyFeedback.message}
+                </p>
+              {/if}
+            </div>
+          {:else}
+            <Alert>
+              <AlertCircle class="h-4 w-4" aria-hidden="true" />
+              <div class="space-y-1">
+                <AlertTitle>No local secret available</AlertTitle>
+                <AlertDescription>Rotate the secret to store a copy on this device for backup access.</AlertDescription>
+              </div>
+            </Alert>
+          {/if}
+        </div>
+      {/if}
+    </CardContent>
+  </Card>
+
   <Card class="border-border/60 bg-background/80 backdrop-blur">
     <CardHeader class="flex flex-row items-start gap-3 border-b border-border/40 pb-4">
       <div class="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">

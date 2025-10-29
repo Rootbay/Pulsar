@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onDestroy, tick } from 'svelte';
+  import { get } from 'svelte/store';
   import { fade, slide } from 'svelte/transition';
   import { Button } from '$lib/components/ui/button';
   import {
@@ -14,6 +15,12 @@
   import { Separator } from '$lib/components/ui/separator';
   import { clipboardSettings } from '$lib/stores/clipboard';
   import { cn } from '$lib/utils';
+  import type { ClipboardSettings } from '$lib/config/settings';
+  import {
+    clearClipboardNow,
+    clipboardIntegrationState,
+    updateClipboardSettings
+  } from '$lib/utils/clipboardService';
   import {
     CircleCheck,
     ClipboardCheck,
@@ -24,6 +31,7 @@
     Timer,
     Trash2
   } from '@lucide/svelte';
+  import { toast } from 'svelte-sonner';
 
   let clipboardIntegration = false;
   let clearAfterDuration = 12;
@@ -52,34 +60,60 @@
     { id: 4, action: 'API Key: sk-proj-...', time: '3 hours ago', status: 'copied' }
   ] satisfies Array<{ id: number; action: string; time: string; status: string }>;
 
-  const handleSetTimeout = (seconds: number) => {
-    clipboardSettings.update((current) => ({
-      ...current,
-      clearAfterDuration: seconds
-    }));
+  const handleSetTimeout = async (seconds: number) => {
+    clearAfterDuration = seconds;
+    try {
+      await updateClipboardSettings({ clearAfterDuration: seconds });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to update clipboard timeout.';
+      clearAfterDuration = get(clipboardSettings).clearAfterDuration;
+      toast.error('Unable to update clipboard timeout.', { description: message });
+    }
   };
 
-  const handleSwitchChange = (
+  const handleSwitchChange = async (
     setting: 'clipboardIntegration' | 'blockHistory' | 'onlyUnlocked'
   ) => {
-    clipboardSettings.update((current) => ({
-      ...current,
-      [setting]: !current[setting]
-    }));
+    const current = get(clipboardSettings);
+    const nextValue = !current[setting];
+
+    try {
+      const patch: Partial<ClipboardSettings> = { [setting]: nextValue } as Partial<ClipboardSettings>;
+      await updateClipboardSettings(patch);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to update clipboard setting.';
+      toast.error('Clipboard setting update failed.', { description: message });
+    }
   };
 
-  const handleRangeChange = () => {
-    clipboardSettings.update((current) => ({
-      ...current,
-      clearAfterDuration
-    }));
+  const handleRangeChange = async () => {
+    try {
+      await updateClipboardSettings({ clearAfterDuration });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to update clipboard timeout.';
+      clearAfterDuration = get(clipboardSettings).clearAfterDuration;
+      toast.error('Unable to update clipboard timeout.', { description: message });
+    }
   };
 
-  const handleRadioChange = () => {
-    clipboardSettings.update((current) => ({
-      ...current,
-      permissionLevel
-    }));
+  const handleRadioChange = async () => {
+    try {
+      await updateClipboardSettings({ permissionLevel });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to update clipboard permission.';
+      permissionLevel = get(clipboardSettings).permissionLevel;
+      toast.error('Unable to update clipboard permission.', { description: message });
+    }
+  };
+
+  const handleClearClipboard = async () => {
+    try {
+      await clearClipboardNow();
+      toast.success('Clipboard cleared.');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to clear clipboard.';
+      toast.error('Unable to clear clipboard.', { description: message });
+    }
   };
 
   const toggleAuditLog = async () => {
@@ -114,9 +148,18 @@
         <Switch
           checked={clipboardIntegration}
           aria-label="Toggle clipboard integration"
-          onclick={() => handleSwitchChange('clipboardIntegration')}
+          disabled={!$clipboardIntegrationState.integrationAvailable || $clipboardIntegrationState.applying}
+          on:click={() => handleSwitchChange('clipboardIntegration')}
         />
       </div>
+
+      {#if !$clipboardIntegrationState.integrationAvailable}
+        <p class="text-sm text-destructive">Clipboard integration is currently unavailable.</p>
+      {/if}
+
+      {#if $clipboardIntegrationState.lastError}
+        <p class="text-sm text-destructive">{$clipboardIntegrationState.lastError}</p>
+      {/if}
 
       <div class="space-y-4 rounded-lg border border-border/60 bg-muted/10 p-4">
         <div class="flex flex-wrap items-center justify-between gap-3">
@@ -136,7 +179,8 @@
                 'h-9 px-3 text-sm',
                 clearAfterDuration === option && 'border-primary bg-primary/20 text-primary'
               )}
-              onclick={() => handleSetTimeout(option)}
+              disabled={!$clipboardIntegrationState.integrationAvailable || $clipboardIntegrationState.applying}
+              on:click={() => handleSetTimeout(option)}
             >
               {option}s
             </Button>
@@ -151,6 +195,7 @@
             step="1"
             bind:value={clearAfterDuration}
             on:change={handleRangeChange}
+            disabled={!$clipboardIntegrationState.integrationAvailable || $clipboardIntegrationState.applying}
             class="h-2 w-full cursor-pointer appearance-none rounded-full bg-muted accent-[hsl(var(--primary))]"
           />
           <div class="flex justify-between text-xs text-muted-foreground">
@@ -175,16 +220,35 @@
             <ClipboardList class="size-5" />
           </div>
           <div class="space-y-1">
-            <p class="text-sm font-medium text-foreground">Block clipboard history</p>
+            <div class="flex items-center gap-2">
+              <p class="text-sm font-medium text-foreground">Block clipboard history</p>
+              <Badge
+                variant={$clipboardIntegrationState.historyBlockingActive ? 'secondary' : 'outline'}
+                class="text-xs"
+              >
+                {$clipboardIntegrationState.historyBlockingActive ? 'Active' : 'Inactive'}
+              </Badge>
+            </div>
             <p class="text-sm text-muted-foreground">Prevent system clipboard history from storing entries.</p>
           </div>
         </div>
         <Switch
           checked={blockHistory}
           aria-label="Toggle block clipboard history"
-          onclick={() => handleSwitchChange('blockHistory')}
+          disabled={
+            !$clipboardIntegrationState.integrationAvailable ||
+            !$clipboardIntegrationState.historyBlockingSupported ||
+            $clipboardIntegrationState.applying
+          }
+          on:click={() => handleSwitchChange('blockHistory')}
         />
       </div>
+
+      {#if !$clipboardIntegrationState.historyBlockingSupported}
+        <p class="pl-11 text-xs text-muted-foreground">
+          Clipboard history blocking is not supported on this platform.
+        </p>
+      {/if}
 
       <div class="flex items-start justify-between gap-4">
         <div class="flex items-start gap-3">
@@ -199,7 +263,8 @@
         <Switch
           checked={onlyUnlocked}
           aria-label="Toggle only allow on unlocked session"
-          onclick={() => handleSwitchChange('onlyUnlocked')}
+          disabled={!$clipboardIntegrationState.integrationAvailable || $clipboardIntegrationState.applying}
+          on:click={() => handleSwitchChange('onlyUnlocked')}
         />
       </div>
 
@@ -249,11 +314,17 @@
     </CardHeader>
     <CardContent class="space-y-6">
       <div class="flex flex-wrap items-center gap-3">
-        <Button type="button" variant="destructive" class="flex items-center gap-2">
+        <Button
+          type="button"
+          variant="destructive"
+          class="flex items-center gap-2"
+          disabled={!$clipboardIntegrationState.integrationAvailable || $clipboardIntegrationState.applying}
+          on:click={handleClearClipboard}
+        >
           <Trash2 class="size-4" />
           Clear clipboard now
         </Button>
-        <Button type="button" variant="outline" class="flex items-center gap-2" onclick={toggleAuditLog}>
+        <Button type="button" variant="outline" class="flex items-center gap-2" on:click={toggleAuditLog}>
           <History class="size-4" />
           {showAuditLog ? 'Hide audit log' : 'View audit log'}
         </Button>

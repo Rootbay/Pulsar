@@ -14,6 +14,7 @@ use sqlx::sqlite::{SqliteConnectOptions, SqliteConnection};
 use sqlx::{Connection, Row};
 use std::path::{Path, PathBuf};
 use tauri::State;
+use tauri_plugin_clipboard_manager::ClipboardExt;
 use tokio::fs;
 use totp_rs::{Algorithm as TotpAlgorithm, Secret, TOTP};
 use zeroize::{Zeroize, Zeroizing};
@@ -880,7 +881,7 @@ pub async fn is_login_totp_configured(state: State<'_, AppState>) -> Result<bool
 }
 
 #[tauri::command]
-pub async fn lock(state: State<'_, AppState>) -> Result<(), String> {
+pub async fn lock(app: tauri::AppHandle, state: State<'_, AppState>) -> Result<(), String> {
     {
         let mut key_guard = state.key.lock().await;
         *key_guard = None;
@@ -888,6 +889,17 @@ pub async fn lock(state: State<'_, AppState>) -> Result<(), String> {
     {
         let mut pending = state.pending_key.lock().await;
         *pending = None;
+    }
+
+    let should_clear = {
+        let policy = state.clipboard_policy.lock().await;
+        policy.integration_enabled && policy.only_unlocked
+    };
+
+    if should_clear {
+        if let Err(error) = app.clipboard().clear() {
+            eprintln!("Failed to clear clipboard on lock: {}", error);
+        }
     }
     Ok(())
 }

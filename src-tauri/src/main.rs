@@ -2,6 +2,7 @@
 
 mod auth;
 mod backup_commands;
+mod clipboard;
 mod crypto;
 mod db;
 mod db_commands;
@@ -79,7 +80,9 @@ fn main() {
             pending_key: Arc::new(Mutex::new(None)),
             db_path: Arc::new(Mutex::new(None)),
             rekey: Arc::new(Mutex::new(())),
+            clipboard_policy: Arc::new(Mutex::new(Default::default())),
         })
+        .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_store::Builder::new().build())
@@ -141,6 +144,9 @@ fn main() {
             security::run_integrity_check,
             get_all_settings,
             set_all_settings,
+            clipboard::get_clipboard_capabilities,
+            clipboard::apply_clipboard_policy,
+            clipboard::clear_clipboard,
         ])
         .run(context)
         .expect("error while running tauri application");

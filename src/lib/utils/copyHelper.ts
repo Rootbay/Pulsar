@@ -1,21 +1,58 @@
 import type { PasswordItem } from '$lib/types/password';
-import { writeText, readText } from '@tauri-apps/plugin-clipboard-manager';
-import { securitySettings } from '$lib/stores/security';
+import { clear, readText, writeText } from '@tauri-apps/plugin-clipboard-manager';
 import { get } from 'svelte/store';
 
+import { isLocked } from '$lib/stores';
+import { clipboardSettings } from '$lib/stores/clipboard';
+import { clipboardIntegrationState, clipboardServiceReady } from '$lib/utils/clipboardService';
+
+let clearTimer: ReturnType<typeof setTimeout> | null = null;
+
 async function copyToClipboard(text: string) {
-	await writeText(text);
+        const settings = get(clipboardSettings);
+        const integrationStatus = get(clipboardIntegrationState);
+        const serviceReady = get(clipboardServiceReady);
+        const locked = get(isLocked);
 
-	const settings = get(securitySettings);
+        if (!settings.clipboardIntegration || !integrationStatus.integrationAvailable) {
+                throw new Error('Clipboard integration is disabled.');
+        }
 
-	if (settings.clearClipboardOnCopy && settings.clipboardClearTime > 0) {
-		setTimeout(async () => {
-			const currentClipboard = await readText();
-			if (currentClipboard === text) {
-				await writeText('');
-			}
-		}, settings.clipboardClearTime * 1000);
-	}
+        if (settings.onlyUnlocked && locked) {
+                throw new Error('Clipboard access is disabled while the vault is locked.');
+        }
+
+        if (settings.blockHistory && serviceReady) {
+                if (!integrationStatus.historyBlockingSupported) {
+                        throw new Error('Clipboard history blocking is not supported on this platform.');
+                }
+
+                if (!integrationStatus.historyBlockingActive) {
+                        throw new Error('Clipboard history blocking could not be enforced.');
+                }
+        }
+
+        await writeText(text);
+
+        if (clearTimer) {
+                clearTimeout(clearTimer);
+        }
+
+        if (settings.clearAfterDuration > 0) {
+                const delayMs = settings.clearAfterDuration * 1000;
+                clearTimer = setTimeout(async () => {
+                        try {
+                                const currentClipboard = await readText();
+                                if (currentClipboard === text) {
+                                        await clear();
+                                }
+                        } catch (error) {
+                                console.error('Failed to clear clipboard after timeout', error);
+                        } finally {
+                                clearTimer = null;
+                        }
+                }, delayMs);
+        }
 }
 
 export async function copyPassword(passwordItem: PasswordItem) {

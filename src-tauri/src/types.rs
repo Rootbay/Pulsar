@@ -44,6 +44,16 @@ pub struct RecipientKey {
     pub private_key: String,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VaultBackupSnapshot {
+    pub version: u32,
+    pub exported_at: String,
+    pub password_items: Vec<PasswordItem>,
+    pub buttons: Vec<Button>,
+    pub recipient_keys: Vec<RecipientKey>,
+}
+
 #[derive(Serialize, Deserialize)]
 pub struct ExportPayload {
     pub version: u8,

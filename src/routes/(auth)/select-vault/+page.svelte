@@ -13,13 +13,20 @@
   import { isDatabaseLoaded, isLocked, needsPasswordSetup, totpVerified } from '$lib/stores';
   import { recentDatabases } from '$lib/stores/recentDatabases';
   import { importVaultBackup, notifyVaultRefresh } from '$lib/utils/backup';
-  import { X } from '@lucide/svelte';
+  import type { ImportVaultProgressStage } from '$lib/utils/backup';
+  import { X, Loader2 } from '@lucide/svelte';
 
   let error: string | null = null;
   let importMessage: string | null = null;
+  let importProgress: string | null = null;
   let showImportPopup = false;
   let lastAttemptedPath: string | null = null;
   let triedElevated = false;
+
+  const importProgressMessages: Record<ImportVaultProgressStage, string> = {
+    decrypting: 'Decrypting backup…',
+    restoring: 'Restoring vault contents…'
+  };
 
   $: hasAccessDeniedError = Boolean(error?.toLowerCase().includes('access is denied'));
 
@@ -170,6 +177,7 @@
   const handleImportSelected = async (event: CustomEvent<Record<string, unknown>>) => {
     showImportPopup = false;
     importMessage = null;
+    importProgress = null;
 
     const importedPath = typeof event.detail?.importedPath === 'string' ? event.detail.importedPath : null;
     const passphrase = typeof event.detail?.passphrase === 'string' ? event.detail.passphrase.trim() : '';
@@ -185,11 +193,19 @@
     }
 
     try {
-      const snapshot = await importVaultBackup(passphrase, importedPath);
+      error = null;
+      importProgress = importProgressMessages.decrypting;
+
+      const snapshot = await importVaultBackup(passphrase, {
+        sourcePath: importedPath,
+        onProgress: (stage) => {
+          importProgress = importProgressMessages[stage];
+        }
+      });
       const itemCount = snapshot.passwordItems.length;
       const tagCount = snapshot.buttons.length;
-      importMessage = `Backup verified: ${itemCount} item${itemCount === 1 ? '' : 's'} and ${tagCount} tag${tagCount === 1 ? '' : 's'} found.`;
-      error = null;
+      importMessage = `Vault restored: ${itemCount} item${itemCount === 1 ? '' : 's'} and ${tagCount} tag${tagCount === 1 ? '' : 's'} imported successfully.`;
+      importProgress = null;
       notifyVaultRefresh('import');
     } catch (cause) {
       console.error('Failed to import backup:', cause);
@@ -200,6 +216,7 @@
       } else {
         error = 'Failed to import the selected backup. Please verify the passphrase and try again.';
       }
+      importProgress = null;
     }
   };
 
@@ -296,6 +313,13 @@
           </button>
         </div>
       {/if}
+    </div>
+  {/if}
+
+  {#if importProgress}
+    <div class="progress-block" role="status">
+      <Loader2 class="progress-icon" aria-hidden="true" />
+      <p class="progress-text">{importProgress}</p>
     </div>
   {/if}
 
@@ -569,6 +593,40 @@
   .success-text {
     font-size: 0.95rem;
     font-weight: 600;
+  }
+
+  .progress-block {
+    width: min(90%, 490px);
+    margin: 1rem auto;
+    padding: 1rem 1.25rem;
+    border-radius: 1rem;
+    background: color-mix(in oklch, var(--muted) 45%, transparent);
+    border: 1px solid color-mix(in oklch, var(--border) 80%, transparent);
+    color: var(--foreground);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+  }
+
+  .progress-icon {
+    width: 1.25rem;
+    height: 1.25rem;
+    animation: spin 1s linear infinite;
+  }
+
+  .progress-text {
+    font-size: 0.95rem;
+    font-weight: 500;
+  }
+
+  @keyframes spin {
+    from {
+      transform: rotate(0deg);
+    }
+    to {
+      transform: rotate(360deg);
+    }
   }
 
   .error-actions {

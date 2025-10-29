@@ -4,40 +4,47 @@ import { securitySettings } from '$lib/stores/security';
 import { get } from 'svelte/store';
 
 async function copyToClipboard(text: string) {
-    await writeText(text);
+	await writeText(text);
 
-    const settings = get(securitySettings);
+	const settings = get(securitySettings);
 
-    if (settings.clearClipboardOnCopy && settings.clipboardClearTime > 0) {
-        setTimeout(async () => {
-            const currentClipboard = await readText();
-            if (currentClipboard === text) {
-                await writeText('');
-            }
-        }, settings.clipboardClearTime * 1000);
-    }
+	if (settings.clearClipboardOnCopy && settings.clipboardClearTime > 0) {
+		setTimeout(async () => {
+			const currentClipboard = await readText();
+			if (currentClipboard === text) {
+				await writeText('');
+			}
+		}, settings.clipboardClearTime * 1000);
+	}
 }
 
 export async function copyPassword(passwordItem: PasswordItem) {
-    if (passwordItem && passwordItem.password) {
-        await copyToClipboard(passwordItem.password);
-    }
+	if (passwordItem && passwordItem.password) {
+		await copyToClipboard(passwordItem.password);
+	}
 }
 
 export async function copyUsername(passwordItem: PasswordItem) {
-    if (passwordItem && passwordItem.username) {
-        await copyToClipboard(passwordItem.username);
-    }
+	if (passwordItem && passwordItem.username) {
+		await copyToClipboard(passwordItem.username);
+	}
 }
 
 export async function copyUrl(passwordItem: PasswordItem) {
-    if (passwordItem && passwordItem.url) {
-        await copyToClipboard(passwordItem.url);
-    }
+	if (passwordItem && passwordItem.url) {
+		await copyToClipboard(passwordItem.url);
+	}
 }
 
 export async function copyTitle(passwordItem: PasswordItem) {
-    if (passwordItem && passwordItem.title) {
-        await copyToClipboard(passwordItem.title);
-    }
+	if (passwordItem && passwordItem.title) {
+		await copyToClipboard(passwordItem.title);
+	}
+}
+
+export async function copyText(value: string | null | undefined) {
+	if (!value) {
+		return;
+	}
+	await copyToClipboard(value);
 }

@@ -746,6 +746,7 @@
                         displayFields={filteredDisplayFields}
                         bind:editingFields={dndItems}
                         displayColor={displayColor}
+                        passwordItem={selectedPasswordItem}
                         bind:showPassword
                         showSkeleton={showSkeletonDetail}
                         viewSkeletonPlaceholders={

@@ -172,6 +172,10 @@ export const defaultVaultSettings: VaultSettings = {
     compression: false,
 };
 
+export type VaultSettingsMap = Record<string, VaultSettings>;
+
+export const defaultVaultSettingsMap: VaultSettingsMap = {};
+
 export interface PasswordPreset {
     name: string;
     length: number;

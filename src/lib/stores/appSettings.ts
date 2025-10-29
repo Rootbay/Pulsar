@@ -17,8 +17,8 @@ import {
     defaultGeneratorSettings,
     type SecuritySettings,
     defaultSecuritySettings,
-    type VaultSettings,
-    defaultVaultSettings,
+    type VaultSettingsMap,
+    defaultVaultSettingsMap,
     type PasswordPreset,
     defaultPasswordPresets,
     type SiteRule,
@@ -39,7 +39,7 @@ export interface AllSettings {
     recentDatabases: string[];
     siteRules: SiteRule[];
     security: SecuritySettings;
-    vault: VaultSettings;
+    vaultSettingsById: VaultSettingsMap;
 }
 
 const defaultAllSettings: AllSettings = {
@@ -55,7 +55,7 @@ const defaultAllSettings: AllSettings = {
     recentDatabases: [],
     siteRules: defaultSiteRules,
     security: defaultSecuritySettings,
-    vault: defaultVaultSettings,
+    vaultSettingsById: defaultVaultSettingsMap,
 };
 
 export const appSettings = writable<AllSettings>(defaultAllSettings);
@@ -83,7 +83,12 @@ export async function initAppSettings() {
                         general: { ...defaultAllSettings.general, ...(loadedSettings.general || {}) },
                         generator: { ...defaultAllSettings.generator, ...(loadedSettings.generator || {}) },
                         security: { ...defaultAllSettings.security, ...(loadedSettings.security || {}) },
-                        vault: { ...defaultAllSettings.vault, ...(loadedSettings.vault || {}) },
+                        vaultSettingsById: {
+                            ...defaultAllSettings.vaultSettingsById,
+                            ...(loadedSettings.vaultSettingsById
+                                || loadedSettings.vault
+                                || {}),
+                        },
                         keybinds: loadedSettings.keybinds || defaultAllSettings.keybinds,
                         passwordPresets: loadedSettings.passwordPresets || defaultAllSettings.passwordPresets,
                         recentDatabases: loadedSettings.recentDatabases || defaultAllSettings.recentDatabases,

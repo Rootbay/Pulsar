@@ -1,6 +1,7 @@
 <script lang="ts">
   import '../app.css';
   import { browser } from '$app/environment';
+  import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import { page } from '$app/stores';
   import {
@@ -11,8 +12,15 @@
     totpRequired
   } from '$lib/stores';
   import { appearanceSettings } from '$lib/stores/appearance';
+  import { initClipboardService } from '$lib/utils/clipboardService';
 
   const AUTH_ROUTES = new Set(['/select-vault', '/setup', '/login', '/totp']);
+
+  onMount(() => {
+    initClipboardService().catch((error) => {
+      console.error('Failed to initialize clipboard policies', error);
+    });
+  });
 
   $: if (browser) {
     const htmlElement = document.documentElement;

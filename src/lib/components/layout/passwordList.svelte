@@ -45,12 +45,14 @@
     items: PasswordItem[];
     buttons: TagButton[];
     selectedId: number | null;
+    disableEdit?: boolean;
   }
 
   let {
     items = $bindable<PasswordItem[]>([]),
     buttons,
-    selectedId = null
+    selectedId = null,
+    disableEdit = false
   }: Props = $props();
 
   const dispatch = createEventDispatcher<{
@@ -79,6 +81,8 @@
   let showSkeleton = $state(false);
   let skeletonTimer: ReturnType<typeof setTimeout> | null = null;
   let lastSkeletonKey = '';
+  let navInnerRef: HTMLElement | null = null;
+  let highlightTimer: ReturnType<typeof setTimeout> | null = null;
 
   const itemsCount = $derived(items.length);
 
@@ -181,7 +185,50 @@
     }
 
     cleanupResizeListeners();
+
+    if (highlightTimer) {
+      clearTimeout(highlightTimer);
+      highlightTimer = null;
+    }
   });
+
+  function clearEditingHighlight() {
+    if (!navInnerRef) return;
+
+    const highlighted = navInnerRef.querySelectorAll<HTMLElement>('.editing-target');
+    highlighted.forEach((element) => element.classList.remove('editing-target'));
+  }
+
+  export async function focusItem(id: number | null | undefined) {
+    if (id == null) {
+      return;
+    }
+
+    await tick();
+
+    if (!navInnerRef) {
+      return;
+    }
+
+    clearEditingHighlight();
+
+    const target = navInnerRef.querySelector<HTMLElement>(`[data-item-id="${id}"]`);
+    if (!target) {
+      return;
+    }
+
+    target.classList.add('editing-target');
+    target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+    if (highlightTimer) {
+      clearTimeout(highlightTimer);
+    }
+
+    highlightTimer = setTimeout(() => {
+      target.classList.remove('editing-target');
+      highlightTimer = null;
+    }, 800);
+  }
 
   function partitionItems(list: PasswordItem[]): ItemSection[] {
     const buckets: Record<SectionTitle, PasswordItem[]> = {
@@ -373,6 +420,10 @@
   }
 
   function handleEditEntry(item: PasswordItem) {
+    if (disableEdit) {
+      return;
+    }
+
     dispatch('editEntry', item);
   }
 
@@ -385,7 +436,14 @@
 <nav class="passwordList">
   <ContextMenu>
     <ContextMenuTrigger>
-      <div class="navInner" aria-busy={showSkeleton} role="region" aria-label="Password list" tabindex="-1">
+      <div
+        class="navInner"
+        bind:this={navInnerRef}
+        aria-busy={showSkeleton}
+        role="region"
+        aria-label="Password list"
+        tabindex="-1"
+      >
         <div class="topControls" role="region" aria-label="Navigation controls">
           <div class="searchContainer">
             <Button
@@ -478,7 +536,12 @@
                     {:else}
                       {#each section.items as item (item.id)}
                         {@const fallback = getFallback(item)}
-                        <li class="item" class:selected={selectedItemId === item.id} role="listitem">
+                        <li
+                          class="item"
+                          class:selected={selectedItemId === item.id}
+                          data-item-id={item.id}
+                          role="listitem"
+                        >
                           <ContextMenu>
                             <ContextMenuTrigger>
                               <a
@@ -510,7 +573,12 @@
                             <ContextMenuContent class="w-48">
                               <ContextMenuItem onSelect={() => handlePinToggle(item)}>{isPinned(item) ? 'Unpin' : 'Pin'}</ContextMenuItem>
                               <ContextMenuSeparator />
-                              <ContextMenuItem onSelect={() => handleEditEntry(item)}>Edit Entry</ContextMenuItem>
+                              <ContextMenuItem
+                                disabled={disableEdit}
+                                onSelect={() => handleEditEntry(item)}
+                              >
+                                Edit Entry
+                              </ContextMenuItem>
                               <ContextMenuItem
                                 class="text-destructive focus:text-destructive data-[highlighted]:bg-destructive/10"
                                 onSelect={() => handleRemoveEntry(item)}
@@ -662,6 +730,12 @@
 
   .item.selected {
     background: var(--passwordlist-hover);
+  }
+
+  .item.editing-target {
+    background: color-mix(in oklch, var(--passwordlist-hover) 90%, transparent);
+    box-shadow: 0 0 0 2px color-mix(in oklch, var(--passwordlist-strong-text) 22%, transparent);
+    border-radius: 10px;
   }
 
   .itemLink {

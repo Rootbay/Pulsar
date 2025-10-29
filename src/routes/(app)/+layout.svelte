@@ -9,7 +9,7 @@
   import Settings from '../settings/+page.svelte';
   import { invoke } from '@tauri-apps/api/core';
   import type { PasswordItem } from '../+layout.ts';
-  import { onMount } from 'svelte';
+  import { onMount, tick } from 'svelte';
 
   interface Button {
     id: number;
@@ -29,6 +29,8 @@
   let popupTag: any = null;
   let buttons: Button[] = [];
   let displayColor = '#94a3b8';
+  let passwordListRef: InstanceType<typeof PasswordList> | null = null;
+  let passwordDetailRef: InstanceType<typeof PasswordDetail> | null = null;
 
   $: {
     if (selectedPasswordItem && selectedPasswordItem.tags) {
@@ -194,6 +196,20 @@
     selectedPasswordItem = event.detail;
   }
 
+  async function handlePasswordEditRequested(event: CustomEvent<PasswordItem>) {
+    if (!event.detail || $isLocked) {
+      return;
+    }
+
+    selectedPasswordItem = event.detail;
+    await tick();
+
+    await passwordListRef?.focusItem?.(event.detail.id ?? null);
+    passwordDetailRef?.enterEditMode?.();
+  }
+
+  $: disableContextEdit = $isLocked || passwordItems.length === 0;
+
   async function handleRemoveEntry(event: CustomEvent) {
     const itemToRemove = event.detail;
 
@@ -224,13 +240,17 @@
           on:lock={handleLock}
         />
       </SidebarProvider>
+
       <PasswordList
         items={passwordItems}
         on:createEntry={handleCreateEntry}
         on:select={handlePasswordSelected}
+        on:editEntry={handlePasswordEditRequested}
         {buttons}
         on:removeEntry={handleRemoveEntry}
         selectedId={selectedPasswordItem?.id ?? null}
+        disableEdit={disableContextEdit}
+        bind:this={passwordListRef}
       />
       <PasswordDetail
         bind:selectedPasswordItem
@@ -245,6 +265,7 @@
             passwordItems = [...passwordItems];
           }
         }}
+        bind:this={passwordDetailRef}
       >
         <slot />
       </PasswordDetail>

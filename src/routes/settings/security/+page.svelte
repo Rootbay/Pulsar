@@ -1,6 +1,8 @@
 <script lang="ts">
   import { get } from 'svelte/store';
-  import { onDestroy } from 'svelte';
+  import { onDestroy, onMount } from 'svelte';
+  import { invoke } from '@tauri-apps/api/core';
+  import { toast } from 'svelte-sonner';
   import { securitySettings } from '$lib/stores/security';
   import type { SecuritySettings } from '$lib/config/settings';
   import { Button } from '$lib/components/ui/button';
@@ -12,8 +14,23 @@
   import { Switch } from '$lib/components/ui/switch';
   import { Badge } from '$lib/components/ui/badge';
   import { cn } from '$lib/utils';
-  import { Lock, RefreshCw, Trash2, ShieldCheck, Fingerprint, Smartphone, CalendarClock, MonitorSmartphone, EyeOff, Eye, TriangleAlert, HardDrive, Shield } from '@lucide/svelte';
-  
+  import {
+    Lock,
+    RefreshCw,
+    Trash2,
+    ShieldCheck,
+    Fingerprint,
+    Smartphone,
+    CalendarClock,
+    MonitorSmartphone,
+    EyeOff,
+    Eye,
+    TriangleAlert,
+    HardDrive,
+    Shield,
+    Loader2
+  } from '@lucide/svelte';
+
   type BooleanSettingKey = {
     [K in keyof SecuritySettings]: SecuritySettings[K] extends boolean ? K : never;
   }[keyof SecuritySettings];
@@ -22,6 +39,24 @@
     value: SecuritySettings['autoLockInactivity'];
     label: string;
   };
+
+  type DeviceRecord = {
+    id: string;
+    name: string;
+    kind: string;
+    lastSeen: string | null;
+    isCurrent: boolean;
+  };
+
+  type SecurityActionId = 'rekey' | 'wipe-memory' | 'integrity-check';
+
+  type Argon2Params = {
+    memoryKib: number;
+    timeCost: number;
+    parallelism: number;
+  };
+
+  const MIN_PASSWORD_LENGTH = 8;
 
   const autoLockOptions: AutoLockOption[] = [
     { value: 'Immediate', label: 'Immediate' },
@@ -53,45 +88,26 @@
     }
   ];
 
-  const pairedDevices: Array<{
-    name: string;
-    lastSeen: string;
-    isCurrent: boolean;
-    type: string;
-    Icon: typeof Fingerprint;
-  }> = [
-    {
-      name: 'Touch ID (MacBook Pro)',
-      lastSeen: '2 minutes ago',
-      isCurrent: true,
-      type: 'Biometric',
-      Icon: Fingerprint
-    },
-    {
-      name: 'Pixel 8 (Device Key)',
-      lastSeen: 'Yesterday � 20:14',
-      isCurrent: false,
-      type: 'Device Key',
-      Icon: Smartphone
-    }
-  ];
-
   const securityActions: Array<{
+    id: SecurityActionId;
     title: string;
     description: string;
     Icon: typeof RefreshCw;
   }> = [
     {
+      id: 'rekey',
       title: 'Re-key Vault',
       description: 'Rotate encryption keys and re-encrypt stored data.',
       Icon: RefreshCw
     },
     {
+      id: 'wipe-memory',
       title: 'Clear Memory',
       description: 'Scrub sensitive material from memory immediately.',
       Icon: Trash2
     },
     {
+      id: 'integrity-check',
       title: 'Integrity Check',
       description: 'Verify vault contents for tampering or corruption.',
       Icon: ShieldCheck
@@ -104,9 +120,46 @@
   let currentPassword = '';
   let newPassword = '';
   let confirmPassword = '';
+  let changePasswordError = '';
+  let isChangingPassword = false;
+
+  let kdfModalOpen = false;
+  let kdfCurrentPassword = '';
+  let showKdfPassword = false;
+  let kdfMemoryMb = 64;
+  let kdfTimeCost = 3;
+  let kdfParallelism = 4;
+  let kdfError = '';
+  let isUpdatingKdf = false;
+
+  let argon2Params: Argon2Params = {
+    memoryKib: 64 * 1024,
+    timeCost: 3,
+    parallelism: 4
+  };
+  let argon2Loading = false;
+
+  let devices: DeviceRecord[] = [];
+  let devicesLoading = false;
+  let deviceActionPending: Record<string, boolean> = {};
+  let isRevokingDevices = false;
+
+  let securityActionPending: Record<SecurityActionId, boolean> = {
+    rekey: false,
+    'wipe-memory': false,
+    'integrity-check': false
+  };
+
+  const memoryFormatter = new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 });
+  const gigabyteFormatter = new Intl.NumberFormat(undefined, { maximumFractionDigits: 1 });
 
   const unsubscribe = securitySettings.subscribe((settings) => {
     currentSettings = settings;
+  });
+
+  onMount(() => {
+    loadArgon2Params();
+    loadDevices();
   });
 
   onDestroy(() => {
@@ -126,21 +179,53 @@
     applyChanges({ autoLockInactivity: value });
   }
 
+  function parseError(error: unknown): string {
+    if (error instanceof Error) {
+      return error.message;
+    }
+    if (typeof error === 'string') {
+      return error;
+    }
+    try {
+      return JSON.stringify(error);
+    } catch {
+      return 'Unknown error';
+    }
+  }
+
+  function formatArgonMemory(memoryKib: number): string {
+    if (memoryKib <= 0) {
+      return '0 MB';
+    }
+    const memoryMb = memoryKib / 1024;
+    if (memoryMb >= 1024) {
+      return `${gigabyteFormatter.format(memoryMb / 1024)} GB`;
+    }
+    return `${memoryFormatter.format(memoryMb)} MB`;
+  }
+
   function openPasswordModal() {
     passwordModalOpen = true;
     currentPassword = '';
     newPassword = '';
     confirmPassword = '';
+    changePasswordError = '';
     showCurrentPassword = false;
   }
 
   function closePasswordModal() {
     passwordModalOpen = false;
+    currentPassword = '';
+    newPassword = '';
+    confirmPassword = '';
+    changePasswordError = '';
+    showCurrentPassword = false;
   }
 
   function handleDialogChange(open: boolean) {
     passwordModalOpen = open;
     if (!passwordModalOpen) {
+      changePasswordError = '';
       showCurrentPassword = false;
     }
   }
@@ -148,6 +233,231 @@
   function togglePasswordVisibility() {
     showCurrentPassword = !showCurrentPassword;
   }
+
+  function openKdfModal() {
+    kdfModalOpen = true;
+    kdfCurrentPassword = '';
+    showKdfPassword = false;
+    kdfError = '';
+    kdfMemoryMb = Math.max(8, Math.round(argon2Params.memoryKib / 1024));
+    kdfTimeCost = argon2Params.timeCost;
+    kdfParallelism = argon2Params.parallelism;
+  }
+
+  function handleKdfDialogChange(open: boolean) {
+    kdfModalOpen = open;
+    if (!open) {
+      kdfCurrentPassword = '';
+      kdfError = '';
+      showKdfPassword = false;
+    }
+  }
+
+  function toggleKdfPasswordVisibility() {
+    showKdfPassword = !showKdfPassword;
+  }
+
+  function getDeviceIcon(kind: string): typeof Fingerprint {
+    switch (kind) {
+      case 'biometric':
+        return Fingerprint;
+      case 'device-key':
+      case 'key':
+        return Smartphone;
+      default:
+        return Shield;
+    }
+  }
+
+  function getDeviceTypeLabel(kind: string): string {
+    if (!kind) {
+      return 'Unknown';
+    }
+    return kind
+      .split(/[-_ ]+/)
+      .filter(Boolean)
+      .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
+      .join(' ');
+  }
+
+  async function loadArgon2Params() {
+    argon2Loading = true;
+    try {
+      const params = await invoke<Argon2Params>('get_argon2_params');
+      argon2Params = params;
+    } catch (error) {
+      toast.error(`Failed to load key derivation settings: ${parseError(error)}`);
+    } finally {
+      argon2Loading = false;
+    }
+  }
+
+  async function loadDevices() {
+    devicesLoading = true;
+    try {
+      const result = await invoke<DeviceRecord[]>('list_devices');
+      devices = result.map((device) => ({
+        ...device,
+        kind: device.kind ?? 'unknown',
+        lastSeen: device.lastSeen ?? null
+      }));
+      deviceActionPending = {};
+    } catch (error) {
+      toast.error(`Failed to load devices: ${parseError(error)}`);
+    } finally {
+      devicesLoading = false;
+    }
+  }
+
+  async function submitPasswordChange() {
+    changePasswordError = '';
+    if (!isPasswordFormValid) {
+      if (newPassword.trim() !== confirmPassword.trim()) {
+        changePasswordError = 'New password and confirmation do not match.';
+      } else if (newPassword.trim().length < MIN_PASSWORD_LENGTH) {
+        changePasswordError = `New password must be at least ${MIN_PASSWORD_LENGTH} characters.`;
+      } else if (newPassword.trim() === currentPassword.trim()) {
+        changePasswordError = 'New password must be different from the current password.';
+      }
+      return;
+    }
+
+    isChangingPassword = true;
+    try {
+      await invoke('rotate_master_password', {
+        currentPassword,
+        newPassword
+      });
+      toast.success('Master password updated successfully.');
+      closePasswordModal();
+      await loadArgon2Params();
+    } catch (error) {
+      toast.error(`Failed to update master password: ${parseError(error)}`);
+    } finally {
+      isChangingPassword = false;
+    }
+  }
+
+  async function submitKdfUpdate() {
+    kdfError = '';
+    if (!isKdfFormValid) {
+      if (kdfCurrentPassword.trim().length === 0) {
+        kdfError = 'Current password is required.';
+      } else if (kdfMemoryMb < 8) {
+        kdfError = 'Memory must be at least 8 MiB.';
+      } else if (kdfTimeCost < 1) {
+        kdfError = 'Time cost must be at least 1.';
+      } else if (kdfParallelism < 1) {
+        kdfError = 'Parallelism must be at least 1.';
+      }
+      return;
+    }
+
+    isUpdatingKdf = true;
+    try {
+      await invoke('update_argon2_params', {
+        currentPassword: kdfCurrentPassword,
+        memoryKib: Math.round(kdfMemoryMb * 1024),
+        timeCost: Math.round(kdfTimeCost),
+        parallelism: Math.round(kdfParallelism)
+      });
+      toast.success('Key derivation parameters updated.');
+      handleKdfDialogChange(false);
+      await loadArgon2Params();
+    } catch (error) {
+      toast.error(`Failed to update key derivation parameters: ${parseError(error)}`);
+    } finally {
+      isUpdatingKdf = false;
+    }
+  }
+
+  async function performMemoryWipe() {
+    securityActionPending = { ...securityActionPending, 'wipe-memory': true };
+    try {
+      await invoke('wipe_memory');
+      toast.success('Sensitive data cleared from memory. The vault has been locked.');
+    } catch (error) {
+      toast.error(`Failed to clear memory: ${parseError(error)}`);
+    } finally {
+      securityActionPending = { ...securityActionPending, 'wipe-memory': false };
+    }
+  }
+
+  async function runIntegrityCheck() {
+    securityActionPending = { ...securityActionPending, 'integrity-check': true };
+    try {
+      const result = await invoke<string>('run_integrity_check');
+      if (result.trim().toLowerCase() === 'ok') {
+        toast.success('Vault integrity check completed successfully.');
+      } else {
+        toast.error(`Integrity check reported issues: ${result}`);
+      }
+    } catch (error) {
+      toast.error(`Failed to run integrity check: ${parseError(error)}`);
+    } finally {
+      securityActionPending = { ...securityActionPending, 'integrity-check': false };
+    }
+  }
+
+  async function handleSecurityAction(actionId: SecurityActionId) {
+    if (actionId === 'rekey') {
+      openPasswordModal();
+      return;
+    }
+
+    if (actionId === 'wipe-memory') {
+      await performMemoryWipe();
+    } else if (actionId === 'integrity-check') {
+      await runIntegrityCheck();
+    }
+  }
+
+  async function removeDevice(device: DeviceRecord) {
+    deviceActionPending = { ...deviceActionPending, [device.id]: true };
+    try {
+      await invoke('remove_device', { deviceId: device.id });
+      devices = devices.filter((entry) => entry.id !== device.id);
+      const updated = { ...deviceActionPending };
+      delete updated[device.id];
+      deviceActionPending = updated;
+      toast.success(`Removed ${device.name}.`);
+    } catch (error) {
+      deviceActionPending = { ...deviceActionPending, [device.id]: false };
+      toast.error(`Failed to remove device: ${parseError(error)}`);
+    }
+  }
+
+  async function revokeAllDevices() {
+    isRevokingDevices = true;
+    try {
+      await invoke('revoke_all_devices');
+      devices = [];
+      deviceActionPending = {};
+      toast.success('All devices revoked.');
+    } catch (error) {
+      toast.error(`Failed to revoke devices: ${parseError(error)}`);
+    } finally {
+      isRevokingDevices = false;
+    }
+  }
+
+  function handlePairDevice() {
+    toast.info('Device pairing is not yet available. Stay tuned!');
+  }
+
+  $: argon2Summary = `Argon2id • memory ${formatArgonMemory(argon2Params.memoryKib)} • time cost ${argon2Params.timeCost} • parallelism ${argon2Params.parallelism}`;
+
+  $: isPasswordFormValid =
+    currentPassword.trim().length > 0 &&
+    newPassword.trim().length >= MIN_PASSWORD_LENGTH &&
+    newPassword.trim() === confirmPassword.trim() &&
+    newPassword.trim() !== currentPassword.trim();
+
+  $: isKdfFormValid =
+    kdfCurrentPassword.trim().length > 0 &&
+    kdfMemoryMb >= 8 &&
+    kdfTimeCost >= 1 &&
+    kdfParallelism >= 1;
 </script>
 
 <div class="flex flex-1 flex-col gap-6 overflow-y-auto px-8 py-8">
@@ -175,9 +485,11 @@
       <div class="flex flex-col gap-2 rounded-lg border border-border/60 bg-muted/20 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <p class="text-sm font-semibold text-foreground">Key Derivation</p>
-          <p class="text-sm text-muted-foreground">Argon2id � memory 64&nbsp;MB � time cost 3 � parallelism 4</p>
+          <p class="text-sm text-muted-foreground">
+            {argon2Loading ? 'Loading key derivation parameters…' : argon2Summary}
+          </p>
         </div>
-        <Button variant="outline" size="sm" onclick={() => {}}>
+        <Button variant="outline" size="sm" onclick={openKdfModal}>
           Reconfigure KDF
         </Button>
       </div>
@@ -285,44 +597,71 @@
           <CardTitle>Paired Devices</CardTitle>
           <CardDescription>Review devices authorised for biometric or key-based unlock.</CardDescription>
         </div>
-        <Button variant="outline" size="sm" onclick={() => {}}>
+        <Button variant="outline" size="sm" onclick={handlePairDevice} disabled={devicesLoading}>
           Pair New Device
         </Button>
       </div>
     </CardHeader>
     <CardContent class="flex flex-col gap-4 pt-4">
-      {#each pairedDevices as device}
-        <div
-          class={cn(
-            'flex items-start justify-between gap-4 rounded-lg border border-border/60 bg-muted/20 px-4 py-4 sm:items-center',
-            device.isCurrent ? 'border-primary/60 bg-primary/10' : ''
-          )}
-        >
-          <div class="flex items-start gap-3">
-            <div class="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
-              <device.Icon class="h-5 w-5" aria-hidden="true" />
-            </div>
-            <div>
-              <p class="text-sm font-semibold text-foreground">{device.name}</p>
-              <p class="text-xs text-muted-foreground">
-                {device.lastSeen}{device.isCurrent ? ' � Current device' : ''}
-              </p>
-            </div>
-          </div>
-          <div class="flex items-center gap-3">
-            <Badge variant="secondary">{device.type}</Badge>
-            <Button variant="ghost" size="icon" onclick={() => {}} aria-label={`Remove ${device.name}`}>
-              <Trash2 class="h-4 w-4" aria-hidden="true" />
-            </Button>
-          </div>
+      {#if devicesLoading}
+        <div class="flex items-center gap-2 text-sm text-muted-foreground">
+          <Loader2 class="h-4 w-4 animate-spin" aria-hidden="true" />
+          <span>Loading devices…</span>
         </div>
-      {/each}
+      {:else if devices.length === 0}
+        <p class="text-sm text-muted-foreground">No devices have been paired yet.</p>
+      {:else}
+        {#each devices as device}
+          <div
+            class={cn(
+              'flex items-start justify-between gap-4 rounded-lg border border-border/60 bg-muted/20 px-4 py-4 sm:items-center',
+              device.isCurrent ? 'border-primary/60 bg-primary/10' : ''
+            )}
+          >
+            <div class="flex items-start gap-3">
+              <div class="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
+                <svelte:component this={getDeviceIcon(device.kind)} class="h-5 w-5" aria-hidden="true" />
+              </div>
+              <div>
+                <p class="text-sm font-semibold text-foreground">{device.name}</p>
+                <p class="text-xs text-muted-foreground">
+                  {device.lastSeen ?? 'No recent activity'}{device.isCurrent ? ' • Current device' : ''}
+                </p>
+              </div>
+            </div>
+            <div class="flex items-center gap-3">
+              <Badge variant="secondary">{getDeviceTypeLabel(device.kind)}</Badge>
+              <Button
+                variant="ghost"
+                size="icon"
+                onclick={() => removeDevice(device)}
+                disabled={!!deviceActionPending[device.id]}
+                aria-label={`Remove ${device.name}`}
+              >
+                {#if deviceActionPending[device.id]}
+                  <Loader2 class="h-4 w-4 animate-spin" aria-hidden="true" />
+                {:else}
+                  <Trash2 class="h-4 w-4" aria-hidden="true" />
+                {/if}
+              </Button>
+            </div>
+          </div>
+        {/each}
 
-      <div class="flex justify-end">
-        <Button variant="destructive" size="sm" onclick={() => {}}>
-          Revoke All Devices
-        </Button>
-      </div>
+        <div class="flex justify-end">
+          <Button
+            variant="destructive"
+            size="sm"
+            onclick={revokeAllDevices}
+            disabled={isRevokingDevices || devices.length === 0}
+          >
+            {#if isRevokingDevices}
+              <Loader2 class="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
+            {/if}
+            Revoke All Devices
+          </Button>
+        </div>
+      {/if}
     </CardContent>
   </Card>
 
@@ -392,9 +731,15 @@
             type="button"
             variant="outline"
             class="h-full w-full flex-col items-start gap-3 rounded-xl border-border/60 bg-muted/20 p-4 text-left transition-colors hover:border-primary/50 hover:text-primary"
-            onclick={() => {}}
+            onclick={() => handleSecurityAction(action.id)}
+            disabled={action.id !== 'rekey' && securityActionPending[action.id]}
+            aria-busy={action.id !== 'rekey' && securityActionPending[action.id]}
           >
-            <action.Icon class="h-5 w-5 text-primary" aria-hidden="true" />
+            {#if action.id !== 'rekey' && securityActionPending[action.id]}
+              <Loader2 class="h-5 w-5 animate-spin text-primary" aria-hidden="true" />
+            {:else}
+              <action.Icon class="h-5 w-5 text-primary" aria-hidden="true" />
+            {/if}
             <div>
               <p class="text-sm font-semibold text-foreground">{action.title}</p>
               <p class="text-sm text-muted-foreground">{action.description}</p>
@@ -466,14 +811,106 @@
         <TriangleAlert class="mt-0.5 h-4 w-4" aria-hidden="true" />
         <p>Changing the master password re-encrypts the vault. The operation may take several minutes for large vaults.</p>
       </div>
+      {#if changePasswordError}
+        <p class="text-sm text-destructive">{changePasswordError}</p>
+      {/if}
     </div>
 
     <DialogFooter class="gap-2">
       <Button type="button" variant="outline" onclick={closePasswordModal}>
         Cancel
       </Button>
-      <Button type="button" variant="destructive" onclick={() => {}}>
+      <Button
+        type="button"
+        variant="destructive"
+        onclick={submitPasswordChange}
+        disabled={!isPasswordFormValid || isChangingPassword}
+        aria-busy={isChangingPassword}
+      >
+        {#if isChangingPassword}
+          <Loader2 class="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
+        {/if}
         Change Password
+      </Button>
+    </DialogFooter>
+  </DialogContent>
+</Dialog>
+
+<Dialog open={kdfModalOpen} onOpenChange={handleKdfDialogChange}>
+  <DialogContent class="sm:max-w-lg">
+    <DialogHeader>
+      <DialogTitle>Reconfigure Key Derivation</DialogTitle>
+      <DialogDescription>
+        Adjust the Argon2id parameters used when deriving the vault encryption key.
+      </DialogDescription>
+    </DialogHeader>
+
+    <div class="space-y-4">
+      <div class="grid gap-3 sm:grid-cols-3">
+        <div class="space-y-2">
+          <Label for="kdf-memory">Memory (MiB)</Label>
+          <Input id="kdf-memory" type="number" min="8" bind:value={kdfMemoryMb} />
+        </div>
+        <div class="space-y-2">
+          <Label for="kdf-time">Time Cost</Label>
+          <Input id="kdf-time" type="number" min="1" bind:value={kdfTimeCost} />
+        </div>
+        <div class="space-y-2">
+          <Label for="kdf-parallelism">Parallelism</Label>
+          <Input id="kdf-parallelism" type="number" min="1" bind:value={kdfParallelism} />
+        </div>
+      </div>
+
+      <div class="space-y-2">
+        <Label for="kdf-password">Current Password</Label>
+        <div class="relative">
+          <Input
+            id="kdf-password"
+            type={showKdfPassword ? 'text' : 'password'}
+            placeholder="Enter current password"
+            bind:value={kdfCurrentPassword}
+          />
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            class="absolute right-1 top-1/2 -translate-y-1/2"
+            aria-label={showKdfPassword ? 'Hide current password' : 'Show current password'}
+            onclick={toggleKdfPasswordVisibility}
+          >
+            {#if showKdfPassword}
+              <EyeOff class="h-4 w-4 text-primary" aria-hidden="true" />
+            {:else}
+              <Eye class="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+            {/if}
+          </Button>
+        </div>
+      </div>
+
+      <div class="flex items-start gap-3 rounded-lg border border-border/60 bg-muted/20 p-3 text-sm text-muted-foreground">
+        <TriangleAlert class="mt-0.5 h-4 w-4 text-primary" aria-hidden="true" />
+        <p>Updating Argon2 parameters will re-encrypt the vault and may take a few moments.</p>
+      </div>
+
+      {#if kdfError}
+        <p class="text-sm text-destructive">{kdfError}</p>
+      {/if}
+    </div>
+
+    <DialogFooter class="gap-2">
+      <Button type="button" variant="outline" onclick={() => handleKdfDialogChange(false)}>
+        Cancel
+      </Button>
+      <Button
+        type="button"
+        onclick={submitKdfUpdate}
+        disabled={!isKdfFormValid || isUpdatingKdf}
+        aria-busy={isUpdatingKdf}
+      >
+        {#if isUpdatingKdf}
+          <Loader2 class="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
+        {/if}
+        Apply Changes
       </Button>
     </DialogFooter>
   </DialogContent>

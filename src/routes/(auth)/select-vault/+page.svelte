@@ -12,9 +12,11 @@
   import ImportManagerPopup from '$lib/components/ImportManagerPopup.svelte';
   import { isDatabaseLoaded, isLocked, needsPasswordSetup, totpVerified } from '$lib/stores';
   import { recentDatabases } from '$lib/stores/recentDatabases';
+  import { importVaultBackup, notifyVaultRefresh } from '$lib/utils/backup';
   import { X } from '@lucide/svelte';
 
   let error: string | null = null;
+  let importMessage: string | null = null;
   let showImportPopup = false;
   let lastAttemptedPath: string | null = null;
   let triedElevated = false;
@@ -167,10 +169,37 @@
 
   const handleImportSelected = async (event: CustomEvent<Record<string, unknown>>) => {
     showImportPopup = false;
-    const importedPath = typeof event.detail?.importedPath === 'string' ? event.detail.importedPath : null;
+    importMessage = null;
 
-    if (importedPath) {
-      await loadAndCheckDatabase(importedPath);
+    const importedPath = typeof event.detail?.importedPath === 'string' ? event.detail.importedPath : null;
+    const passphrase = typeof event.detail?.passphrase === 'string' ? event.detail.passphrase.trim() : '';
+
+    if (!importedPath) {
+      error = 'No backup file was selected.';
+      return;
+    }
+
+    if (!passphrase) {
+      error = 'A passphrase is required to unlock the selected backup.';
+      return;
+    }
+
+    try {
+      const snapshot = await importVaultBackup(passphrase, importedPath);
+      const itemCount = snapshot.passwordItems.length;
+      const tagCount = snapshot.buttons.length;
+      importMessage = `Backup verified: ${itemCount} item${itemCount === 1 ? '' : 's'} and ${tagCount} tag${tagCount === 1 ? '' : 's'} found.`;
+      error = null;
+      notifyVaultRefresh('import');
+    } catch (cause) {
+      console.error('Failed to import backup:', cause);
+      if (typeof cause === 'string') {
+        error = cause;
+      } else if (cause instanceof Error) {
+        error = cause.message;
+      } else {
+        error = 'Failed to import the selected backup. Please verify the passphrase and try again.';
+      }
     }
   };
 
@@ -267,6 +296,12 @@
           </button>
         </div>
       {/if}
+    </div>
+  {/if}
+
+  {#if importMessage}
+    <div class="success-block" role="status">
+      <p class="success-text">{importMessage}</p>
     </div>
   {/if}
 </div>
@@ -516,6 +551,22 @@
   }
 
   .error-text {
+    font-size: 0.95rem;
+    font-weight: 600;
+  }
+
+  .success-block {
+    width: min(90%, 490px);
+    margin: 0 auto;
+    padding: 1.25rem 1.5rem;
+    border-radius: 1rem;
+    background: color-mix(in oklch, var(--primary) 12%, transparent);
+    border: 1px solid color-mix(in oklch, var(--primary) 38%, var(--border) 62%);
+    color: var(--foreground);
+    text-align: center;
+  }
+
+  .success-text {
     font-size: 0.95rem;
     font-weight: 600;
   }

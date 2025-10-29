@@ -130,6 +130,7 @@ fn main() {
             // Backup commands
             backup_commands::export_vault,
             backup_commands::import_vault,
+            backup_commands::restore_vault_snapshot,
             // Security commands
             security::list_devices,
             security::remove_device,

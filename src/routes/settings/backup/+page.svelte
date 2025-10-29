@@ -48,6 +48,7 @@
     importVaultBackup,
     notifyVaultRefresh
   } from '$lib/utils/backup';
+  import type { ImportVaultProgressStage } from '$lib/utils/backup';
 
   const frequencies = [
     { value: 'daily', label: 'Daily (Default)' },
@@ -117,7 +118,13 @@
   let modalBusy = false;
   let modalError: string | null = null;
   let modalRequiresPassphrase = true;
+  let modalStatus: string | null = null;
   let feedback: { type: 'success' | 'error'; message: string } | null = null;
+
+  const importProgressMessages: Record<ImportVaultProgressStage, string> = {
+    decrypting: 'Decrypting backup…',
+    restoring: 'Restoring vault contents…'
+  };
 
   function openModal({
     title,
@@ -143,6 +150,7 @@
     modalBusy = false;
     modalRequiresPassphrase = requiresPassphrase;
     modalOnConfirm = onConfirm;
+    modalStatus = null;
     showModal = true;
   }
 
@@ -152,6 +160,7 @@
     modalPassphrase = '';
     modalError = null;
     modalBusy = false;
+    modalStatus = null;
   }
 
   async function handleManualBackup() {
@@ -199,7 +208,11 @@
         'Select a previous Pulsar backup and provide its passphrase to restore your vault contents.',
       confirmLabel: 'Import backup',
       onConfirm: async (passphrase) => {
-        const snapshot = await importVaultBackup(passphrase);
+        const snapshot = await importVaultBackup(passphrase, {
+          onProgress: (stage) => {
+            modalStatus = importProgressMessages[stage];
+          }
+        });
         const totalItems = snapshot.passwordItems.length;
         const tagCount = snapshot.buttons.length;
         const message = `Imported ${totalItems} saved item${totalItems === 1 ? '' : 's'} and ${tagCount} tag${tagCount === 1 ? '' : 's'}.`;
@@ -484,6 +497,13 @@
         <p class="mt-4 text-sm text-destructive">{modalError}</p>
       {/if}
 
+      {#if modalStatus}
+        <p class="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
+          <Loader2 class="size-4 animate-spin" aria-hidden="true" />
+          <span>{modalStatus}</span>
+        </p>
+      {/if}
+
       <div class="mt-6 flex justify-end gap-2">
         <Button type="button" variant="ghost" onclick={closeModal}>Cancel</Button>
         <Button
@@ -520,6 +540,7 @@
                 modalError = 'An unexpected error occurred while processing the request.';
               }
               feedback = { type: 'error', message: modalError };
+              modalStatus = null;
             } finally {
               modalBusy = false;
             }

@@ -1,4 +1,6 @@
-use crate::types::ExportPayload;
+use crate::encryption::encrypt;
+use crate::state::AppState;
+use crate::types::{ExportPayload, VaultBackupSnapshot};
 use argon2::{Algorithm, Argon2, Params, Version};
 use base64::{engine::general_purpose, Engine as _};
 use chacha20poly1305::{
@@ -7,14 +9,16 @@ use chacha20poly1305::{
 };
 use rand::rngs::OsRng;
 use rand::RngCore;
-use serde_json::Value;
+use serde_json::{self, Value};
+use sqlx::{Error as SqlxError, SqlitePool};
 use std::fs;
 use std::path::PathBuf;
 use tauri::command;
 use tauri::AppHandle;
+use tauri::State;
 use tauri_plugin_dialog::DialogExt;
 use tokio::sync::oneshot;
-use zeroize::Zeroize;
+use zeroize::{Zeroize, Zeroizing};
 
 #[command]
 pub async fn export_vault(
@@ -168,4 +172,160 @@ pub async fn import_vault(
     key.zeroize();
 
     String::from_utf8(decrypted_bytes).map_err(|e| format!("UTF-8 conversion failed: {}", e))
+}
+
+async fn get_key(state: &State<'_, AppState>) -> Result<Zeroizing<Vec<u8>>, String> {
+    let guard = state.key.lock().await;
+    guard.clone().ok_or_else(|| "Vault is locked".to_string())
+}
+
+async fn get_db_pool(state: &State<'_, AppState>) -> Result<SqlitePool, String> {
+    let guard = state.db.lock().await;
+    guard.clone().ok_or_else(|| "Database not loaded".to_string())
+}
+
+#[command]
+pub async fn restore_vault_snapshot(
+    state: State<'_, AppState>,
+    snapshot: VaultBackupSnapshot,
+) -> Result<(), String> {
+    if snapshot.version != 1 {
+        return Err(format!(
+            "Unsupported backup version {}. Please upgrade Pulsar to restore this backup.",
+            snapshot.version
+        ));
+    }
+
+    let key = get_key(&state).await?;
+    let db_pool = get_db_pool(&state).await?;
+    let mut tx = db_pool.begin().await.map_err(|e| e.to_string())?;
+
+    sqlx::query("DELETE FROM password_items")
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| e.to_string())?;
+    sqlx::query("DELETE FROM buttons")
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| e.to_string())?;
+    sqlx::query("DELETE FROM recipient_keys")
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| e.to_string())?;
+    if let Err(e) = sqlx::query(
+        "DELETE FROM sqlite_sequence WHERE name IN ('password_items', 'buttons', 'recipient_keys')",
+    )
+    .execute(&mut *tx)
+    .await
+    {
+        match &e {
+            SqlxError::Database(db_err) if db_err.message().contains("no such table") => {}
+            _ => return Err(e.to_string()),
+        }
+    }
+
+    for item in &snapshot.password_items {
+        let title_enc = encrypt(&item.title, key.as_slice())?;
+        let description_enc = item
+            .description
+            .as_deref()
+            .map(|value| encrypt(value, key.as_slice()))
+            .transpose()?;
+        let img_enc = item
+            .img
+            .as_deref()
+            .map(|value| encrypt(value, key.as_slice()))
+            .transpose()?;
+        let tags_enc = item
+            .tags
+            .as_deref()
+            .map(|value| encrypt(value, key.as_slice()))
+            .transpose()?;
+        let username_enc = item
+            .username
+            .as_deref()
+            .map(|value| encrypt(value, key.as_slice()))
+            .transpose()?;
+        let url_enc = item
+            .url
+            .as_deref()
+            .map(|value| encrypt(value, key.as_slice()))
+            .transpose()?;
+        let notes_enc = item
+            .notes
+            .as_deref()
+            .map(|value| encrypt(value, key.as_slice()))
+            .transpose()?;
+        let password_enc = encrypt(&item.password, key.as_slice())?;
+        let totp_secret_enc = item
+            .totp_secret
+            .as_deref()
+            .map(|value| encrypt(value, key.as_slice()))
+            .transpose()?;
+        let custom_fields_json =
+            serde_json::to_string(&item.custom_fields).map_err(|e| e.to_string())?;
+        let custom_fields_enc = encrypt(&custom_fields_json, key.as_slice())?;
+        let field_order_json = item
+            .field_order
+            .as_ref()
+            .map(|value| serde_json::to_string(value))
+            .transpose()
+            .map_err(|e| e.to_string())?;
+        let field_order_enc = field_order_json
+            .map(|value| encrypt(&value, key.as_slice()))
+            .transpose()?;
+
+        sqlx::query("INSERT INTO password_items (id, title, description, img, tags, username, url, notes, password, created_at, updated_at, color, totp_secret, custom_fields, field_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+            .bind(item.id)
+            .bind(title_enc)
+            .bind(description_enc)
+            .bind(img_enc)
+            .bind(tags_enc)
+            .bind(username_enc)
+            .bind(url_enc)
+            .bind(notes_enc)
+            .bind(password_enc)
+            .bind(&item.created_at)
+            .bind(&item.updated_at)
+            .bind(item.color.clone())
+            .bind(totp_secret_enc)
+            .bind(custom_fields_enc)
+            .bind(field_order_enc)
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| e.to_string())?;
+    }
+
+    for button in &snapshot.buttons {
+        let text_enc = encrypt(&button.text, key.as_slice())?;
+        let icon_enc = encrypt(&button.icon, key.as_slice())?;
+        let color_enc = encrypt(&button.color, key.as_slice())?;
+
+        sqlx::query("INSERT INTO buttons (id, text, icon, color) VALUES (?, ?, ?, ?)")
+            .bind(button.id)
+            .bind(text_enc)
+            .bind(icon_enc)
+            .bind(color_enc)
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| e.to_string())?;
+    }
+
+    for recipient in &snapshot.recipient_keys {
+        let name_enc = encrypt(&recipient.name, key.as_slice())?;
+        let public_key_enc = encrypt(&recipient.public_key, key.as_slice())?;
+        let private_key_enc = encrypt(&recipient.private_key, key.as_slice())?;
+
+        sqlx::query("INSERT INTO recipient_keys (id, name, public_key, private_key) VALUES (?, ?, ?, ?)")
+            .bind(recipient.id)
+            .bind(name_enc)
+            .bind(public_key_enc)
+            .bind(private_key_enc)
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| e.to_string())?;
+    }
+
+    tx.commit().await.map_err(|e| e.to_string())?;
+    Ok(())
 }

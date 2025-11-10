@@ -69,7 +69,7 @@
 
 <SidebarRoot
   collapsible="none"
-  class="border-r border-border/50 bg-sidebar/90 backdrop-blur"
+  class="bg-sidebar backdrop-blur"
 >
   <SidebarHeader class="flex items-center justify-center py-5">
     <img src="/svelte.svg" alt="Pulsar logo" class="size-8" />
@@ -85,10 +85,13 @@
               aria-label="Show all items"
               tooltipContent="All items"
               isActive={$selectedTag === null && $filterCategory === 'all'}
-              class="h-12 w-12 justify-center rounded-xl text-sidebar-foreground/80 transition hover:text-sidebar-foreground"
+              style="--tag-color: var(--sidebar-border); --tag-hover: color-mix(in oklch, var(--sidebar-foreground) 40%, var(--sidebar-border)); --tag-active: color-mix(in oklch, var(--sidebar-foreground) 60%, var(--sidebar-border));"
+              class="h-[46px] w-[46px] justify-center rounded-lg cursor-pointer text-[color:var(--tag-color)] transition hover:text-[color:var(--tag-hover)] data-[active=true]:text-[color:var(--tag-active)] hover:bg-transparent active:!bg-transparent data-[active=true]:bg-transparent shadow-[0_0_0_1px_var(--sidebar-border)] hover:shadow-[0_0_0_1px_var(--tag-hover)] active:!shadow-[0_0_0_1px_var(--tag-hover)] data-[active=true]:shadow-[0_0_0_2px_var(--tag-active)] active:!text-[color:var(--tag-hover)] transition-shadow"
               onclick={handleShowAll}
             >
-              <Globe style="w-5 h-5" className="size-5 opacity-70 transition-opacity group-data-[active=true]/menu-item:opacity-100" />
+              <span class="inline-flex size-5 shrink-0 items-center justify-center">
+                <Globe size="20" />
+              </span>
               <span class="sr-only">All items</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
@@ -102,21 +105,19 @@
                     aria-label={button.text}
                     tooltipContent={button.text}
                     isActive={$selectedTag === button.text}
-                    class="group h-12 w-12 justify-center rounded-xl text-sidebar-foreground/70 transition hover:text-sidebar-foreground"
+                    style={`--tag-color: ${button.color || DEFAULT_TAG_COLOR};`}
+                    class="group h-[46px] w-[46px] justify-center rounded-lg cursor-pointer text-[color:var(--tag-color)] data-[active=true]:text-[color:var(--tag-color)] transition hover:text-[color:var(--tag-color)] hover:bg-transparent active:!bg-transparent data-[active=true]:bg-transparent shadow-[0_0_0_1px_var(--sidebar-border)] hover:shadow-[0_0_0_1px_var(--tag-color)] active:!shadow-[0_0_0_1px_var(--tag-color)] data-[active=true]:shadow-[0_0_0_2px_var(--tag-color)] active:!text-[color:var(--tag-color)] transition-shadow"
                     onclick={() => handleTagClick(button.text)}
                   >
-                    <span
-                      class="size-2.5 rounded-full"
-                      style={`background: ${button.color || DEFAULT_TAG_COLOR};`}
-                      aria-hidden="true"
-                    ></span>
-                    <Icon
-                      path={button.icon}
-                      size="22"
-                      viewBox="0 0 44 44"
-                      color={button.color || DEFAULT_TAG_COLOR}
-                      className="size-5 opacity-75 transition-opacity group-data-[active=true]/menu-item:opacity-100"
-                    />
+                    <span class="inline-flex size-5 shrink-0 items-center justify-center">
+                      <Icon
+                        path={button.icon || iconPaths.default}
+                        size="20"
+                        viewBox="0 0 44 44"
+                        color="var(--tag-color)"
+                        className="opacity-75 transition-opacity group-hover/menu-item:opacity-100 group-data-[active=true]/menu-item:opacity-100"
+                      />
+                    </span>
                     <span class="sr-only">{button.text}</span>
                   </SidebarMenuButton>
                 </ContextMenuTrigger>
@@ -130,19 +131,24 @@
               </ContextMenu>
             </SidebarMenuItem>
           {/each}
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              size="lg"
+              aria-label="Add new tag"
+              tooltipContent="Add"
+              style="--tag-color: var(--sidebar-border); --tag-hover: color-mix(in oklch, var(--sidebar-foreground) 40%, var(--sidebar-border)); --tag-active: color-mix(in oklch, var(--sidebar-foreground) 60%, var(--sidebar-border));"
+              class="h-[46px] w-[46px] justify-center rounded-lg cursor-pointer text-[color:var(--tag-color)] transition hover:text-[color:var(--tag-hover)] hover:bg-transparent active:!bg-transparent data-[active=true]:bg-transparent shadow-[0_0_0_1px_var(--sidebar-border)] hover:shadow-[0_0_0_1px_var(--tag-hover)] active:!shadow-[0_0_0_1px_var(--tag-hover)] data-[active=true]:shadow-[0_0_0_2px_var(--tag-active)] active:!text-[color:var(--tag-hover)] transition-shadow"
+              onclick={handleOpenPopup}
+            >
+              <span class="inline-flex size-5 shrink-0 items-center justify-center">
+                <Plus size="20" />
+              </span>
+              <span class="sr-only">Add new tag</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
         </SidebarMenu>
       </SidebarGroupContent>
     </SidebarGroup>
-
-    <Button
-      variant="outline"
-      size="icon"
-      class="size-12 rounded-full border-dashed border-border/60 text-muted-foreground transition hover:border-primary/50 hover:text-primary"
-      aria-label="Add new tag"
-      onclick={handleOpenPopup}
-    >
-      <Plus style="w-5 h-5" />
-    </Button>
   </SidebarContent>
 
   <SidebarFooter class="mt-auto w-full border-t border-border/40 pt-4">
@@ -152,7 +158,7 @@
           size="lg"
           aria-label="Open settings"
           tooltipContent="Settings"
-          class="h-12 w-12 justify-center rounded-xl text-sidebar-foreground/70 transition hover:text-sidebar-foreground"
+          class="h-[46px] w-[46px] justify-center rounded-lg text-sidebar-foreground/70 transition hover:text-sidebar-foreground"
           onclick={() => showSettingsPopup.set(true)}
         >
           <Settings style="w-5 h-5" className="size-5 opacity-70 transition-opacity group-hover/menu-item:opacity-100" />

@@ -1,4 +1,4 @@
-<svelte:options runes />
+﻿<svelte:options runes />
 
 <script lang="ts">
   import { createEventDispatcher, onDestroy, tick } from 'svelte';
@@ -73,9 +73,7 @@
   const PIN_TAG_NAMES = new Set(['pinned', 'pin']);
   const RECENT_FILTER: FilterCategory = 'recent';
 
-  let isResizing = $state(false);
-  let navWidth = 360;
-  let startX = 0;
+  // Legacy resize state removed; handled in global PaneResizer
   let searchTerm = $state('');
   let selectedItemId = $state<number | null>(null);
   let showSkeleton = $state(false);
@@ -87,7 +85,12 @@
   const itemsCount = $derived(items.length);
 
   const tagMap = $derived.by(() =>
-    new Map<string, TagMeta>(buttons.map((button) => [button.text, { color: button.color, icon: button.icon }]))
+    new Map<string, TagMeta>(
+      buttons.map((button) => [
+        button.text,
+        { color: button.color, icon: button.icon || iconPaths.default }
+      ])
+    )
   );
 
   const filteredItems = $derived.by(() => {
@@ -118,23 +121,33 @@
 
   const currentSkeletonKey = $derived(() => `${$selectedTag ?? 'all'}|${$filterCategory}`);
 
+  // Prevent re-entrant select dispatch loops
+  let internalSelecting = $state(false);
+
+  // Single effect to drive selection without reading selectedItemId
+  let lastDispatchedId: number | null = null;
   $effect(() => {
     const visibleIds = new Set(filteredItems.map((item) => item.id));
 
-    if (filteredItems.length === 0) {
-      if (selectedItemId !== null) {
-        selectedItemId = null;
-      }
-      return;
+    let desiredId: number | null = null;
+    if (selectedId !== null && visibleIds.has(selectedId)) {
+      desiredId = selectedId;
+    } else {
+      const nextItem = sectionedItems.find((section) => section.items.length > 0)?.items[0];
+      desiredId = nextItem ? nextItem.id : null;
     }
 
-    if (selectedItemId === null || !visibleIds.has(selectedItemId)) {
-      const nextItem = sectionedItems.find((section) => section.items.length > 0)?.items[0];
-      if (nextItem && selectedItemId !== nextItem.id) {
-        selectedItemId = nextItem.id;
-        dispatch('select', nextItem);
+    // Apply in a microtask to avoid re-entrancy during the same flush
+    Promise.resolve().then(() => {
+      selectedItemId = desiredId;
+      if (desiredId != null && lastDispatchedId !== desiredId) {
+        const item = filteredItems.find((i) => i.id === desiredId);
+        if (item) {
+          dispatch('select', item);
+          lastDispatchedId = desiredId;
+        }
       }
-    }
+    });
   });
 
   $effect(() => {
@@ -172,19 +185,13 @@
     });
   });
 
-  $effect(() => {
-    if (selectedId !== null && selectedId !== selectedItemId) {
-      selectedItemId = selectedId;
-    }
-  });
+  // Removed separate selectedId mirror effect to avoid update loops
 
   onDestroy(() => {
     if (skeletonTimer) {
       clearTimeout(skeletonTimer);
       skeletonTimer = null;
     }
-
-    cleanupResizeListeners();
 
     if (highlightTimer) {
       clearTimeout(highlightTimer);
@@ -373,43 +380,6 @@
     return Array.from({ length: count }, (_, index) => index);
   }
 
-  function cleanupResizeListeners() {
-    if (typeof window === 'undefined') {
-      return;
-    }
-
-    window.removeEventListener('mousemove', resize);
-    window.removeEventListener('mouseup', stopResize);
-  }
-
-  function startResize(event: MouseEvent) {
-    isResizing = true;
-    startX = event.clientX;
-    const navElement = document.querySelector<HTMLElement>('.passwordList');
-    if (navElement) {
-      navWidth = navElement.offsetWidth;
-    }
-    cleanupResizeListeners();
-    window.addEventListener('mousemove', resize);
-    window.addEventListener('mouseup', stopResize);
-  }
-
-  function resize(event: MouseEvent) {
-    if (!isResizing) return;
-    const nextWidth = Math.max(200, Math.min(600, navWidth + (event.clientX - startX)));
-    document.documentElement.style.setProperty('--passwordList-width', `${nextWidth}px`);
-  }
-
-  function stopResize() {
-    if (!isResizing) {
-      cleanupResizeListeners();
-      return;
-    }
-
-    isResizing = false;
-    cleanupResizeListeners();
-  }
-
   function selectItem(item: PasswordItem) {
     selectedItemId = item.id;
     dispatch('select', item);
@@ -556,6 +526,8 @@
                                     title={item.title}
                                     fallbackIcon={fallback.icon}
                                     fallbackColor={fallback.color}
+                                    size={29}
+                                    variant="list"
                                   />
                                   <div class="itemTexts">
                                     <div class="itemTitle">{item.title}</div>
@@ -602,14 +574,15 @@
       <ContextMenuItem onSelect={handleCreateEntry}>Create Entry</ContextMenuItem>
     </ContextMenuContent>
   </ContextMenu>
-  <button class="resizer" onmousedown={startResize} aria-label="Resize sidebar"></button>
+  <!-- Resizer handle moved to global overlay in layout -->
 </nav>
 
 <style>
   .passwordList {
-    --passwordlist-surface: color-mix(in oklch, var(--sidebar) 90%, var(--background) 10%);
-    --passwordlist-elevated: color-mix(in oklch, var(--sidebar) 80%, var(--background) 20%);
-    --passwordlist-hover: color-mix(in oklch, var(--sidebar) 65%, var(--background) 35%);
+    /* Use explicit secondary sidebar tokens */
+    --passwordlist-surface: var(--passwordlist-base);
+    --passwordlist-elevated: var(--passwordlist-item);
+    --passwordlist-hover: var(--passwordlist-hover-bg);
     --passwordlist-strong-text: var(--sidebar-foreground);
     --passwordlist-muted-text: color-mix(in oklch, var(--sidebar-foreground) 60%, transparent);
     --passwordlist-subtle-text: color-mix(in oklch, var(--sidebar-foreground) 35%, transparent);
@@ -673,16 +646,26 @@
   }
 
   .sectionTitle {
-    margin-left: 12px;
+    /* Align title with item text (12px from panel edge) */
+    margin-left: 0;
     font-size: 12px;
     color: var(--passwordlist-muted-text);
+    margin-top: 0;
+  }
+
+  /* Reduce vertical space between section title and its list */
+  .sectionTitle + .itemList {
     margin-top: 0;
   }
 
   .itemList {
     margin-top: 8px;
     list-style: none;
-    padding: 0 0 6px 0;
+    /* Remove side gaps so items reach panel edges */
+    padding: 0;
+    margin-left: -12px;
+    margin-right: -12px;
+    margin-bottom: 6px;
     display: flex;
     flex-direction: column;
     gap: 2px;
@@ -714,7 +697,7 @@
   }
 
   .item {
-    background: transparent;
+    background: var(--passwordlist-item);
     height: 47px;
     width: 100%;
     display: flex;
@@ -746,6 +729,7 @@
     height: 100%;
     text-decoration: none;
     color: inherit;
+    cursor: pointer;
     padding-left: 12px;
     padding-right: 12px;
     padding-top: 5px;
@@ -770,6 +754,7 @@
     color: var(--passwordlist-strong-text);
     line-height: 1;
     user-select: none;
+    cursor: pointer;
   }
 
   .itemDesc {
@@ -778,6 +763,7 @@
     color: var(--passwordlist-muted-text);
     line-height: 1;
     user-select: none;
+    cursor: pointer;
   }
 
   .itemTags {
@@ -797,22 +783,7 @@
     font-style: italic;
   }
 
-  .resizer {
-    width: 5px;
-    height: 100%;
-    background: transparent;
-    position: absolute;
-    right: 0;
-    top: 0;
-    cursor: ew-resize;
-    z-index: 6;
-    border: none;
-    padding: 0;
-  }
-
-  @media (pointer: coarse) {
-    .resizer { width: 12px; }
-  }
+  /* Local resizer removed */
 </style>
 
 

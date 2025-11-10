@@ -86,7 +86,7 @@
 
   function getTagIcon(tag: string): string {
     const btn = buttons.find((button) => button.text === tag);
-    return btn ? btn.icon : iconPaths.default;
+    return btn?.icon || iconPaths.default;
   }
 
   function addExistingTag(tagToAdd: string) {

@@ -5,7 +5,24 @@
   import TagList from './TagList.svelte';
   import Icon from '../ui/Icon.svelte';
   import { iconPaths } from '$lib/icons';
-  import { Circle } from '@lucide/svelte';
+  import Favicon from '../ui/Favicon.svelte';
+
+  // Derive the chosen tag's icon (if any) to use as fallback
+  const primaryTagName = $derived(() => {
+    const raw = selectedPasswordItem?.tags ?? '';
+    const first = raw
+      .split(',')
+      .map((t) => t.trim())
+      .filter(Boolean)[0];
+    return first || null;
+  });
+
+  const primaryTagIconPath = $derived(() => {
+    const name = primaryTagName();
+    if (!name) return iconPaths.default;
+    const btn = (buttons || []).find((b: any) => b.text === name);
+    return btn?.icon || iconPaths.default;
+  });
 
   interface Props {
     selectedPasswordItem: PasswordItem | null;
@@ -65,19 +82,15 @@
   <div class="detail-header" style="--display-color: {displayColor};">
     <div class="title-and-tags">
       <div class="title-container">
-        {#if selectedPasswordItem.img}
-          <img
-            src={selectedPasswordItem.img}
-            alt={selectedPasswordItem.title}
-            class="title-image"
-          />
-        {:else}
-			<Circle
-				color={displayColor}
-				className="header-icon w-6 h-6"
-			/>
-        {/if}
-        <h2 class="header-title" style="color: {displayColor}">
+        <Favicon
+          url={selectedPasswordItem.url || undefined}
+          title={selectedPasswordItem.title}
+          fallbackIcon={primaryTagIconPath}
+          fallbackColor={displayColor}
+          size={27}
+          useStroke={true}
+        />
+        <h2 class="header-title">
           {selectedPasswordItem.title}
         </h2>
         <span class="color-pulse-bg" aria-hidden="true" class:pulsing={pulse}></span>
@@ -134,16 +147,12 @@
 		margin-bottom: 5px;
 	}
 
-	.title-image {
-		width: 24px;
-		height: 24px;
-		border-radius: 4px;
-		object-fit: contain;
-	}
+    /* .title-image removed */
 
     .detail-header h2 {
         margin: 0;
         font-weight: 400;
+        font-size: 18px;
         transition: color 260ms ease;
     }
 
@@ -153,6 +162,12 @@
     }
 
     .title-container { position: relative; }
+    /* Ensure favicon (and its fallback icon) sits above the pulse background */
+    .title-container :global(.itemImgContainer) {
+        position: relative;
+        z-index: 1;
+    }
+    
     .color-pulse-bg {
         position: absolute;
         left: -6px;
@@ -166,6 +181,7 @@
         pointer-events: none;
         transform: scale(0.85);
         transition: opacity 360ms ease, transform 360ms ease, background-color 260ms ease;
+        z-index: 0;
     }
     .color-pulse-bg.pulsing {
         opacity: 0.25;

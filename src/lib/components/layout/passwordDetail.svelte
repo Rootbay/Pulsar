@@ -872,7 +872,7 @@
                                                         <p class="text-xs uppercase tracking-wide text-[color:var(--passworddetail-subtle-text)]">
                                                                 Secret
                                                         </p>
-                                                        <p class="break-all font-mono text-sm text-[color:var(--passworddetail-strong-text)]">
+                                                        <p class="break-all font-mono text-sm text-[color:var(--passworddetail-strong-text)] cursor-pointer">
                                                                 {totpSecret}
                                                         </p>
                                                 </div>

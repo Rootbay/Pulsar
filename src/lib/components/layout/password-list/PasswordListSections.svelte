@@ -58,6 +58,8 @@
                       title={item.title}
                       fallbackIcon={fallback.icon}
                       fallbackColor={fallback.color}
+                      size={29}
+                      variant="list"
                     />
                     <div class="itemTexts">
                       <div class="itemTitle">{item.title}</div>

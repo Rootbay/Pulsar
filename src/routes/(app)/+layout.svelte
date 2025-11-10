@@ -18,7 +18,7 @@
     color: string;
   }
 
-  const SIDEBAR_WIDTH = '5.75rem';
+  const SIDEBAR_WIDTH = '86px';
   const SIDEBAR_STYLE = '--sidebar-width: ' + SIDEBAR_WIDTH + ';';
 
   let passwordItems: PasswordItem[] = [];
@@ -269,6 +269,7 @@
       >
         <slot />
       </PasswordDetail>
+      <!-- Resizer removed -->
     </div>
   </div>
 </div>

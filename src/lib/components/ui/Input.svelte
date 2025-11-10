@@ -160,6 +160,7 @@
     border: none;
     box-sizing: border-box;
     transition: color 260ms ease, background-color 150ms ease-out, box-shadow 150ms ease-out;
+    cursor: pointer; /* view mode clickable */
   }
 
   .inputContainer:hover {
@@ -188,6 +189,11 @@
     font-family: inherit;
     resize: none;
     cursor: inherit;
+  }
+
+  /* editable mode uses text cursor */
+  .inputContainer.editable {
+    cursor: text;
   }
 
   /* When showing placeholder-like value (empty or "N/A") */

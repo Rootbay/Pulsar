@@ -69,7 +69,11 @@ export async function initAppSettings() {
         const storedSettings = await invoke<string | null>('get_all_settings');
         if (storedSettings) {
             try {
-                const loadedSettings = JSON.parse(storedSettings);
+                let loadedSettings: any = JSON.parse(storedSettings);
+                // Backward compatibility: handle double-encoded JSON strings
+                if (typeof loadedSettings === 'string') {
+                    try { loadedSettings = JSON.parse(loadedSettings); } catch {}
+                }
 
                 if (typeof loadedSettings === 'object' && loadedSettings !== null) {
                     const mergedSettings = {

@@ -28,6 +28,12 @@ async fn is_database_loaded(app_state: State<'_, AppState>) -> Result<bool, Stri
 }
 
 #[tauri::command]
+async fn get_active_db_path(app_state: State<'_, AppState>) -> Result<Option<String>, String> {
+    let guard = app_state.db_path.lock().await;
+    Ok(guard.as_ref().map(|p| p.to_string_lossy().to_string()))
+}
+
+#[tauri::command]
 async fn switch_database(db_path: PathBuf, app_state: State<'_, AppState>) -> Result<(), String> {
     let key_opt = {
         let guard = app_state.key.lock().await;
@@ -88,6 +94,7 @@ fn main() {
         .plugin(tauri_plugin_store::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
             is_database_loaded,
+            get_active_db_path,
             switch_database,
             // Auth commands
             auth::set_master_password,
@@ -168,7 +175,9 @@ async fn set_all_settings(app_handle: tauri::AppHandle, settings: String) -> Res
         .map_err(|e| e.to_string())?;
     store.reload().map_err(|e| e.to_string())?;
 
-    (*store).set("settings".to_string(), settings);
+    // Persist as structured JSON rather than a plain string
+    let value: serde_json::Value = serde_json::from_str(&settings).map_err(|e| e.to_string())?;
+    (*store).set("settings".to_string(), value);
 
     match (*store).save() {
         Ok(()) => {}

@@ -287,7 +287,14 @@
 
     try {
       const picked = await invoke<string>('pick_save_file');
-      const finalPath = picked.endsWith('.pulsar') ? picked : `${picked}.pulsar`;
+      const withExt: string = picked.endsWith('.pulsar') ? picked : `${picked}.pulsar`;
+      const sep = withExt.includes('\\') ? '\\' : '/';
+      const lastSep = withExt.lastIndexOf(sep);
+      const baseDir = lastSep === -1 ? '' : withExt.slice(0, lastSep);
+      const baseName = lastSep === -1 ? withExt : withExt.slice(lastSep + 1);
+      const stem = baseName.endsWith('.pulsar') ? baseName.slice(0, -8) : baseName;
+      const folder = baseDir ? `${baseDir}${sep}${stem}` : stem;
+      const finalPath = `${folder}${sep}${stem}.pulsar`;
 
       await invoke('switch_database', { dbPath: finalPath });
       await recentDatabases.addRecentDatabase(finalPath);

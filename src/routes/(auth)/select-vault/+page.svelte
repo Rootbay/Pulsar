@@ -162,7 +162,17 @@
       });
 
       if (picked) {
-        const finalPath = picked.endsWith('.pulsar') ? picked : `${picked}.pulsar`;
+        // Ensure .pulsar extension
+        const withExt = picked.endsWith('.pulsar') ? picked : `${picked}.pulsar`;
+        // Place the vault inside its own folder alongside future sidecar files
+        const sep = withExt.includes('\\') ? '\\' : '/';
+        const lastSep = withExt.lastIndexOf(sep);
+        const baseDir = lastSep === -1 ? '' : withExt.slice(0, lastSep);
+        const baseName = lastSep === -1 ? withExt : withExt.slice(lastSep + 1);
+        const stem = baseName.endsWith('.pulsar') ? baseName.slice(0, -8) : baseName;
+        const folder = baseDir ? `${baseDir}${sep}${stem}` : stem;
+        const finalPath = `${folder}${sep}${stem}.pulsar`;
+
         await loadAndCheckDatabase(finalPath);
       }
     } catch (cause) {
@@ -247,7 +257,7 @@
     <div class="absolute right-[10%] bottom-[10%] h-[18rem] w-[18rem] rounded-full bg-muted/40 blur-2xl"></div>
   </div>
 
-  <div class="mx-auto flex min-h-[65vh] w-full max-w-[490px] flex-col items-center justify-center px-6">
+  <div class="mx-auto flex min-h-[65vh] w-full max-w-[490px] flex-col items-center justify-start pt-[60px] px-6 translate-x-[19px]">
     <div class="w-full text-center">
       <h1 class="text-3xl font-semibold text-foreground">Welcome to Pulsar Pass</h1>
       <p class="mt-2 text-sm text-muted-foreground">Please select an existing vault or create a new one</p>

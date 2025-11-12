@@ -78,7 +78,8 @@ fn load_stored_settings(app_handle: &tauri::AppHandle) -> Result<StoredAppSettin
         serde_json::from_str::<StoredAppSettings>(raw)
             .map_err(|e| format!("Failed to parse stored settings: {e}"))
     } else {
-        Ok(StoredAppSettings::default())
+        serde_json::from_value::<StoredAppSettings>(value.clone())
+            .map_err(|e| format!("Failed to parse stored settings value: {e}"))
     }
 }
 

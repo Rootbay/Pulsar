@@ -14,7 +14,7 @@
   import { recentDatabases } from '$lib/stores/recentDatabases';
   import { importVaultBackup, notifyVaultRefresh } from '$lib/utils/backup';
   import type { ImportVaultProgressStage } from '$lib/utils/backup';
-  import { X, Loader2 } from '@lucide/svelte';
+  import { X, Loader2, FolderOpen, PlusCircle, Upload } from '@lucide/svelte';
 
   let error: string | null = null;
   let importMessage: string | null = null;
@@ -240,94 +240,97 @@
   };
 </script>
 
-<div class="container">
-  <section>
-    <div class="textContainer">
-      <h1>Welcome to Pulsar Pass</h1>
-      <p>Please select an existing one or create a new vault.</p>
+<div class="relative min-h-screen bg-background">
+  <!-- soft background accents -->
+  <div class="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
+    <div class="absolute left-[8%] top-[12%] h-[22rem] w-[22rem] rounded-full bg-primary/10 blur-3xl"></div>
+    <div class="absolute right-[10%] bottom-[10%] h-[18rem] w-[18rem] rounded-full bg-muted/40 blur-2xl"></div>
+  </div>
+
+  <div class="mx-auto flex min-h-[65vh] w-full max-w-[490px] flex-col items-center justify-center px-6">
+    <div class="w-full text-center">
+      <h1 class="text-3xl font-semibold text-foreground">Welcome to Pulsar Pass</h1>
+      <p class="mt-2 text-sm text-muted-foreground">Please select an existing vault or create a new one</p>
     </div>
 
-    <div class="buttonContainer">
-      <button type="button" class="navButton" id="navButton1" onclick={selectExistingVault}>
+    <div class="mt-8 w-full space-y-[9px]">
+      <button
+        type="button"
+        class="h-[47px] w-full max-w-[490px] rounded-full bg-white/10 px-5 text-sm text-white transition-colors hover:bg-white/15 focus:outline-none mx-auto"
+        onclick={selectExistingVault}
+      >
         Select existing vault
       </button>
-      <button type="button" class="navButton" onclick={createNewVault}>
+
+      <button
+        type="button"
+        class="h-[47px] w-full max-w-[490px] rounded-full bg-transparent px-5 text-sm text-white/70 transition-colors hover:text-white hover:bg-white/10 focus:outline-none mx-auto"
+        onclick={createNewVault}
+      >
         Create new vault
       </button>
-      <button type="button" class="navButton" onclick={handleImportFile}>
+
+      <button
+        type="button"
+        class="h-[47px] w-full max-w-[490px] rounded-full bg-transparent px-5 text-sm text-white/70 transition-colors hover:text-white hover:bg-white/10 focus:outline-none mx-auto"
+        onclick={handleImportFile}
+      >
         Migrate vault
       </button>
     </div>
-    <div class="circle-bg" aria-hidden="true"></div>
-  </section>
 
-  <div class="recent-databases-section">
-    <div class="textContainer">
-      <h2>Recent vault</h2>
-      {#if $recentDatabases.length}
-        <button
-          type="button"
-          class="clear-recent"
-          onclick={clearAllRecent}
-          title="Remove all recent entries"
-          aria-label="Remove all recent entries"
-        >
-          <X class="w-4 h-4" />
-        </button>
-      {/if}
-    </div>
-    <div class="recent-databases-list">
-      {#if $recentDatabases.length > 0}
-        {#each $recentDatabases as dbPath (dbPath)}
-          <div class="recent-db-item" title={dbPath}>
-            <button type="button" class="db-name" onclick={() => selectRecentDatabase(dbPath)}>
-              {basename(dbPath)}
-            </button>
+    {#if error}
+      <div class="mt-6 w-full rounded-xl border border-destructive/40 bg-destructive/10 p-3 text-left">
+        <p class="text-sm font-medium text-destructive">{error}</p>
+        {#if hasAccessDeniedError}
+          <div class="mt-3">
             <button
               type="button"
-              class="forget-btn"
-              onclick={(event) => {
-                event.stopPropagation();
-                forgetRecent(dbPath);
-              }}
-              title="Forget this entry"
-              aria-label="Forget this entry"
+              class="h-9 rounded-full border border-border/60 bg-muted/20 px-4 text-sm text-foreground hover:bg-muted/30"
+              onclick={attemptElevatedCopy}
             >
-              <X class="w-4 h-4" />
+              Attempt elevated copy into app folder
             </button>
           </div>
-        {/each}
+        {/if}
+      </div>
+    {/if}
+
+    {#if importProgress}
+      <div class="mt-3 flex w-full items-center gap-3 rounded-xl border border-border/60 bg-muted/20 p-3">
+        <Loader2 class="h-4 w-4 animate-spin text-muted-foreground" aria-hidden="true" />
+        <p class="text-sm text-foreground">{importProgress}</p>
+      </div>
+    {/if}
+
+    {#if importMessage}
+      <div class="mt-3 w-full rounded-xl border border-primary/40 bg-primary/10 p-3">
+        <p class="text-sm font-medium text-foreground">{importMessage}</p>
+      </div>
+    {/if}
+
+    <div class="mt-10 w-full text-left">
+      <h2 class="text-sm font-medium text-foreground">Recent vault</h2>
+      {#if $recentDatabases.length > 0}
+        <ul class="mt-3 space-y-2 w-full max-w-[490px] mx-auto">
+          {#each $recentDatabases as dbPath (dbPath)}
+            <li>
+              <button
+                type="button"
+                class="w-full rounded-lg bg-white/5 px-3 py-2 text-left text-[13px] text-muted-foreground transition hover:bg-white/10 hover:text-foreground"
+                title={dbPath}
+                onclick={() => selectRecentDatabase(dbPath)}
+              >
+                {basename(dbPath)}
+              </button>
+            </li>
+          {/each}
+        </ul>
       {:else}
-        <p class="no-recent-databases">No recent databases.</p>
+        <p class="mt-2 text-xs text-muted-foreground">No recent databases.</p>
       {/if}
     </div>
   </div>
-
-  {#if error}
-    <div class="error-block" role="alert">
-      <p class="error-text">{error}</p>
-      {#if hasAccessDeniedError}
-        <div class="error-actions">
-          <button type="button" class="navButton" onclick={attemptElevatedCopy}>
-            Attempt elevated copy into app folder
-          </button>
-        </div>
-      {/if}
-    </div>
-  {/if}
-
-  {#if importProgress}
-    <div class="progress-block" role="status">
-      <Loader2 class="progress-icon" aria-hidden="true" />
-      <p class="progress-text">{importProgress}</p>
-    </div>
-  {/if}
-
-  {#if importMessage}
-    <div class="success-block" role="status">
-      <p class="success-text">{importMessage}</p>
-    </div>
-  {/if}
 </div>
 
 <ImportManagerPopup bind:show={showImportPopup} on:importSelected={handleImportSelected} />
@@ -443,19 +446,7 @@
     cursor: not-allowed;
   }
 
-  #navButton1 {
-    background: linear-gradient(to right, var(--ds-primary-gradient-start), var(--ds-primary-gradient-end));
-    color: var(--primary-foreground);
-    border-color: color-mix(in oklch, var(--primary) 45%, var(--border) 55%);
-  }
-
-  #navButton1:hover {
-    background: linear-gradient(
-      to right,
-      var(--ds-primary-gradient-hover-start),
-      var(--ds-primary-gradient-hover-end)
-    );
-  }
+  /* legacy #navButton1 styles removed in favor of Tailwind utility classes */
 
   .circle-bg {
     position: absolute;

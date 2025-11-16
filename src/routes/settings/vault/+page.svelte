@@ -287,14 +287,14 @@
 
     try {
       const picked = await invoke<string>('pick_save_file');
-      const withExt: string = picked.endsWith('.pulsar') ? picked : `${picked}.pulsar`;
+      const withExt: string = picked.endsWith('.psec') ? picked : `${picked}.psec`;
       const sep = withExt.includes('\\') ? '\\' : '/';
       const lastSep = withExt.lastIndexOf(sep);
       const baseDir = lastSep === -1 ? '' : withExt.slice(0, lastSep);
       const baseName = lastSep === -1 ? withExt : withExt.slice(lastSep + 1);
-      const stem = baseName.endsWith('.pulsar') ? baseName.slice(0, -8) : baseName;
+      const stem = baseName.endsWith('.psec') ? baseName.slice(0, -5) : baseName;
       const folder = baseDir ? `${baseDir}${sep}${stem}` : stem;
-      const finalPath = `${folder}${sep}${stem}.pulsar`;
+      const finalPath = `${folder}${sep}${stem}.psec`;
 
       await invoke('switch_database', { dbPath: finalPath });
       await recentDatabases.addRecentDatabase(finalPath);
@@ -423,7 +423,7 @@
   });
 </script>
 
-<div class="flex-1 space-y-6 overflow-y-auto px-6 py-8">
+  <div class="flex-1 min-h-0 space-y-6 px-6 py-8">
   <Card class="border-border/60 bg-card/80 backdrop-blur supports-[backdrop-filter]:bg-card/70">
     <CardHeader class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
       <div class="flex items-center gap-3">

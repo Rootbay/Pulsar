@@ -63,10 +63,10 @@
       selectingFile = true;
       const result = await open({
         multiple: false,
-        filters: [
-          { name: 'Pulsar Backup', extensions: ['pulsar', 'json'] },
-          { name: 'All files', extensions: ['*'] }
-        ]
+      filters: [
+        { name: 'Pulsar Backup', extensions: ['psec', 'json'] },
+        { name: 'All files', extensions: ['*'] }
+      ]
       });
 
       if (typeof result === 'string') {
@@ -169,7 +169,7 @@
             {/if}
           </Button>
         </div>
-        <p class="text-xs text-muted-foreground">Accepted formats: .pulsar or .json backup files.</p>
+        <p class="text-xs text-muted-foreground">Accepted formats: .psec or .json backup files.</p>
       </div>
 
       <div class="space-y-2">

@@ -44,7 +44,7 @@
   }
 </script>
 
-<div class="flex flex-1 flex-col gap-6 overflow-y-auto px-8 py-8">
+<div class="flex min-h-0 flex-1 flex-col gap-6 px-8 py-8">
   <Card class="border-border/60 bg-background/80 backdrop-blur">
     <CardHeader class="flex flex-row items-start gap-3 border-b border-border/40 pb-4">
       <div class="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">

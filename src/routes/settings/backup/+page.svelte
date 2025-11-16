@@ -258,7 +258,7 @@
   }
 </script>
 
-<div class="flex-1 space-y-6 overflow-y-auto px-6 py-8">
+<div class="flex-1 min-h-0 space-y-6 px-6 py-8">
   {#if feedback}
     <Alert
       variant={feedback.type === 'error' ? 'destructive' : 'default'}

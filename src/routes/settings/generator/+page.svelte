@@ -423,7 +423,7 @@
   $: strengthProgress = Math.min(100, Math.round((strengthEntropy / MAX_ENTROPY_BITS) * 100));
 </script>
 
-<div class="flex-1 space-y-6 overflow-y-auto px-6 py-8">
+  <div class="flex-1 min-h-0 space-y-6 px-6 py-8">
   <Card class="border-border/60 bg-card/80 backdrop-blur supports-[backdrop-filter]:bg-card/70">
     <CardHeader class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
       <div class="flex items-center gap-3">

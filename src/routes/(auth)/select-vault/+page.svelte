@@ -142,7 +142,7 @@
     try {
       const picked = await open({
         title: 'Select a Pulsar Vault',
-        filters: [{ name: 'Pulsar Vault', extensions: ['pulsar'] }],
+        filters: [{ name: 'Pulsar Vault', extensions: ['psec'] }],
         multiple: false
       });
 
@@ -158,20 +158,20 @@
     try {
       const picked = await save({
         title: 'Create a new Pulsar Vault',
-        filters: [{ name: 'Pulsar Vault', extensions: ['pulsar'] }]
+        filters: [{ name: 'Pulsar Vault', extensions: ['psec'] }]
       });
 
       if (picked) {
-        // Ensure .pulsar extension
-        const withExt = picked.endsWith('.pulsar') ? picked : `${picked}.pulsar`;
+        // Ensure .psec extension
+        const withExt = picked.endsWith('.psec') ? picked : `${picked}.psec`;
         // Place the vault inside its own folder alongside future sidecar files
         const sep = withExt.includes('\\') ? '\\' : '/';
         const lastSep = withExt.lastIndexOf(sep);
         const baseDir = lastSep === -1 ? '' : withExt.slice(0, lastSep);
         const baseName = lastSep === -1 ? withExt : withExt.slice(lastSep + 1);
-        const stem = baseName.endsWith('.pulsar') ? baseName.slice(0, -8) : baseName;
+        const stem = baseName.endsWith('.psec') ? baseName.slice(0, -5) : baseName;
         const folder = baseDir ? `${baseDir}${sep}${stem}` : stem;
-        const finalPath = `${folder}${sep}${stem}.pulsar`;
+        const finalPath = `${folder}${sep}${stem}.psec`;
 
         await loadAndCheckDatabase(finalPath);
       }

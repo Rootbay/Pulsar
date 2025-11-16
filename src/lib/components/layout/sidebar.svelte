@@ -2,7 +2,8 @@
   import { createEventDispatcher } from 'svelte';
   import { invoke } from '@tauri-apps/api/core';
   import { iconPaths } from '$lib/icons';
-  import { filterCategory, selectedTag, showSettingsPopup } from '$lib/stores';
+  import { filterCategory, selectedTag } from '$lib/stores';
+  import { goto } from '$app/navigation';
   import Icon from '../ui/Icon.svelte';
   import { Globe, Plus, Settings } from '@lucide/svelte';
   import {
@@ -159,7 +160,7 @@
           aria-label="Open settings"
           tooltipContent="Settings"
           class="h-[46px] w-[46px] justify-center rounded-lg text-sidebar-foreground/70 transition hover:text-sidebar-foreground"
-          onclick={() => showSettingsPopup.set(true)}
+          onclick={() => goto('/settings')}
         >
           <Settings style="w-5 h-5" className="size-5 opacity-70 transition-opacity group-hover/menu-item:opacity-100" />
           <span class="sr-only">Settings</span>

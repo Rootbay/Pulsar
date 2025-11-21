@@ -427,7 +427,7 @@
   <Card class="border-border/60 bg-card/80 backdrop-blur supports-[backdrop-filter]:bg-card/70">
     <CardHeader class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
       <div class="flex items-center gap-3">
-        <div class="flex size-10 items-center justify-center rounded-full bg-primary/10 text-primary">
+        <div class="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
           <Key class="size-5" aria-hidden="true" />
         </div>
         <div>
@@ -456,7 +456,7 @@
             Generate new
           </Button>
         </div>
-        <div class="flex flex-col gap-2 rounded-lg border border-border/40 bg-background/80 p-4 font-mono text-base">
+        <div class="flex flex-col gap-2 rounded-lg border border-border/40 bg-background/80 p-4 font-mono text-sm">
           {#if generatedPassword}
             <span class="break-all">{generatedPassword}</span>
           {:else}
@@ -591,7 +591,7 @@
 
   <Card class="border-border/60 bg-card/80 backdrop-blur supports-[backdrop-filter]:bg-card/70">
     <CardHeader class="flex items-start gap-3">
-      <div class="flex size-10 items-center justify-center rounded-full bg-primary/10 text-primary">
+      <div class="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
         <ListChecks class="size-5" aria-hidden="true" />
       </div>
       <div>
@@ -652,7 +652,7 @@
 
   <Card class="border-border/60 bg-card/80 backdrop-blur supports-[backdrop-filter]:bg-card/70">
     <CardHeader class="flex items-start gap-3">
-      <div class="flex size-10 items-center justify-center rounded-full bg-primary/10 text-primary">
+      <div class="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
         <FileText class="size-5" aria-hidden="true" />
       </div>
       <div>

@@ -4,12 +4,10 @@
   import { Input } from '$lib/components/ui/input';
   import { Button } from '$lib/components/ui/button';
   import { settingsStore } from '$lib/stores';
-  import { profileSettings } from '$lib/stores/profile';
   import { Bell, Menu, Search, Settings, ShieldCheck, Palette, Clipboard, Info, Database, Sliders, Wand2, Globe } from '@lucide/svelte';
 
   type NavItem = { href: string; label: string; Icon: typeof Settings };
   const navItems: NavItem[] = [
-    { href: '/settings', label: 'Personal info', Icon: Settings },
     { href: '/settings/general', label: 'General', Icon: Settings },
     { href: '/settings/appearance', label: 'Appearance', Icon: Palette },
     { href: '/settings/security', label: 'Security', Icon: ShieldCheck },
@@ -32,18 +30,7 @@
 <div class="flex h-screen w-full overflow-hidden bg-background">
   <!-- Left sidebar -->
   <aside class="hidden h-screen w-64 shrink-0 overflow-y-auto border-r border-border/60 bg-card/50 p-4 md:block">
-    <div class="flex items-center gap-3 p-2">
-      <Avatar class="h-10 w-10">
-        <AvatarImage src="/svelte.svg" alt="Avatar" />
-        <AvatarFallback>PV</AvatarFallback>
-      </Avatar>
-      <div class="min-w-0">
-        <p class="truncate text-sm font-semibold text-foreground">{$profileSettings.name}</p>
-        <p class="truncate text-xs text-muted-foreground">Vault owner</p>
-      </div>
-    </div>
-
-    <nav class="mt-6 space-y-1">
+    <nav class="space-y-1">
       {#each navItems as { href, label, Icon }}
         <a href={href} class={`flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm transition ${isActive(href) ? 'bg-muted text-foreground' : 'text-muted-foreground hover:bg-muted/60'}`}>
           <Icon class="size-4" />

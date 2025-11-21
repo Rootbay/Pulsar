@@ -160,7 +160,7 @@
           aria-label="Open settings"
           tooltipContent="Settings"
           class="h-[46px] w-[46px] justify-center rounded-lg text-sidebar-foreground/70 transition hover:text-sidebar-foreground"
-          onclick={() => goto('/settings')}
+          onclick={() => goto('/settings/general')}
         >
           <Settings style="w-5 h-5" className="size-5 opacity-70 transition-opacity group-hover/menu-item:opacity-100" />
           <span class="sr-only">Settings</span>

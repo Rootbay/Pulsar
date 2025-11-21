@@ -725,8 +725,8 @@
     kdfParallelism >= 1;
 </script>
 
-<div class="flex min-h-0 flex-1 flex-col gap-6 px-8 py-8">
-  <Card class="border-border/60 bg-background/80 backdrop-blur">
+<div class="flex-1 min-h-0 space-y-6 px-6 py-8">
+    <Card class="border-border/60 bg-card/80 backdrop-blur supports-[backdrop-filter]:bg-card/70">
     <CardHeader class="flex flex-row items-start gap-3 border-b border-border/40 pb-4">
       <div class="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
         <ShieldCheck class="h-5 w-5" aria-hidden="true" />
@@ -1034,7 +1034,7 @@
     </CardContent>
   </Card>
 
-  <Card class="border-border/60 bg-background/80 backdrop-blur">
+    <Card class="border-border/60 bg-card/80 backdrop-blur supports-[backdrop-filter]:bg-card/70">
     <CardHeader class="flex flex-row items-start gap-3 border-b border-border/40 pb-4">
       <div class="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
         <Lock class="h-5 w-5" aria-hidden="true" />
@@ -1069,7 +1069,7 @@
     </CardContent>
   </Card>
 
-  <Card class="border-border/60 bg-background/80 backdrop-blur">
+    <Card class="border-border/60 bg-card/80 backdrop-blur supports-[backdrop-filter]:bg-card/70">
     <CardHeader class="flex flex-row items-start gap-3 border-b border-border/40 pb-4">
       <div class="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
         <CalendarClock class="h-5 w-5" aria-hidden="true" />
@@ -1123,7 +1123,7 @@
     </CardContent>
   </Card>
 
-  <Card class="border-border/60 bg-background/80 backdrop-blur">
+    <Card class="border-border/60 bg-card/80 backdrop-blur supports-[backdrop-filter]:bg-card/70">
     <CardHeader class="flex flex-row items-start gap-3 border-b border-border/40 pb-4">
       <div class="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
         <Fingerprint class="h-5 w-5" aria-hidden="true" />
@@ -1160,7 +1160,7 @@
     </CardContent>
   </Card>
 
-  <Card class="border-border/60 bg-background/80 backdrop-blur">
+    <Card class="border-border/60 bg-card/80 backdrop-blur supports-[backdrop-filter]:bg-card/70">
     <CardHeader class="flex flex-row items-start gap-3 border-b border-border/40 pb-4">
       <div class="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
         <MonitorSmartphone class="h-5 w-5" aria-hidden="true" />
@@ -1238,7 +1238,7 @@
     </CardContent>
   </Card>
 
-  <Card class="border-border/60 bg-background/80 backdrop-blur">
+    <Card class="border-border/60 bg-card/80 backdrop-blur supports-[backdrop-filter]:bg-card/70">
     <CardHeader class="flex flex-row items-start gap-3 border-b border-border/40 pb-4">
       <div class="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
         <EyeOff class="h-5 w-5" aria-hidden="true" />
@@ -1287,7 +1287,7 @@
     </CardContent>
   </Card>
 
-  <Card class="border-border/60 bg-background/80 backdrop-blur">
+    <Card class="border-border/60 bg-card/80 backdrop-blur supports-[backdrop-filter]:bg-card/70">
     <CardHeader class="flex flex-row items-start gap-3 border-b border-border/40 pb-4">
       <div class="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
         <Shield class="h-5 w-5" aria-hidden="true" />
@@ -1313,9 +1313,9 @@
             {:else}
               <action.Icon class="h-5 w-5 text-primary" aria-hidden="true" />
             {/if}
-            <div>
+            <div class="space-y-1">
               <p class="text-sm font-semibold text-foreground">{action.title}</p>
-              <p class="text-sm text-muted-foreground">{action.description}</p>
+              <p class="text-xs text-muted-foreground whitespace-normal break-words">{action.description}</p>
             </div>
           </Button>
         {/each}

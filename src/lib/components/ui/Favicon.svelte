@@ -72,7 +72,8 @@
         iconSrc = faviconCache.get(domain)!;
         tick();
       } else {
-        const faviconUrl = `https://icon.horse/icon/${domain}`;
+        // Prefer real site favicon over generic letter tiles
+        const faviconUrl = `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=128`;
         const img = new Image();
         img.src = faviconUrl;
         img.onload = () => {
@@ -135,8 +136,14 @@
 
 <style>
   .itemImgContainer {
+    /* Force a perfectly square box regardless of layout stretching */
     width: var(--favicon-size, 29px);
     height: var(--favicon-size, 29px);
+    min-width: var(--favicon-size, 29px);
+    max-width: var(--favicon-size, 29px);
+    min-height: var(--favicon-size, 29px);
+    max-height: var(--favicon-size, 29px);
+    flex: 0 0 auto;
     border-radius: calc(var(--favicon-size, 29px) / 2);
     /* Ensure a consistent white background behind favicons (including SVGs) */
     background: #ffffff;
@@ -145,6 +152,17 @@
     overflow: hidden;
     line-height: 0;
     box-sizing: border-box;
+  }
+
+  /* Ensure nav/list variant background matches header size exactly */
+  .itemImgContainer.list-variant {
+    width: 30px;
+    height: 30px;
+    min-width: 30px;
+    max-width: 30px;
+    min-height: 30px;
+    max-height: 30px;
+    flex: 0 0 auto;
   }
 
   .itemImg.raster {
@@ -162,11 +180,20 @@
 
   /* Nudge raster URL icons in main (default) variant for visual centering */
   .itemImgContainer:not(.list-variant) .itemImg.raster {
-    width: 17px;
-    height: 17px;
-    border-radius: 8.5px;
-    margin-top: -1px;
-    margin-left: -1px;
+    width: 18px;
+    height: 18px;
+    border-radius: 9px;
+    margin-top: 0;
+    margin-left: 0;
+  }
+
+  /* Match icon size/position in nav list (list variant) */
+  .itemImgContainer.list-variant .itemImg.raster {
+    width: 18px;
+    height: 18px;
+    border-radius: 9px;
+    margin-top: 0;
+    margin-left: 0;
   }
 
   .tag-icon-container {

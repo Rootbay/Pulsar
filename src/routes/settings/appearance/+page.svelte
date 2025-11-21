@@ -10,7 +10,7 @@
   import { Select, SelectContent, SelectItem, SelectTrigger } from '$lib/components/ui/select';
   import { Switch } from '$lib/components/ui/switch';
   import { cn } from '$lib/utils';
-  import { Palette, Contrast, LayoutDashboard, Waves, Gauge, Monitor } from '@lucide/svelte';
+  import { Palette, Contrast, LayoutDashboard, Waves, Monitor } from '@lucide/svelte';
 
   type ThemeOption = AppearanceSettings['theme'];
   type DensityOption = AppearanceSettings['pageDensity'];
@@ -142,8 +142,8 @@
   }
 </script>
 
-<div class="flex min-h-0 flex-1 flex-col gap-6 px-8 py-8">
-  <Card class="border-border/60 bg-background/80 backdrop-blur">
+<div class="flex-1 min-h-0 space-y-6 px-6 py-8">
+  <Card class="border-border/60 bg-card/80 backdrop-blur supports-[backdrop-filter]:bg-card/70">
     <CardHeader class="flex flex-row items-start gap-3 border-b border-border/40 pb-4">
       <div class="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
         <Palette class="h-5 w-5" aria-hidden="true" />
@@ -173,14 +173,9 @@
         </div>
 
         <div class="flex items-center justify-between gap-4 rounded-lg border border-border/60 bg-muted/20 px-4 py-3">
-          <div class="flex items-center gap-3">
-            <div class="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
-              <LayoutDashboard class="h-5 w-5" aria-hidden="true" />
-            </div>
-            <div>
-              <p class="text-sm font-semibold text-foreground">Compact Mode</p>
-              <p class="text-sm text-muted-foreground">Reduce spacing and padding.</p>
-            </div>
+          <div class="space-y-1">
+            <p class="text-sm font-semibold text-foreground">Compact Mode</p>
+            <p class="text-sm text-muted-foreground">Reduce spacing and padding.</p>
           </div>
           <Switch
             checked={compactMode}
@@ -191,8 +186,7 @@
       </div>
 
       <div class="space-y-2">
-        <Label class="flex items-center gap-2 text-sm font-medium text-foreground">
-          <Gauge class="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+        <Label class="text-sm font-medium text-foreground">
           Font Size
         </Label>
         <div class="flex items-center gap-4">
@@ -211,14 +205,9 @@
       <div class="grid gap-4 md:grid-cols-2">
         {#each toggleOptions as option (option.key)}
           <div class="flex items-center justify-between gap-4 rounded-lg border border-border/60 bg-muted/20 px-4 py-3">
-            <div class="flex items-center gap-3">
-              <div class="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
-                <option.Icon class="h-5 w-5" aria-hidden="true" />
-              </div>
-              <div>
-                <p class="text-sm font-semibold text-foreground">{option.title}</p>
-                <p class="text-sm text-muted-foreground">{option.description}</p>
-              </div>
+            <div class="space-y-1">
+              <p class="text-sm font-semibold text-foreground">{option.title}</p>
+              <p class="text-sm text-muted-foreground">{option.description}</p>
             </div>
             <Switch
               checked={option.key === 'highContrast' ? highContrast : reducedMotion}
@@ -231,7 +220,7 @@
     </CardContent>
   </Card>
 
-  <Card class="border-border/60 bg-background/80 backdrop-blur">
+  <Card class="border-border/60 bg-card/80 backdrop-blur supports-[backdrop-filter]:bg-card/70">
     <CardHeader class="flex flex-row items-start gap-3 border-b border-border/40 pb-4">
       <div class="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
         <LayoutDashboard class="h-5 w-5" aria-hidden="true" />
@@ -259,7 +248,6 @@
           >
             <div>
               <p class="text-sm font-semibold text-foreground">{option.title}</p>
-              <p class="text-sm text-muted-foreground">{option.description}</p>
             </div>
             <div
               class={cn(

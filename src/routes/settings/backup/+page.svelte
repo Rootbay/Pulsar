@@ -272,7 +272,7 @@
   <Card class="border-border/60 bg-card/80 backdrop-blur supports-[backdrop-filter]:bg-card/70">
     <CardHeader class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
       <div class="flex items-center gap-3">
-        <div class="flex size-10 items-center justify-center rounded-full bg-primary/10 text-primary">
+        <div class="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
           <Archive class="size-5" aria-hidden="true" />
         </div>
         <div>
@@ -348,7 +348,7 @@
 
   <Card class="border-border/60 bg-card/80 backdrop-blur supports-[backdrop-filter]:bg-card/70">
     <CardHeader class="flex items-start gap-3">
-      <div class="flex size-10 items-center justify-center rounded-full bg-primary/10 text-primary">
+      <div class="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
         <Archive class="size-5" aria-hidden="true" />
       </div>
       <div>
@@ -399,7 +399,7 @@
 
   <Card class="border-border/60 bg-card/80 backdrop-blur supports-[backdrop-filter]:bg-card/70">
     <CardHeader class="flex items-start gap-3">
-      <div class="flex size-10 items-center justify-center rounded-full bg-primary/10 text-primary">
+      <div class="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
         <Cloud class="size-5" aria-hidden="true" />
       </div>
       <div>

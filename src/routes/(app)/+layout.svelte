@@ -6,7 +6,7 @@
   import CreatePasswordPopup from '$lib/components/CreatePasswordPopup.svelte';
   import Popup from '$lib/components/ui/Popup.svelte';
   import { SidebarProvider } from '$lib/components/ui/sidebar';
-  import Settings from '../settings/+page.svelte';
+  import Settings from '../settings/general/+page.svelte';
   import { invoke } from '@tauri-apps/api/core';
   import type { PasswordItem } from '../+layout.ts';
   import { onMount, tick } from 'svelte';

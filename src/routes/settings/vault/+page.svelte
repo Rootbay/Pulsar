@@ -427,7 +427,7 @@
   <Card class="border-border/60 bg-card/80 backdrop-blur supports-[backdrop-filter]:bg-card/70">
     <CardHeader class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
       <div class="flex items-center gap-3">
-        <div class="flex size-10 items-center justify-center rounded-full bg-primary/10 text-primary">
+        <div class="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
           <FolderKanban class="size-5" aria-hidden="true" />
         </div>
         <div>
@@ -482,13 +482,15 @@
                 onclick={() => selectVault(vault.id)}
               >
                 <div class="flex items-start justify-between gap-3">
-                  <div>
-                    <p class="text-sm font-semibold text-foreground">{vault.name}</p>
+                  <div class="flex-1 space-y-1">
+                    <div class="flex flex-wrap items-center gap-2">
+                      <p class="text-sm font-semibold text-foreground">{vault.name}</p>
+                      <div class="flex flex-wrap items-center gap-1 text-[10px]">
+                        <Badge variant="secondary" class="capitalize">{vault.status}</Badge>
+                        <Badge variant="outline">{formatItemBadge(vault.itemCount)}</Badge>
+                      </div>
+                    </div>
                     <p class="text-xs text-muted-foreground">{vault.path}</p>
-                  </div>
-                  <div class="flex flex-col items-end gap-1">
-                    <Badge variant="secondary" class="w-fit capitalize">{vault.status}</Badge>
-                    <Badge variant="outline" class="w-fit">{formatItemBadge(vault.itemCount)}</Badge>
                   </div>
                 </div>
                 <div class="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
@@ -625,7 +627,7 @@
 
   <Card class="border-border/60 bg-card/80 backdrop-blur supports-[backdrop-filter]:bg-card/70">
     <CardHeader class="flex items-start gap-3">
-      <div class="flex size-10 items-center justify-center rounded-full bg-primary/10 text-primary">
+      <div class="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
         <ChartColumn class="size-5" aria-hidden="true" />
       </div>
       <div>

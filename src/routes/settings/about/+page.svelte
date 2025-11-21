@@ -44,8 +44,8 @@
   }
 </script>
 
-<div class="flex min-h-0 flex-1 flex-col gap-6 px-8 py-8">
-  <Card class="border-border/60 bg-background/80 backdrop-blur">
+<div class="flex-1 min-h-0 space-y-6 px-6 py-8">
+  <Card class="border-border/60 bg-card/80 backdrop-blur supports-[backdrop-filter]:bg-card/70">
     <CardHeader class="flex flex-row items-start gap-3 border-b border-border/40 pb-4">
       <div class="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
         <BadgeCheck class="h-5 w-5" aria-hidden="true" />
@@ -86,7 +86,7 @@
     </CardContent>
   </Card>
 
-  <Card class="border-border/60 bg-background/80 backdrop-blur">
+  <Card class="border-border/60 bg-card/80 backdrop-blur supports-[backdrop-filter]:bg-card/70">
     <CardHeader class="flex flex-row items-start gap-3 border-b border-border/40 pb-4">
       <div class="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
         <ShieldQuestionMark class="h-5 w-5" aria-hidden="true" />
@@ -113,7 +113,7 @@
     </CardContent>
   </Card>
 
-  <Card class="border-border/60 bg-background/80 backdrop-blur">
+  <Card class="border-border/60 bg-card/80 backdrop-blur supports-[backdrop-filter]:bg-card/70">
     <CardHeader class="flex flex-row items-start gap-3 border-b border-border/40 pb-4">
       <div class="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
         <FolderOpen class="h-5 w-5" aria-hidden="true" />

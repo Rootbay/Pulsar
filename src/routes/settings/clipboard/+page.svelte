@@ -130,20 +130,20 @@
 
 <div class="flex-1 min-h-0 space-y-6 px-6 py-8">
   <Card class="border-border/60 bg-card/80 backdrop-blur supports-[backdrop-filter]:bg-card/70">
-    <CardHeader>
-      <CardTitle>Core Integration</CardTitle>
-      <CardDescription>Configure basic clipboard functionality.</CardDescription>
+    <CardHeader class="flex flex-row items-start gap-3 border-b border-border/40 pb-4">
+      <div class="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
+        <ClipboardCheck class="h-5 w-5" aria-hidden="true" />
+      </div>
+      <div>
+        <CardTitle>Core Integration</CardTitle>
+        <CardDescription>Configure basic clipboard functionality.</CardDescription>
+      </div>
     </CardHeader>
     <CardContent class="space-y-6">
       <div class="flex items-start justify-between gap-4">
-        <div class="flex items-start gap-3">
-          <div class="rounded-lg bg-primary/10 p-2 text-primary">
-            <ClipboardCheck class="size-5" />
-          </div>
-          <div class="space-y-1">
-            <p class="text-sm font-medium text-foreground">Clipboard integration</p>
-            <p class="text-sm text-muted-foreground">Enable automatic clipboard functionality.</p>
-          </div>
+        <div class="space-y-1">
+          <p class="text-sm font-medium text-foreground">Clipboard integration</p>
+          <p class="text-sm text-muted-foreground">Enable automatic clipboard functionality.</p>
         </div>
         <Switch
           checked={clipboardIntegration}
@@ -209,28 +209,28 @@
   </Card>
 
   <Card class="border-border/60 bg-card/80 backdrop-blur supports-[backdrop-filter]:bg-card/70">
-    <CardHeader>
-      <CardTitle>Access control</CardTitle>
-      <CardDescription>Fine-tune clipboard safety and permissions.</CardDescription>
+    <CardHeader class="flex flex-row items-start gap-3 border-b border-border/40 pb-4">
+      <div class="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
+        <Shield class="h-5 w-5" aria-hidden="true" />
+      </div>
+      <div>
+        <CardTitle>Access control</CardTitle>
+        <CardDescription>Fine-tune clipboard safety and permissions.</CardDescription>
+      </div>
     </CardHeader>
     <CardContent class="space-y-6">
       <div class="flex items-start justify-between gap-4">
-        <div class="flex items-start gap-3">
-          <div class="rounded-lg bg-secondary/20 p-2 text-secondary-foreground">
-            <ClipboardList class="size-5" />
+        <div class="space-y-1">
+          <div class="flex items-center gap-2">
+            <p class="text-sm font-medium text-foreground">Block clipboard history</p>
+            <Badge
+              variant={$clipboardIntegrationState.historyBlockingActive ? 'secondary' : 'outline'}
+              class="text-xs"
+            >
+              {$clipboardIntegrationState.historyBlockingActive ? 'Active' : 'Inactive'}
+            </Badge>
           </div>
-          <div class="space-y-1">
-            <div class="flex items-center gap-2">
-              <p class="text-sm font-medium text-foreground">Block clipboard history</p>
-              <Badge
-                variant={$clipboardIntegrationState.historyBlockingActive ? 'secondary' : 'outline'}
-                class="text-xs"
-              >
-                {$clipboardIntegrationState.historyBlockingActive ? 'Active' : 'Inactive'}
-              </Badge>
-            </div>
-            <p class="text-sm text-muted-foreground">Prevent system clipboard history from storing entries.</p>
-          </div>
+          <p class="text-sm text-muted-foreground">Prevent system clipboard history from storing entries.</p>
         </div>
         <Switch
           checked={blockHistory}
@@ -251,14 +251,9 @@
       {/if}
 
       <div class="flex items-start justify-between gap-4">
-        <div class="flex items-start gap-3">
-          <div class="rounded-lg bg-chart-warning-soft p-2 text-chart-warning">
-            <ShieldAlert class="size-5" />
-          </div>
-          <div class="space-y-1">
-            <p class="text-sm font-medium text-foreground">Only allow on unlocked session</p>
-            <p class="text-sm text-muted-foreground">Disable clipboard export when Pulsar is locked.</p>
-          </div>
+        <div class="space-y-1">
+          <p class="text-sm font-medium text-foreground">Only allow on unlocked session</p>
+          <p class="text-sm text-muted-foreground">Disable clipboard export when Pulsar is locked.</p>
         </div>
         <Switch
           checked={onlyUnlocked}
@@ -270,8 +265,8 @@
 
       <div class="space-y-4 rounded-lg border border-border/60 bg-muted/10 p-4">
         <div class="flex items-start gap-3">
-          <div class="rounded-lg bg-primary/10 p-2 text-primary">
-            <Shield class="size-5" />
+          <div class="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
+            <ClipboardList class="size-5" aria-hidden="true" />
           </div>
           <div class="space-y-1">
             <p class="text-sm font-medium text-foreground">Per-item clipboard permissions</p>
@@ -280,28 +275,34 @@
         </div>
 
         <div class="space-y-3 pl-11">
-          <label class="flex items-center gap-3 text-sm text-foreground">
-            <input
-              type="radio"
-              class="size-4 cursor-pointer accent-[hsl(var(--primary))]"
-              name="permission"
-              value="ask"
-              bind:group={permissionLevel}
-              on:change={handleRadioChange}
-            />
-            <span>Allow once (ask each time)</span>
-          </label>
-          <label class="flex items-center gap-3 text-sm text-foreground">
-            <input
-              type="radio"
-              class="size-4 cursor-pointer accent-[hsl(var(--primary))]"
-              name="permission"
-              value="remember"
-              bind:group={permissionLevel}
-              on:change={handleRadioChange}
-            />
-            <span>Always allow (remember choice)</span>
-          </label>
+          <div class="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant={permissionLevel === 'ask' ? 'default' : 'outline'}
+              class="h-8 px-3 text-xs"
+              aria-pressed={permissionLevel === 'ask'}
+              on:click={async () => {
+                permissionLevel = 'ask';
+                await handleRadioChange();
+              }}
+            >
+              Allow once (ask each time)
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant={permissionLevel === 'remember' ? 'default' : 'outline'}
+              class="h-8 px-3 text-xs"
+              aria-pressed={permissionLevel === 'remember'}
+              on:click={async () => {
+                permissionLevel = 'remember';
+                await handleRadioChange();
+              }}
+            >
+              Always allow (remember choice)
+            </Button>
+          </div>
         </div>
       </div>
     </CardContent>

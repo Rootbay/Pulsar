@@ -87,7 +87,7 @@
           title={selectedPasswordItem.title}
           fallbackIcon={primaryTagIconPath}
           fallbackColor={displayColor}
-          size={27}
+          size={30}
           useStroke={true}
         />
         <h2 class="header-title">
@@ -172,8 +172,8 @@
         position: absolute;
         left: -6px;
         top: -6px;
-        width: 44px;
-        height: 44px;
+        width: 30px;
+        height: 30px;
         border-radius: 12px;
         background: var(--display-color);
         filter: blur(8px);

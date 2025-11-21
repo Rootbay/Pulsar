@@ -56,10 +56,9 @@
     position: absolute;
     inset: 0;
     border-radius: 11.5px;
-    background: var(--tag-color);
-    opacity: 0.3;
-      transition: background-color 280ms ease, opacity 280ms ease;
-      filter: blur(3px);
+    background: transparent;
+    opacity: 0;
+    transition: background-color 280ms ease, opacity 280ms ease;
   }
 
   .tag-icon-container :global(svg) {

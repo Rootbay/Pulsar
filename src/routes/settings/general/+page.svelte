@@ -102,20 +102,20 @@
   }
 </script>
 
-<div class="flex flex-col gap-6">
-  <Card class="border-border/60 bg-card/40 backdrop-blur">
-    <CardHeader class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+<div class="flex-1 min-h-0 space-y-6 px-6 py-8">
+  <Card class="border-border/60 bg-card/80 backdrop-blur supports-[backdrop-filter]:bg-card/70">
+    <CardHeader class="flex flex-row items-start gap-3 border-b border-border/40 pb-4">
       <div class="flex items-center gap-3">
-        <div class="flex size-10 items-center justify-center rounded-md bg-primary/10 text-primary">
-          <Settings style="w-5 h-5"color="currentColor" />
+        <div class="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
+          <Settings size={20} color="currentColor" aria-hidden="true" />
         </div>
         <div>
-          <CardTitle class="text-lg">General Settings</CardTitle>
+          <CardTitle>General Settings</CardTitle>
           <CardDescription>Manage default language, startup behaviour, and layout.</CardDescription>
         </div>
       </div>
     </CardHeader>
-    <CardContent class="flex flex-col gap-8">
+    <CardContent class="flex flex-col gap-8 pt-4">
       <div class="grid gap-6 md:grid-cols-2">
         <div class="space-y-2">
           <Label class="text-sm font-medium text-foreground">App Language</Label>
@@ -196,14 +196,14 @@
     </CardContent>
   </Card>
 
-  <Card class="border-border/60 bg-card/40 backdrop-blur">
-    <CardHeader class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+  <Card class="border-border/60 bg-card/80 backdrop-blur supports-[backdrop-filter]:bg-card/70">
+    <CardHeader class="flex flex-col gap-3 border-b border-border/40 pb-4 sm:flex-row sm:items-start sm:justify-between">
       <div class="flex items-center gap-3">
-        <div class="flex size-10 items-center justify-center rounded-md bg-primary/10 text-primary">
-          <Lock style="w-5 h-5" color="currentColor" />
+        <div class="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
+          <Lock size={20} color="currentColor" aria-hidden="true" />
         </div>
         <div>
-          <CardTitle class="text-lg">Two-Factor Authentication</CardTitle>
+          <CardTitle>Two-Factor Authentication</CardTitle>
           <CardDescription>Add extra layers of protection to vault access.</CardDescription>
         </div>
       </div>
@@ -213,17 +213,12 @@
         onclick={() => toggleSwitch('enable2FAForUnlock')}
       />
     </CardHeader>
-    <CardContent class="flex flex-col gap-4">
+    <CardContent class="flex flex-col gap-4 pt-4">
       {#each authenticationMethods as method (method.key)}
         <div class="flex items-center justify-between gap-4 rounded-lg border border-border/60 bg-muted/20 px-4 py-3">
-          <div class="flex items-center gap-3">
-            <div class="flex size-10 items-center justify-center rounded-md bg-primary/10 text-primary">
-              <method.icon class="size-5" />
-            </div>
-            <div>
-              <p class="text-sm font-medium text-foreground">{method.title}</p>
-              <p class="text-sm text-muted-foreground">{method.description}</p>
-            </div>
+          <div class="space-y-1">
+            <p class="text-sm font-medium text-foreground">{method.title}</p>
+            <p class="text-sm text-muted-foreground">{method.description}</p>
           </div>
           <Switch
             checked={currentGeneralSettings[method.key]}
@@ -238,14 +233,14 @@
     </CardContent>
   </Card>
 
-  <Card class="border-border/60 bg-card/40 backdrop-blur">
-    <CardHeader class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+  <Card class="border-border/60 bg-card/80 backdrop-blur supports-[backdrop-filter]:bg-card/70">
+    <CardHeader class="flex flex-col gap-3 border-b border-border/40 pb-4 sm:flex-row sm:items-start sm:justify-between">
       <div class="flex items-center gap-3">
-        <div class="flex size-10 items-center justify-center rounded-md bg-primary/10 text-primary">
-          <Key style="w-5 h-5" />
+        <div class="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
+          <Key size={20} aria-hidden="true" />
         </div>
         <div>
-          <CardTitle class="text-lg">Keyboard Shortcuts</CardTitle>
+          <CardTitle>Keyboard Shortcuts</CardTitle>
           <CardDescription>Customize shortcuts for frequently used actions.</CardDescription>
         </div>
       </div>
@@ -253,7 +248,7 @@
         Configure Shortcuts
       </Button>
     </CardHeader>
-    <CardContent>
+    <CardContent class="pt-4">
       <p class="text-sm text-muted-foreground">
         Personalize key combinations to match your workflow and speed up navigation.
       </p>

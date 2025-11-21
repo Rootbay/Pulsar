@@ -343,7 +343,7 @@
             <Label class="text-sm font-medium text-foreground">
               {t(locale, 'Backup frequency', 'Frekvens för säkerhetskopior')}
             </Label>
-            {@key locale}
+            {#key locale}
               <Select type="single" value={$state.backupFrequency} onValueChange={updateFrequency}>
                 <SelectTrigger aria-label="Select backup frequency" class="w-full">
                   <span data-slot="select-value" class="truncate text-sm">

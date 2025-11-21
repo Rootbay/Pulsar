@@ -34,6 +34,7 @@
     importVaultBackup,
     notifyVaultRefresh
   } from '$lib/utils/backup';
+  import { currentLocale } from '$lib/i18n';
 
   interface BackendVault {
     id: string;
@@ -78,6 +79,9 @@
   const WEAK_PASSWORDS = 23;
   const DUPLICATES = 5;
 
+  const t = (locale: 'en' | 'sv', en: string, sv: string) => (locale === 'sv' ? sv : en);
+  $: locale = $currentLocale as 'en' | 'sv';
+
   let loadingVaults = false;
   let busyAction: 'import' | 'create' | 'backup' | 'restore' | 'export' | null = null;
 
@@ -100,7 +104,7 @@
 
   function formatBytes(bytes?: number): string {
     if (bytes === undefined) {
-      return 'Unknown size';
+      return t(locale, 'Unknown size', 'Okänd storlek');
     }
 
     if (bytes === 0) {
@@ -121,7 +125,7 @@
 
   function formatRelativeTime(timestamp?: number): string {
     if (!timestamp) {
-      return 'Unknown';
+      return t(locale, 'Unknown', 'Okänt');
     }
 
     const difference = timestamp - Date.now();
@@ -142,15 +146,27 @@
       }
     }
 
-    return 'just now';
+    return t(locale, 'just now', 'nyss');
   }
 
-  function formatItemBadge(count?: number): string {
+  function formatItemBadge(count?: number, locale: 'en' | 'sv'): string {
     if (typeof count === 'number') {
-      return `${count} item${count === 1 ? '' : 's'}`;
+      const base = locale === 'sv' ? 'post' : 'item';
+      const pluralSuffix = count === 1 ? '' : locale === 'sv' ? 'er' : 's';
+      return `${count} ${base}${pluralSuffix}`;
     }
 
-    return 'Items unavailable';
+    return locale === 'sv' ? 'Poster ej tillgängliga' : 'Items unavailable';
+  }
+
+  function formatStatusLabel(status: Vault['status'], locale: 'en' | 'sv'): string {
+    if (locale === 'sv') {
+      if (status === 'unlocked') return 'Upplåst';
+      if (status === 'locked') return 'Låst';
+      if (status === 'available') return 'Tillgängligt';
+    }
+    // Fallback: capitalise first letter
+    return status.charAt(0).toUpperCase() + status.slice(1);
   }
 
   async function refreshVaults({ preserveSelection = true } = {}): Promise<void> {
@@ -192,7 +208,7 @@
       }
     } catch (cause) {
       console.error('Failed to load vaults:', cause);
-      toast.error('Unable to load vaults.');
+      toast.error(t(locale, 'Unable to load vaults.', 'Det gick inte att läsa in valv.'));
     } finally {
       loadingVaults = false;
     }
@@ -256,14 +272,18 @@
 
     try {
       const sourcePath = await invoke<string>('pick_open_file');
-      const passphrase = window.prompt('Enter the passphrase for the backup');
+      const passphrase = window.prompt(
+        t(locale, 'Enter the passphrase for the backup', 'Ange lösenfrasen för säkerhetskopian')
+      );
 
       if (!passphrase?.trim()) {
         return;
       }
 
       await importVaultBackup(passphrase.trim(), { sourcePath });
-      toast.success('Vault imported successfully.');
+      toast.success(
+        t(locale, 'Vault imported successfully.', 'Valv importerat.')
+      );
       notifyVaultRefresh('import');
       await refreshVaults();
     } catch (cause) {
@@ -272,7 +292,7 @@
       }
 
       console.error('Failed to import vault:', cause);
-      toast.error(resolveErrorMessage(cause, 'Failed to import vault.'));
+      toast.error(resolveErrorMessage(cause, t(locale, 'Failed to import vault.', 'Misslyckades med att importera valv.')));
     } finally {
       busyAction = null;
     }
@@ -299,7 +319,7 @@
       await invoke('switch_database', { dbPath: finalPath });
       await recentDatabases.addRecentDatabase(finalPath);
 
-      toast.success('Vault created successfully.');
+      toast.success(t(locale, 'Vault created successfully.', 'Valv skapat.'));
       notifyVaultRefresh('create');
       await refreshVaults({ preserveSelection: false });
     } catch (cause) {
@@ -308,7 +328,9 @@
       }
 
       console.error('Failed to create vault:', cause);
-      toast.error(resolveErrorMessage(cause, 'Failed to create vault.'));
+      toast.error(
+        resolveErrorMessage(cause, t(locale, 'Failed to create vault.', 'Misslyckades med att skapa valv.'))
+      );
     } finally {
       busyAction = null;
     }
@@ -322,7 +344,9 @@
     busyAction = 'backup';
 
     try {
-      const passphrase = window.prompt('Enter a passphrase to secure the backup');
+      const passphrase = window.prompt(
+        t(locale, 'Enter a passphrase to secure the backup', 'Ange en lösenfras för att skydda säkerhetskopian')
+      );
       if (!passphrase?.trim()) {
         return;
       }
@@ -333,7 +357,9 @@
       await refreshVaults();
     } catch (cause) {
       console.error('Failed to run backup:', cause);
-      toast.error(resolveErrorMessage(cause, 'Failed to run backup.'));
+      toast.error(
+        resolveErrorMessage(cause, t(locale, 'Failed to run backup.', 'Misslyckades med att skapa säkerhetskopia.'))
+      );
     } finally {
       busyAction = null;
     }
@@ -348,14 +374,16 @@
 
     try {
       const sourcePath = await invoke<string>('pick_open_file');
-      const passphrase = window.prompt('Enter the backup passphrase to restore');
+      const passphrase = window.prompt(
+        t(locale, 'Enter the backup passphrase to restore', 'Ange säkerhetskopians lösenfras för att återställa')
+      );
 
       if (!passphrase?.trim()) {
         return;
       }
 
       await importVaultBackup(passphrase.trim(), { sourcePath });
-      toast.success('Vault restored successfully.');
+      toast.success(t(locale, 'Vault restored successfully.', 'Valv återställt.'));
       notifyVaultRefresh('restore');
       await refreshVaults();
     } catch (cause) {
@@ -364,7 +392,9 @@
       }
 
       console.error('Failed to restore vault:', cause);
-      toast.error(resolveErrorMessage(cause, 'Failed to restore vault.'));
+      toast.error(
+        resolveErrorMessage(cause, t(locale, 'Failed to restore vault.', 'Misslyckades med att återställa valv.'))
+      );
     } finally {
       busyAction = null;
     }
@@ -378,13 +408,19 @@
     busyAction = 'export';
 
     try {
-      const passphrase = window.prompt('Enter a passphrase for the export file');
+      const passphrase = window.prompt(
+        t(locale, 'Enter a passphrase for the export file', 'Ange en lösenfras för exportfilen')
+      );
       if (!passphrase?.trim()) {
         return;
       }
 
       const exportPlaintext = window.confirm(
-        'Export without encryption? Select “OK” to export plaintext data or “Cancel” to keep it encrypted.'
+        t(
+          locale,
+          'Export without encryption? Select “OK” to export plaintext data or “Cancel” to keep it encrypted.',
+          'Exportera utan kryptering? Välj ”OK” för att exportera okrypterad data eller ”Avbryt” för att behålla krypteringen.'
+        )
       );
 
       const message = await exportVaultBackup(passphrase.trim(), { plaintext: exportPlaintext });
@@ -431,8 +467,12 @@
           <FolderKanban class="size-5" aria-hidden="true" />
         </div>
         <div>
-          <CardTitle>Vault management</CardTitle>
-          <CardDescription>Select a vault to inspect and adjust its settings.</CardDescription>
+          <CardTitle>
+            {t(locale, 'Vault management', 'Valvhantering')}
+          </CardTitle>
+          <CardDescription>
+            {t(locale, 'Select a vault to inspect and adjust its settings.', 'Välj ett valv för att granska och justera dess inställningar.')}
+          </CardDescription>
         </div>
       </div>
       <div class="flex gap-2">
@@ -444,7 +484,7 @@
           disabled={busyAction !== null}
         >
           <HardDriveDownload class="size-4" aria-hidden="true" />
-          Import vault
+          {t(locale, 'Import vault', 'Importera valv')}
         </Button>
         <Button
           type="button"
@@ -453,7 +493,7 @@
           disabled={busyAction !== null}
         >
           <Archive class="size-4" aria-hidden="true" />
-          Create vault
+          {t(locale, 'Create vault', 'Skapa valv')}
         </Button>
       </div>
     </CardHeader>
@@ -463,11 +503,11 @@
         <div class="space-y-3">
           {#if loadingVaults}
             <div class="rounded-xl border border-border/60 bg-muted/20 p-4 text-sm text-muted-foreground">
-              Loading vaults…
+              {t(locale, 'Loading vaults…', 'Läser in valv…')}
             </div>
           {:else if !$vaultsStore.length}
             <div class="rounded-xl border border-border/60 bg-muted/20 p-4 text-sm text-muted-foreground">
-              No vaults available yet. Create or import one to get started.
+              {t(locale, 'No vaults available yet. Create or import one to get started.', 'Inga valv tillgängliga ännu. Skapa eller importera ett för att komma igång.')}
             </div>
           {:else}
             {#each $vaultsStore as vault (vault.id)}
@@ -486,8 +526,10 @@
                     <div class="flex flex-wrap items-center gap-2">
                       <p class="text-sm font-semibold text-foreground">{vault.name}</p>
                       <div class="flex flex-wrap items-center gap-1 text-[10px]">
-                        <Badge variant="secondary" class="capitalize">{vault.status}</Badge>
-                        <Badge variant="outline">{formatItemBadge(vault.itemCount)}</Badge>
+                        <Badge variant="secondary" class="capitalize">
+                          {formatStatusLabel(vault.status, locale)}
+                        </Badge>
+                        <Badge variant="outline">{formatItemBadge(vault.itemCount, locale)}</Badge>
                       </div>
                     </div>
                     <p class="text-xs text-muted-foreground">{vault.path}</p>
@@ -495,16 +537,18 @@
                 </div>
                 <div class="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
                   <span>{formatBytes(vault.sizeBytes)}</span>
-                  <span>Last modified {formatRelativeTime(vault.modifiedAt)}</span>
+                  <span>
+                    {t(locale, 'Last modified', 'Senast ändrad')} {formatRelativeTime(vault.modifiedAt)}
+                  </span>
                   {#if vault.encrypted}
                     <span class="flex items-center gap-1 text-chart-success">
                       <ShieldCheck class="size-3" />
-                      Encrypted
+                      {t(locale, 'Encrypted', 'Krypterad')}
                     </span>
                   {:else}
                     <span class="flex items-center gap-1 text-destructive">
                       <ShieldAlert class="size-3" />
-                      Not encrypted
+                      {t(locale, 'Not encrypted', 'Inte krypterad')}
                     </span>
                   {/if}
                 </div>
@@ -516,8 +560,12 @@
         <div class="space-y-4 rounded-xl border border-border/60 bg-background/70 p-4">
           <div class="flex items-start justify-between gap-2">
             <div>
-              <p class="text-sm font-semibold text-foreground">Selected vault</p>
-              <p class="text-xs text-muted-foreground">Manage metadata and automation for this vault.</p>
+              <p class="text-sm font-semibold text-foreground">
+                {t(locale, 'Selected vault', 'Markerat valv')}
+              </p>
+              <p class="text-xs text-muted-foreground">
+                {t(locale, 'Manage metadata and automation for this vault.', 'Hantera metadata och automatisering för detta valv.')}
+              </p>
             </div>
             <Button
               type="button"
@@ -534,12 +582,14 @@
 
           {#if $selectedVault}
             <div class="space-y-3">
-              <Label for="vault-name" class="text-sm font-medium text-foreground">Display name</Label>
+              <Label for="vault-name" class="text-sm font-medium text-foreground">
+                {t(locale, 'Display name', 'Visningsnamn')}
+              </Label>
               <Input
                 id="vault-name"
                 type="text"
                 value={$vaultSettings.name}
-                placeholder="Vault name"
+                placeholder={t(locale, 'Vault name', 'Valvnamn')}
                 oninput={updateVaultName}
               />
             </div>
@@ -547,8 +597,12 @@
             <div class="space-y-3">
               <div class="flex items-center justify-between gap-3 rounded-lg border border-border/60 bg-muted/10 px-3 py-2">
                 <div>
-                  <p class="text-sm font-medium text-foreground">Store TOTP per entry</p>
-                  <p class="text-xs text-muted-foreground">Allow storing 2FA secrets inside this vault.</p>
+                  <p class="text-sm font-medium text-foreground">
+                    {t(locale, 'Store TOTP per entry', 'Spara TOTP per post')}
+                  </p>
+                  <p class="text-xs text-muted-foreground">
+                    {t(locale, 'Allow storing 2FA secrets inside this vault.', 'Tillåt lagring av 2FA-hemligheter i detta valv.')}
+                  </p>
                 </div>
                 <Switch
                   checked={$vaultSettings.totp}
@@ -560,8 +614,12 @@
 
               <div class="flex items-center justify-between gap-3 rounded-lg border border-border/60 bg-muted/10 px-3 py-2">
                 <div>
-                  <p class="text-sm font-medium text-foreground">Automatic backups</p>
-                  <p class="text-xs text-muted-foreground">Schedule periodic backups for this vault.</p>
+                  <p class="text-sm font-medium text-foreground">
+                    {t(locale, 'Automatic backups', 'Automatiska säkerhetskopior')}
+                  </p>
+                  <p class="text-xs text-muted-foreground">
+                    {t(locale, 'Schedule periodic backups for this vault.', 'Schemalägg regelbundna säkerhetskopior för detta valv.')}
+                  </p>
                 </div>
                 <Switch
                   checked={$vaultSettings.backups}
@@ -573,8 +631,12 @@
 
               <div class="flex items-center justify-between gap-3 rounded-lg border border-border/60 bg-muted/10 px-3 py-2">
                 <div>
-                  <p class="text-sm font-medium text-foreground">Compression</p>
-                  <p class="text-xs text-muted-foreground">Compress vault payloads to save disk space.</p>
+                  <p class="text-sm font-medium text-foreground">
+                    {t(locale, 'Compression', 'Komprimering')}
+                  </p>
+                  <p class="text-xs text-muted-foreground">
+                    {t(locale, 'Compress vault payloads to save disk space.', 'Komprimera valvets data för att spara diskutrymme.')}
+                  </p>
                 </div>
                 <Switch
                   checked={$vaultSettings.compression}
@@ -594,7 +656,7 @@
                 disabled={busyAction !== null}
               >
                 <Archive class="size-4" aria-hidden="true" />
-                Backup now
+                {t(locale, 'Backup now', 'Säkerhetskopiera nu')}
               </Button>
               <Button
                 type="button"
@@ -604,7 +666,7 @@
                 disabled={busyAction !== null}
               >
                 <Database class="size-4" aria-hidden="true" />
-                Restore
+                {t(locale, 'Restore', 'Återställ')}
               </Button>
               <Button
                 type="button"
@@ -614,11 +676,13 @@
                 disabled={busyAction !== null}
               >
                 <HardDriveDownload class="size-4" aria-hidden="true" />
-                Export
+                {t(locale, 'Export', 'Exportera')}
               </Button>
             </div>
           {:else}
-            <p class="text-sm text-muted-foreground">Select a vault from the list to adjust its settings.</p>
+            <p class="text-sm text-muted-foreground">
+              {t(locale, 'Select a vault from the list to adjust its settings.', 'Välj ett valv i listan för att ändra dess inställningar.')}
+            </p>
           {/if}
         </div>
       </div>
@@ -631,26 +695,38 @@
         <ChartColumn class="size-5" aria-hidden="true" />
       </div>
       <div>
-        <CardTitle>Vault insights</CardTitle>
-        <CardDescription>Quick statistics across all vaults.</CardDescription>
+        <CardTitle>
+          {t(locale, 'Vault insights', 'Valvstatistik')}
+        </CardTitle>
+        <CardDescription>
+          {t(locale, 'Quick statistics across all vaults.', 'Snabb statistik över alla valv.')}
+        </CardDescription>
       </div>
     </CardHeader>
     <CardContent>
       <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div class="rounded-xl border border-border/60 bg-background/80 p-4">
-          <p class="text-xs text-muted-foreground">Total items</p>
+          <p class="text-xs text-muted-foreground">
+            {t(locale, 'Total items', 'Totalt antal poster')}
+          </p>
           <p class="text-2xl font-semibold text-foreground">{$totalItems}</p>
         </div>
         <div class="rounded-xl border border-border/60 bg-background/80 p-4">
-          <p class="text-xs text-muted-foreground">Weak passwords detected</p>
+          <p class="text-xs text-muted-foreground">
+            {t(locale, 'Weak passwords detected', 'Svaga lösenord upptäckta')}
+          </p>
           <p class="text-2xl font-semibold text-destructive">{WEAK_PASSWORDS}</p>
         </div>
         <div class="rounded-xl border border-border/60 bg-background/80 p-4">
-          <p class="text-xs text-muted-foreground">Duplicate entries</p>
+          <p class="text-xs text-muted-foreground">
+            {t(locale, 'Duplicate entries', 'Dubblerade poster')}
+          </p>
           <p class="text-2xl font-semibold text-chart-warning">{DUPLICATES}</p>
         </div>
         <div class="rounded-xl border border-border/60 bg-background/80 p-4">
-          <p class="text-xs text-muted-foreground">Encrypted vaults</p>
+          <p class="text-xs text-muted-foreground">
+            {t(locale, 'Encrypted vaults', 'Krypterade valv')}
+          </p>
           <p class="text-2xl font-semibold text-chart-success">
             {$encryptedCount}/{$vaultsStore.length}
           </p>

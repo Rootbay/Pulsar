@@ -9,6 +9,7 @@
   import { Select, SelectContent, SelectItem, SelectTrigger } from '$lib/components/ui/select';
   import { Switch } from '$lib/components/ui/switch';
   import { Smartphone, Key, Lock, Settings } from '@lucide/svelte';
+  import { currentLocale } from '$lib/i18n';
 
   type BooleanSettingKey = {
     [K in keyof GeneralSettings]: GeneralSettings[K] extends boolean ? K : never;
@@ -17,6 +18,9 @@
   type SelectSettingKey = Exclude<keyof GeneralSettings, BooleanSettingKey>;
 
   let currentGeneralSettings: GeneralSettings;
+  let locale: 'en' | 'sv' = 'en';
+  $: locale = $currentLocale;
+  const t = (en: string, sv: string) => (locale === 'sv' ? sv : en);
 
   const unsubscribe = generalSettings.subscribe((value) => {
     currentGeneralSettings = value;
@@ -30,11 +34,8 @@
 
   const selectOptions: Record<SelectSettingKey, { value: string; label: string }[]> = {
     appLanguage: [
-      { value: '8 characters', label: '8 characters' },
-      { value: '12 characters', label: '12 characters' },
-      { value: '16 characters', label: '16 characters' },
-      { value: '20 characters', label: '20 characters' },
-      { value: '32 characters', label: '32 characters' }
+      { value: 'en', label: 'English' },
+      { value: 'sv', label: 'Svenska' }
     ],
     defaultVaultOnStartup: [
       { value: '8 characters', label: '8 characters' },
@@ -110,35 +111,43 @@
           <Settings size={20} color="currentColor" aria-hidden="true" />
         </div>
         <div>
-          <CardTitle>General Settings</CardTitle>
-          <CardDescription>Manage default language, startup behaviour, and layout.</CardDescription>
+          <CardTitle>{t('General Settings', 'Allmänna inställningar')}</CardTitle>
+          <CardDescription>
+            {t('Manage default language, startup behaviour, and layout.', 'Hantera standardspråk, uppstart och layout.')}
+          </CardDescription>
         </div>
       </div>
     </CardHeader>
     <CardContent class="flex flex-col gap-8 pt-4">
       <div class="grid gap-6 md:grid-cols-2">
         <div class="space-y-2">
-          <Label class="text-sm font-medium text-foreground">App Language</Label>
-          <Select
-            type="single"
-            value={currentGeneralSettings.appLanguage}
-            onValueChange={(value) => updateSetting('appLanguage', value)}
-          >
-            <SelectTrigger aria-label="Select app language" class="w-full">
-              <span data-slot="select-value" class="truncate">
-                {getOptionLabel('appLanguage')}
-              </span>
-            </SelectTrigger>
-            <SelectContent>
-              {#each selectOptions.appLanguage as option (option.value)}
-                <SelectItem value={option.value}>{option.label}</SelectItem>
-              {/each}
-            </SelectContent>
-          </Select>
+          <Label class="text-sm font-medium text-foreground">
+            {t('App Language', 'Språk')}
+          </Label>
+          {#each [locale] as l (l)}
+            <Select
+              type="single"
+              value={currentGeneralSettings.appLanguage}
+              onValueChange={(value) => updateSetting('appLanguage', value)}
+            >
+              <SelectTrigger aria-label="Select app language" class="w-full">
+                <span data-slot="select-value" class="truncate">
+                  {getOptionLabel('appLanguage')}
+                </span>
+              </SelectTrigger>
+              <SelectContent>
+                {#each selectOptions.appLanguage as option (option.value)}
+                  <SelectItem value={option.value}>{option.label}</SelectItem>
+                {/each}
+              </SelectContent>
+            </Select>
+          {/each}
         </div>
 
         <div class="space-y-2">
-          <Label class="text-sm font-medium text-foreground">Default Vault on Startup</Label>
+          <Label class="text-sm font-medium text-foreground">
+            {t('Default Vault on Startup', 'Standardvalv vid uppstart')}
+          </Label>
           <Select
             type="single"
             value={currentGeneralSettings.defaultVaultOnStartup}
@@ -162,8 +171,20 @@
         {#each toggleSettings as toggleSetting (toggleSetting.key)}
           <div class="flex items-center justify-between gap-4 rounded-lg border border-border/60 bg-muted/20 px-4 py-3">
             <div class="space-y-1">
-              <p class="text-sm font-medium text-foreground">{toggleSetting.title}</p>
-              <p class="text-sm text-muted-foreground">{toggleSetting.description}</p>
+              <p class="text-sm font-medium text-foreground">
+                {locale === 'sv' && toggleSetting.key === 'startOnSystemBoot'
+                  ? 'Starta med systemet'
+                  : locale === 'sv' && toggleSetting.key === 'showInSystemTray'
+                    ? 'Visa i systemfältet'
+                    : toggleSetting.title}
+              </p>
+              <p class="text-sm text-muted-foreground">
+                {locale === 'sv' && toggleSetting.key === 'startOnSystemBoot'
+                  ? 'Öppna Pulsar automatiskt när datorn startar.'
+                  : locale === 'sv' && toggleSetting.key === 'showInSystemTray'
+                    ? 'Håll appen tillgänglig från systemfältet.'
+                    : toggleSetting.description}
+              </p>
             </div>
             <Switch
               checked={currentGeneralSettings[toggleSetting.key]}
@@ -175,7 +196,9 @@
       </div>
 
       <div class="space-y-2">
-        <Label class="text-sm font-medium text-foreground">Default View on Open</Label>
+        <Label class="text-sm font-medium text-foreground">
+          {t('Default View on Open', 'Standardvy vid öppning')}
+        </Label>
         <Select
           type="single"
           value={currentGeneralSettings.defaultViewOnOpen}
@@ -203,8 +226,12 @@
           <Lock size={20} color="currentColor" aria-hidden="true" />
         </div>
         <div>
-          <CardTitle>Two-Factor Authentication</CardTitle>
-          <CardDescription>Add extra layers of protection to vault access.</CardDescription>
+          <CardTitle>
+            {t('Two-Factor Authentication', 'Tvåfaktorsautentisering')}
+          </CardTitle>
+          <CardDescription>
+            {t('Add extra layers of protection to vault access.', 'Lägg till extra skyddslager för valvåtkomst.')}
+          </CardDescription>
         </div>
       </div>
       <Switch
@@ -217,8 +244,12 @@
       {#each authenticationMethods as method (method.key)}
         <div class="flex items-center justify-between gap-4 rounded-lg border border-border/60 bg-muted/20 px-4 py-3">
           <div class="space-y-1">
-            <p class="text-sm font-medium text-foreground">{method.title}</p>
-            <p class="text-sm text-muted-foreground">{method.description}</p>
+            <p class="text-sm font-medium text-foreground">
+              {t('TOTP (Time-based)', 'TOTP (tidsbaserad)')}
+            </p>
+            <p class="text-sm text-muted-foreground">
+              {t('Built-in authenticator support.', 'Inbyggt stöd för autentiserare.')}
+            </p>
           </div>
           <Switch
             checked={currentGeneralSettings[method.key]}
@@ -240,17 +271,24 @@
           <Key size={20} aria-hidden="true" />
         </div>
         <div>
-          <CardTitle>Keyboard Shortcuts</CardTitle>
-          <CardDescription>Customize shortcuts for frequently used actions.</CardDescription>
+          <CardTitle>
+            {t('Keyboard Shortcuts', 'Tangentbordsgenvägar')}
+          </CardTitle>
+          <CardDescription>
+            {t('Customize shortcuts for frequently used actions.', 'Anpassa genvägar för vanliga åtgärder.')}
+          </CardDescription>
         </div>
       </div>
       <Button variant="outline" size="sm" class="mt-3 sm:mt-0" onclick={() => (showKeyboardShortcutsPopup = true)}>
-        Configure Shortcuts
+        {t('Configure Shortcuts', 'Konfigurera genvägar')}
       </Button>
     </CardHeader>
     <CardContent class="pt-4">
       <p class="text-sm text-muted-foreground">
-        Personalize key combinations to match your workflow and speed up navigation.
+        {t(
+          'Personalize key combinations to match your workflow and speed up navigation.',
+          'Anpassa tangentkombinationer efter ditt arbetssätt och snabba upp navigeringen.'
+        )}
       </p>
     </CardContent>
   </Card>

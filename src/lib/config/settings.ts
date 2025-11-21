@@ -95,7 +95,7 @@ export interface GeneralSettings {
 }
 
 export const defaultGeneralSettings: GeneralSettings = {
-    appLanguage: '16 characters',
+    appLanguage: 'en',
     defaultVaultOnStartup: '16 characters',
     startOnSystemBoot: true,
     showInSystemTray: true,

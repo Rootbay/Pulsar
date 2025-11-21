@@ -3,11 +3,14 @@
   import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '$lib/components/ui/card';
   import { Switch } from '$lib/components/ui/switch';
   import { BadgeCheck, CodeXml, FileText, FolderOpen, LifeBuoy, RefreshCw, ShieldQuestionMark, CloudUpload } from '@lucide/svelte';
+  import { currentLocale } from '$lib/i18n';
 
   type UpdateStatus = 'idle' | 'checking' | 'uptoDate';
   type IconComponent = typeof FileText;
 
   let updateStatus: UpdateStatus = 'idle';
+  const t = (locale: 'en' | 'sv', en: string, sv: string) => (locale === 'sv' ? sv : en);
+  $: locale = $currentLocale as 'en' | 'sv';
   let uploadDiagnostics = false;
 
   const versionDetails = [
@@ -51,8 +54,12 @@
         <BadgeCheck class="h-5 w-5" aria-hidden="true" />
       </div>
       <div>
-        <CardTitle>Application Information</CardTitle>
-        <CardDescription>Version details and update status.</CardDescription>
+        <CardTitle>
+          {t(locale, 'Application Information', 'Information om applikationen')}
+        </CardTitle>
+        <CardDescription>
+          {t(locale, 'Version details and update status.', 'Versionsinformation och uppdateringsstatus.')}
+        </CardDescription>
       </div>
     </CardHeader>
     <CardContent class="flex flex-col gap-6 pt-4">
@@ -67,19 +74,23 @@
 
       <div class="flex flex-col gap-4 rounded-lg border border-dashed border-border/70 bg-muted/20 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
         <div class="space-y-1">
-          <h3 class="text-sm font-semibold text-foreground">Check for Updates</h3>
-          <p class="text-sm text-muted-foreground">Check if a newer version is available</p>
+          <h3 class="text-sm font-semibold text-foreground">
+            {t(locale, 'Check for Updates', 'Sök efter uppdateringar')}
+          </h3>
+          <p class="text-sm text-muted-foreground">
+            {t(locale, 'Check if a newer version is available', 'Kontrollera om en nyare version finns tillgänglig')}
+          </p>
         </div>
         <Button class="shrink-0" onclick={checkForUpdates} disabled={updateStatus !== 'idle'}>
           {#if updateStatus === 'idle'}
             <RefreshCw class="mr-2 h-4 w-4" aria-hidden="true" />
-            Check Now
+            {t(locale, 'Check Now', 'Sök nu')}
           {:else if updateStatus === 'checking'}
             <RefreshCw class="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
-            Checking...
+            {t(locale, 'Checking...', 'Söker...')}
           {:else}
             <BadgeCheck class="mr-2 h-4 w-4 text-chart-success" aria-hidden="true" />
-            Up to date
+            {t(locale, 'Up to date', 'Uppdaterad')}
           {/if}
         </Button>
       </div>
@@ -92,8 +103,12 @@
         <ShieldQuestionMark class="h-5 w-5" aria-hidden="true" />
       </div>
       <div>
-        <CardTitle>Documentation & Support</CardTitle>
-        <CardDescription>Find helpful resources and get in touch.</CardDescription>
+        <CardTitle>
+          {t(locale, 'Documentation & Support', 'Dokumentation & support')}
+        </CardTitle>
+        <CardDescription>
+          {t(locale, 'Find helpful resources and get in touch.', 'Hitta hjälpresurser och kontakta oss.')}
+        </CardDescription>
       </div>
     </CardHeader>
     <CardContent class="pt-4">
@@ -106,7 +121,13 @@
             onclick={action}
           >
             <Icon class="h-4 w-4" aria-hidden="true" />
-            {label}
+            {label === 'License'
+              ? t(locale, 'License', 'Licens')
+              : label === 'Security Whitepaper'
+                ? t(locale, 'Security Whitepaper', 'Säkerhetswhitepaper')
+                : label === 'Contact Support'
+                  ? t(locale, 'Contact Support', 'Kontakta support')
+                  : t(locale, 'Source Code', 'Källkod')}
           </Button>
         {/each}
       </div>
@@ -119,26 +140,38 @@
         <FolderOpen class="h-5 w-5" aria-hidden="true" />
       </div>
       <div>
-        <CardTitle>Diagnostic Tools</CardTitle>
-        <CardDescription>Tools for troubleshooting and support.</CardDescription>
+        <CardTitle>
+          {t(locale, 'Diagnostic Tools', 'Diagnostikverktyg')}
+        </CardTitle>
+        <CardDescription>
+          {t(locale, 'Tools for troubleshooting and support.', 'Verktyg för felsökning och support.')}
+        </CardDescription>
       </div>
     </CardHeader>
     <CardContent class="flex flex-col gap-4 pt-4">
       <div class="flex flex-col gap-2 rounded-lg border border-border/60 bg-card/40 p-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h3 class="text-sm font-semibold text-foreground">Open Logs Folder</h3>
-          <p class="text-sm text-muted-foreground">Access application log files</p>
+          <h3 class="text-sm font-semibold text-foreground">
+            {t(locale, 'Open Logs Folder', 'Öppna loggmapp')}
+          </h3>
+          <p class="text-sm text-muted-foreground">
+            {t(locale, 'Access application log files', 'Öppna programmets loggfiler')}
+          </p>
         </div>
         <Button type="button" variant="outline" class="gap-2" onclick={() => openLink('Logs Folder')}>
           <FolderOpen class="h-4 w-4" aria-hidden="true" />
-          Open
+          {t(locale, 'Open', 'Öppna')}
         </Button>
       </div>
 
       <div class="flex flex-col gap-2 rounded-lg border border-border/60 bg-card/40 p-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h3 class="text-sm font-semibold text-foreground">Upload Diagnostics to Support</h3>
-          <p class="text-sm text-muted-foreground">Help us identify and fix issues faster</p>
+          <h3 class="text-sm font-semibold text-foreground">
+            {t(locale, 'Upload Diagnostics to Support', 'Ladda upp diagnostik till supporten')}
+          </h3>
+          <p class="text-sm text-muted-foreground">
+            {t(locale, 'Help us identify and fix issues faster', 'Hjälp oss hitta och åtgärda problem snabbare')}
+          </p>
         </div>
         <div class="flex items-center gap-3">
           <CloudUpload class="h-4 w-4 text-muted-foreground" aria-hidden="true" />

@@ -16,6 +16,7 @@
   import { clipboardSettings } from '$lib/stores/clipboard';
   import { cn } from '$lib/utils';
   import type { ClipboardSettings } from '$lib/config/settings';
+  import { currentLocale } from '$lib/i18n';
   import {
     clearClipboardNow,
     clipboardIntegrationState,
@@ -32,6 +33,9 @@
     Trash2
   } from '@lucide/svelte';
   import { toast } from 'svelte-sonner';
+
+  const t = (locale: 'en' | 'sv', en: string, sv: string) => (locale === 'sv' ? sv : en);
+  $: locale = $currentLocale as 'en' | 'sv';
 
   let clipboardIntegration = false;
   let clearAfterDuration = 12;
@@ -135,15 +139,21 @@
         <ClipboardCheck class="h-5 w-5" aria-hidden="true" />
       </div>
       <div>
-        <CardTitle>Core Integration</CardTitle>
-        <CardDescription>Configure basic clipboard functionality.</CardDescription>
+        <CardTitle>{t(locale, 'Core Integration', 'Grundläggande integration')}</CardTitle>
+        <CardDescription>
+          {t(locale, 'Configure basic clipboard functionality.', 'Ställ in grundläggande urklippsfunktioner.')}
+        </CardDescription>
       </div>
     </CardHeader>
     <CardContent class="space-y-6">
       <div class="flex items-start justify-between gap-4">
         <div class="space-y-1">
-          <p class="text-sm font-medium text-foreground">Clipboard integration</p>
-          <p class="text-sm text-muted-foreground">Enable automatic clipboard functionality.</p>
+          <p class="text-sm font-medium text-foreground">
+            {t(locale, 'Clipboard integration', 'Urklippsintegration')}
+          </p>
+          <p class="text-sm text-muted-foreground">
+            {t(locale, 'Enable automatic clipboard functionality.', 'Aktivera automatisk hantering av urklipp.')}
+          </p>
         </div>
         <Switch
           checked={clipboardIntegration}
@@ -154,7 +164,9 @@
       </div>
 
       {#if !$clipboardIntegrationState.integrationAvailable}
-        <p class="text-sm text-destructive">Clipboard integration is currently unavailable.</p>
+        <p class="text-sm text-destructive">
+          {t(locale, 'Clipboard integration is currently unavailable.', 'Urklippsintegration är för närvarande inte tillgänglig.')}
+        </p>
       {/if}
 
       {#if $clipboardIntegrationState.lastError}
@@ -214,15 +226,19 @@
         <Shield class="h-5 w-5" aria-hidden="true" />
       </div>
       <div>
-        <CardTitle>Access control</CardTitle>
-        <CardDescription>Fine-tune clipboard safety and permissions.</CardDescription>
+        <CardTitle>{t(locale, 'Access control', 'Åtkomstkontroll')}</CardTitle>
+        <CardDescription>
+          {t(locale, 'Fine-tune clipboard safety and permissions.', 'Finjustera säkerhet och behörigheter för urklipp.')}
+        </CardDescription>
       </div>
     </CardHeader>
     <CardContent class="space-y-6">
       <div class="flex items-start justify-between gap-4">
         <div class="space-y-1">
           <div class="flex items-center gap-2">
-            <p class="text-sm font-medium text-foreground">Block clipboard history</p>
+            <p class="text-sm font-medium text-foreground">
+              {t(locale, 'Block clipboard history', 'Blockera urklippshistorik')}
+            </p>
             <Badge
               variant={$clipboardIntegrationState.historyBlockingActive ? 'secondary' : 'outline'}
               class="text-xs"
@@ -230,7 +246,13 @@
               {$clipboardIntegrationState.historyBlockingActive ? 'Active' : 'Inactive'}
             </Badge>
           </div>
-          <p class="text-sm text-muted-foreground">Prevent system clipboard history from storing entries.</p>
+          <p class="text-sm text-muted-foreground">
+            {t(
+              locale,
+              'Prevent system clipboard history from storing entries.',
+              'Förhindra att systemets urklippshistorik sparar poster.'
+            )}
+          </p>
         </div>
         <Switch
           checked={blockHistory}
@@ -246,14 +268,18 @@
 
       {#if !$clipboardIntegrationState.historyBlockingSupported}
         <p class="pl-11 text-xs text-muted-foreground">
-          Clipboard history blocking is not supported on this platform.
+          {t(locale, 'Clipboard history blocking is not supported on this platform.', 'Blockering av urklippshistorik stöds inte på denna plattform.')}
         </p>
       {/if}
 
       <div class="flex items-start justify-between gap-4">
         <div class="space-y-1">
-          <p class="text-sm font-medium text-foreground">Only allow on unlocked session</p>
-          <p class="text-sm text-muted-foreground">Disable clipboard export when Pulsar is locked.</p>
+          <p class="text-sm font-medium text-foreground">
+            {t(locale, 'Only allow on unlocked session', 'Tillåt endast när Pulsar är upplåst')}
+          </p>
+          <p class="text-sm text-muted-foreground">
+            {t(locale, 'Disable clipboard export when Pulsar is locked.', 'Inaktivera urklippsexport när Pulsar är låst.')}
+          </p>
         </div>
         <Switch
           checked={onlyUnlocked}
@@ -269,8 +295,12 @@
             <ClipboardList class="size-5" aria-hidden="true" />
           </div>
           <div class="space-y-1">
-            <p class="text-sm font-medium text-foreground">Per-item clipboard permissions</p>
-            <p class="text-sm text-muted-foreground">Choose how Pulsar prompts when copying credentials.</p>
+            <p class="text-sm font-medium text-foreground">
+              {t(locale, 'Per-item clipboard permissions', 'Behörigheter per post för urklipp')}
+            </p>
+            <p class="text-sm text-muted-foreground">
+              {t(locale, 'Choose how Pulsar prompts when copying credentials.', 'Välj hur Pulsar frågar när uppgifter kopieras.')}
+            </p>
           </div>
         </div>
 
@@ -287,7 +317,7 @@
                 await handleRadioChange();
               }}
             >
-              Allow once (ask each time)
+              {t(locale, 'Allow once (ask each time)', 'Tillåt en gång (fråga varje gång)')}
             </Button>
             <Button
               type="button"
@@ -300,7 +330,7 @@
                 await handleRadioChange();
               }}
             >
-              Always allow (remember choice)
+              {t(locale, 'Always allow (remember choice)', 'Tillåt alltid (kom ihåg valet)')}
             </Button>
           </div>
         </div>
@@ -310,8 +340,12 @@
 
   <Card class="border-border/60 bg-card/80 backdrop-blur supports-[backdrop-filter]:bg-card/70">
     <CardHeader>
-      <CardTitle>Actions & monitoring</CardTitle>
-      <CardDescription>Manual controls and local activity tracking.</CardDescription>
+      <CardTitle>
+        {t(locale, 'Actions & monitoring', 'Åtgärder & övervakning')}
+      </CardTitle>
+      <CardDescription>
+        {t(locale, 'Manual controls and local activity tracking.', 'Manuella kontroller och lokal aktivitetslogg.')}
+      </CardDescription>
     </CardHeader>
     <CardContent class="space-y-6">
       <div class="flex flex-wrap items-center gap-3">
@@ -323,11 +357,13 @@
           on:click={handleClearClipboard}
         >
           <Trash2 class="size-4" />
-          Clear clipboard now
+          {t(locale, 'Clear clipboard now', 'Töm urklipp nu')}
         </Button>
         <Button type="button" variant="outline" class="flex items-center gap-2" on:click={toggleAuditLog}>
           <History class="size-4" />
-          {showAuditLog ? 'Hide audit log' : 'View audit log'}
+          {showAuditLog
+            ? t(locale, 'Hide audit log', 'Dölj aktivitetslogg')
+            : t(locale, 'View audit log', 'Visa aktivitetslogg')}
         </Button>
       </div>
 
@@ -335,8 +371,12 @@
         <div id="auditLogSection" class="space-y-4" transition:slide>
           <Separator class="bg-border/60" />
           <div>
-            <h4 class="text-sm font-semibold text-foreground">Recent clipboard activity</h4>
-            <p class="text-sm text-muted-foreground">Local activity log (not synced)</p>
+            <h4 class="text-sm font-semibold text-foreground">
+              {t(locale, 'Recent clipboard activity', 'Senaste urklippsaktivitet')}
+            </h4>
+            <p class="text-sm text-muted-foreground">
+              {t(locale, 'Local activity log (not synced)', 'Lokal aktivitetslogg (inte synkad)')}
+            </p>
           </div>
           <div class="max-h-64 space-y-2 overflow-y-auto pr-1">
             {#each auditLogEntries as entry (entry.id)}

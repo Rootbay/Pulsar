@@ -49,12 +49,23 @@
     notifyVaultRefresh
   } from '$lib/utils/backup';
   import type { ImportVaultProgressStage } from '$lib/utils/backup';
+  import { currentLocale } from '$lib/i18n';
+
+  const t = (locale: 'en' | 'sv', en: string, sv: string) => (locale === 'sv' ? sv : en);
+  $: locale = $currentLocale as 'en' | 'sv';
 
   const frequencies = [
     { value: 'daily', label: 'Daily (Default)' },
     { value: 'weekly', label: 'Weekly' },
     { value: 'custom', label: 'Custom interval' }
   ];
+
+  function getFrequencyLabel(value: string, locale: 'en' | 'sv'): string {
+    if (value === 'daily') return t(locale, 'Daily (Default)', 'Dagligen (standard)');
+    if (value === 'weekly') return t(locale, 'Weekly', 'Veckovis');
+    if (value === 'custom') return t(locale, 'Custom interval', 'Anpassat intervall');
+    return value;
+  }
 
   const syncModes = [
     {
@@ -165,9 +176,13 @@
 
   async function handleManualBackup() {
     openModal({
-      title: 'Create manual backup?',
-      description: 'This creates a fresh encrypted backup of your vault using the active settings.',
-      confirmLabel: 'Export backup',
+      title: t(locale, 'Create manual backup?', 'Skapa manuell säkerhetskopia?'),
+      description: t(
+        locale,
+        'This creates a fresh encrypted backup of your vault using the active settings.',
+        'Detta skapar en ny krypterad säkerhetskopia av ditt valv baserat på aktuella inställningar.'
+      ),
+      confirmLabel: t(locale, 'Export backup', 'Exportera säkerhetskopia'),
       onConfirm: async (passphrase) => {
         const message = await exportVaultBackup(passphrase);
         feedback = { type: 'success', message };
@@ -177,9 +192,13 @@
 
   async function handleExportEncrypted() {
     openModal({
-      title: 'Export encrypted data?',
-      description: 'Export your vault in encrypted form. Keep the generated file secure.',
-      confirmLabel: 'Export encrypted',
+      title: t(locale, 'Export encrypted data?', 'Exportera krypterad data?'),
+      description: t(
+        locale,
+        'Export your vault in encrypted form. Keep the generated file secure.',
+        'Exportera ditt valv i krypterad form. Förvara den skapade filen säkert.'
+      ),
+      confirmLabel: t(locale, 'Export encrypted', 'Exportera krypterat'),
       onConfirm: async (passphrase) => {
         const message = await exportVaultBackup(passphrase);
         feedback = { type: 'success', message };
@@ -189,10 +208,13 @@
 
   async function handleExportPlaintext() {
     openModal({
-      title: 'Export plaintext data?',
-      description:
+      title: t(locale, 'Export plaintext data?', 'Exportera okrypterad data?'),
+      description: t(
+        locale,
         'WARNING: This exports all vault contents without encryption. Only proceed on trusted devices.',
-      confirmLabel: 'Export plaintext',
+        'VARNING: Detta exporterar allt innehåll i valvet utan kryptering. Fortsätt bara på betrodda enheter.'
+      ),
+      confirmLabel: t(locale, 'Export plaintext', 'Exportera okrypterat'),
       danger: true,
       onConfirm: async (passphrase) => {
         const message = await exportVaultBackup(passphrase, { plaintext: true });
@@ -203,10 +225,13 @@
 
   async function handleImport() {
     openModal({
-      title: 'Start import process?',
-      description:
+      title: t(locale, 'Start import process?', 'Starta importprocess?'),
+      description: t(
+        locale,
         'Select a previous Pulsar backup and provide its passphrase to restore your vault contents.',
-      confirmLabel: 'Import backup',
+        'Välj en tidigare Pulsar-säkerhetskopia och ange dess lösenfras för att återställa ditt valv.'
+      ),
+      confirmLabel: t(locale, 'Import backup', 'Importera säkerhetskopia'),
       onConfirm: async (passphrase) => {
         const snapshot = await importVaultBackup(passphrase, {
           onProgress: (stage) => {
@@ -264,7 +289,11 @@
       variant={feedback.type === 'error' ? 'destructive' : 'default'}
       class="border-border/60 bg-card/80 backdrop-blur supports-[backdrop-filter]:bg-card/70"
     >
-      <AlertTitle>{feedback.type === 'error' ? 'Something went wrong' : 'Action completed'}</AlertTitle>
+      <AlertTitle>
+        {feedback.type === 'error'
+          ? t(locale, 'Something went wrong', 'Något gick fel')
+          : t(locale, 'Action completed', 'Åtgärd slutförd')}
+      </AlertTitle>
       <AlertDescription>{feedback.message}</AlertDescription>
     </Alert>
   {/if}
@@ -276,12 +305,14 @@
           <Archive class="size-5" aria-hidden="true" />
         </div>
         <div>
-          <CardTitle>Backups</CardTitle>
-          <CardDescription>Manage automated and on-demand backups for your vault.</CardDescription>
+          <CardTitle>{t(locale, 'Backups', 'Säkerhetskopior')}</CardTitle>
+          <CardDescription>
+            {t(locale, 'Manage automated and on-demand backups for your vault.', 'Hantera automatiska och manuella säkerhetskopior av ditt valv.')}
+          </CardDescription>
         </div>
       </div>
       <Badge variant="secondary" class="w-fit">
-        Retaining {$state.retentionCount} copies
+        {t(locale, 'Retaining', 'Behåller')} {$state.retentionCount} {t(locale, 'copies', 'kopior')}
       </Badge>
     </CardHeader>
 
@@ -289,9 +320,15 @@
       <div class="space-y-4">
         <div class="flex items-center justify-between gap-3 rounded-xl border border-border/60 bg-muted/10 px-4 py-3">
           <div>
-            <p class="text-sm font-medium text-foreground">Automatic backups</p>
+            <p class="text-sm font-medium text-foreground">
+              {t(locale, 'Automatic backups', 'Automatiska säkerhetskopior')}
+            </p>
             <p class="text-xs text-muted-foreground">
-              Create backups at regular intervals based on your chosen schedule.
+              {t(
+                locale,
+                'Create backups at regular intervals based on your chosen schedule.',
+                'Skapa säkerhetskopior med jämna mellanrum enligt ditt schema.'
+              )}
             </p>
           </div>
           <Switch
@@ -303,23 +340,30 @@
 
         <div class="grid gap-4 md:grid-cols-2">
           <div class="space-y-2">
-            <Label class="text-sm font-medium text-foreground">Backup frequency</Label>
-            <Select type="single" value={$state.backupFrequency} onValueChange={updateFrequency}>
-              <SelectTrigger aria-label="Select backup frequency" class="w-full">
-                <span data-slot="select-value" class="truncate text-sm">
-                  {frequencies.find((item) => item.value === $state.backupFrequency)?.label ?? 'Select frequency'}
-                </span>
-              </SelectTrigger>
-              <SelectContent>
-                {#each frequencies as option}
-                  <SelectItem value={option.value}>{option.label}</SelectItem>
-                {/each}
-              </SelectContent>
-            </Select>
+            <Label class="text-sm font-medium text-foreground">
+              {t(locale, 'Backup frequency', 'Frekvens för säkerhetskopior')}
+            </Label>
+            {@key locale}
+              <Select type="single" value={$state.backupFrequency} onValueChange={updateFrequency}>
+                <SelectTrigger aria-label="Select backup frequency" class="w-full">
+                  <span data-slot="select-value" class="truncate text-sm">
+                    {getFrequencyLabel($state.backupFrequency, locale) ??
+                      t(locale, 'Select frequency', 'Välj frekvens')}
+                  </span>
+                </SelectTrigger>
+                <SelectContent>
+                  {#each frequencies as option}
+                    <SelectItem value={option.value}>{getFrequencyLabel(option.value, locale)}</SelectItem>
+                  {/each}
+                </SelectContent>
+              </Select>
+            {/key}
           </div>
 
           <div class="space-y-2">
-            <Label for="retention-count" class="text-sm font-medium text-foreground">Retention count</Label>
+            <Label for="retention-count" class="text-sm font-medium text-foreground">
+              {t(locale, 'Retention count', 'Antal kopior')}
+            </Label>
             <Input
               id="retention-count"
               type="number"
@@ -328,7 +372,9 @@
               value={$state.retentionCount}
               oninput={updateRetention}
             />
-            <p class="text-xs text-muted-foreground">Number of backup versions to keep on disk.</p>
+            <p class="text-xs text-muted-foreground">
+              {t(locale, 'Number of backup versions to keep on disk.', 'Antal säkerhetskopior som ska sparas på disk.')}
+            </p>
           </div>
         </div>
       </div>
@@ -336,11 +382,11 @@
       <div class="flex flex-wrap gap-2">
         <Button type="button" class="gap-2" onclick={handleManualBackup}>
           <Download class="size-4" aria-hidden="true" />
-          Create manual backup
+          {t(locale, 'Create manual backup', 'Skapa manuell säkerhetskopia')}
         </Button>
         <Button type="button" variant="outline" class="gap-2" onclick={handleImport}>
           <CloudUpload class="size-4" aria-hidden="true" />
-          Import data
+          {t(locale, 'Import data', 'Importera data')}
         </Button>
       </div>
     </CardContent>
@@ -352,28 +398,36 @@
         <Archive class="size-5" aria-hidden="true" />
       </div>
       <div>
-        <CardTitle>Export options</CardTitle>
-        <CardDescription>Generate encrypted or plaintext exports of your vault.</CardDescription>
+        <CardTitle>{t(locale, 'Export options', 'Exportalternativ')}</CardTitle>
+        <CardDescription>
+          {t(locale, 'Generate encrypted or plaintext exports of your vault.', 'Skapa krypterade eller okrypterade exporter av ditt valv.')}
+        </CardDescription>
       </div>
     </CardHeader>
     <CardContent class="space-y-4">
       <div class="grid gap-4 md:grid-cols-2">
         <div class="space-y-2 rounded-xl border border-border/60 bg-muted/10 p-4">
-          <p class="text-sm font-semibold text-foreground">Encrypted export</p>
-          <p class="text-xs text-muted-foreground">Secured with your export passphrase.</p>
+          <p class="text-sm font-semibold text-foreground">
+            {t(locale, 'Encrypted export', 'Krypterad export')}
+          </p>
+          <p class="text-xs text-muted-foreground">
+            {t(locale, 'Secured with your export passphrase.', 'Skyddad med din exportlösenfras.')}
+          </p>
           <Button type="button" class="gap-2" onclick={handleExportEncrypted}>
             <ShieldCheck class="size-4" aria-hidden="true" />
-            Export encrypted
+            {t(locale, 'Export encrypted', 'Exportera krypterat')}
           </Button>
         </div>
 
         <div class="space-y-2 rounded-xl border border-border/60 bg-muted/10 p-4">
           <div class="flex items-center gap-2">
             <ShieldAlert class="size-4 text-destructive" aria-hidden="true" />
-            <p class="text-sm font-semibold text-foreground">Plaintext export</p>
+            <p class="text-sm font-semibold text-foreground">
+              {t(locale, 'Plaintext export', 'Oskyddad export')}
+            </p>
           </div>
           <p class="text-xs text-muted-foreground">
-            Only use on trusted devices. Sensitive data remains unprotected.
+            {t(locale, 'Only use on trusted devices. Sensitive data remains unprotected.', 'Använd endast på betrodda enheter. Känslig data förblir oskyddad.')}
           </p>
           <div class="flex items-center justify-between gap-2">
             <Switch
@@ -389,7 +443,7 @@
               disabled={!$state.enablePlaintextExport}
             >
               <Shield class="size-4" aria-hidden="true" />
-              Export plaintext
+              {t(locale, 'Export plaintext', 'Exportera okrypterat')}
             </Button>
           </div>
         </div>
@@ -403,8 +457,10 @@
         <Cloud class="size-5" aria-hidden="true" />
       </div>
       <div>
-        <CardTitle>Sync</CardTitle>
-        <CardDescription>Configure cloud providers to replicate backups across devices.</CardDescription>
+        <CardTitle>{t(locale, 'Sync', 'Synkronisering')}</CardTitle>
+        <CardDescription>
+          {t(locale, 'Configure cloud providers to replicate backups across devices.', 'Konfigurera molnleverantörer för att replikera säkerhetskopior mellan enheter.')}
+        </CardDescription>
       </div>
     </CardHeader>
     <CardContent class="space-y-6">
@@ -423,8 +479,20 @@
           >
             <mode.icon class="size-5" aria-hidden="true" />
             <div>
-              <p class="text-sm font-semibold text-foreground">{mode.title}</p>
-              <p class="text-xs text-muted-foreground">{mode.description}</p>
+              <p class="text-sm font-semibold text-foreground">
+                {mode.id === 'off'
+                  ? t(locale, 'Turned off', 'Avstängd')
+                  : mode.id === 'manual'
+                    ? t(locale, 'Manual sync', 'Manuell synkronisering')
+                    : t(locale, 'Automatic sync', 'Automatisk synkronisering')}
+              </p>
+              <p class="text-xs text-muted-foreground">
+                {mode.id === 'off'
+                  ? t(locale, 'Backups stay local to this device.', 'Säkerhetskopior stannar lokalt på denna enhet.')
+                  : mode.id === 'manual'
+                    ? t(locale, 'Trigger cloud sync on demand.', 'Starta molnsynk vid behov.')
+                    : t(locale, 'Keep cloud copy in sync automatically.', 'Håll molnkopian synkroniserad automatiskt.')}
+              </p>
             </div>
           </button>
         {/each}
@@ -448,7 +516,15 @@
             <provider.icon class="size-5" aria-hidden="true" />
             <div>
               <p class="text-sm font-semibold text-foreground">{provider.name}</p>
-              <p class="text-xs text-muted-foreground">{provider.description}</p>
+              <p class="text-xs text-muted-foreground">
+                {provider.id === 'webdav'
+                  ? t(locale, provider.description, 'Anslut till valfri WebDAV-kompatibel lagring.')
+                  : provider.id === 'dropbox'
+                    ? t(locale, provider.description, 'Använd Dropbox som mål för säkerhetskopior.')
+                    : provider.id === 's3'
+                      ? t(locale, provider.description, 'Synkronisera säkerhetskopior till din S3-bucket.')
+                      : t(locale, provider.description, 'Ange egna inloggningsuppgifter för en annan leverantör.')}
+              </p>
             </div>
           </button>
         {/each}
@@ -476,7 +552,9 @@
 
       {#if modalRequiresPassphrase}
         <div class="mt-6 space-y-2">
-          <Label for="backup-passphrase" class="text-sm font-medium text-foreground">Backup passphrase</Label>
+          <Label for="backup-passphrase" class="text-sm font-medium text-foreground">
+            {t(locale, 'Backup passphrase', 'Lösenfras för säkerhetskopia')}
+          </Label>
           <Input
             id="backup-passphrase"
             type="password"
@@ -488,7 +566,11 @@
             }}
           />
           <p class="text-xs text-muted-foreground">
-            This passphrase encrypts or decrypts your vault backup. Use the same passphrase you will remember later.
+            {t(
+              locale,
+              'This passphrase encrypts or decrypts your vault backup. Use the same passphrase you will remember later.',
+              'Denna lösenfras krypterar eller dekrypterar din säkerhetskopia. Använd en lösenfras du kommer ihåg.'
+            )}
           </p>
         </div>
       {/if}
@@ -505,7 +587,9 @@
       {/if}
 
       <div class="mt-6 flex justify-end gap-2">
-        <Button type="button" variant="ghost" onclick={closeModal}>Cancel</Button>
+        <Button type="button" variant="ghost" onclick={closeModal}>
+          {t(locale, 'Cancel', 'Avbryt')}
+        </Button>
         <Button
           type="button"
           variant={modalDanger ? 'destructive' : 'default'}

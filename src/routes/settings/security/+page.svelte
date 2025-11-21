@@ -17,6 +17,7 @@
   import { Badge } from '$lib/components/ui/badge';
   import { Alert, AlertDescription, AlertTitle } from '$lib/components/ui/alert';
   import { cn } from '$lib/utils';
+  import { currentLocale } from '$lib/i18n';
   import {
     Lock,
     RefreshCw,
@@ -39,6 +40,9 @@
     Link2
   } from '@lucide/svelte';
   
+  const t = (locale: 'en' | 'sv', en: string, sv: string) => (locale === 'sv' ? sv : en);
+  $: locale = $currentLocale as 'en' | 'sv';
+
   type BooleanSettingKey = {
     [K in keyof SecuritySettings]: SecuritySettings[K] extends boolean ? K : never;
   }[keyof SecuritySettings];
@@ -73,6 +77,17 @@
     { value: '15 minutes', label: '15 minutes' },
     { value: 'Custom...', label: 'Custom...' }
   ];
+
+  function getAutoLockLabel(value: SecuritySettings['autoLockInactivity'], locale: 'en' | 'sv'): string {
+    if (locale === 'sv') {
+      if (value === 'Immediate') return 'Omedelbart';
+      if (value === '1 minute') return '1 minut';
+      if (value === '5 minutes') return '5 minuter';
+      if (value === '15 minutes') return '15 minuter';
+      if (value === 'Custom...') return 'Anpassat…';
+    }
+    return autoLockOptions.find((option) => option.value === value)?.label ?? value;
+  }
 
   const privacyToggles: Array<{
     key: BooleanSettingKey;
@@ -152,11 +167,12 @@
   let currentProvisioningUri: string | null = null;
 
   $: currentProvisioningUri = $loginTotpSecret ? buildProvisioningUri($loginTotpSecret) : null;
-  $: generateButtonLabel = pendingTotpSecret
-    ? 'Generate different secret'
-    : $loginTotpConfigured
-      ? 'Rotate secret'
-      : 'Generate secret';
+  $: generateButtonLabel =
+    pendingTotpSecret
+      ? t(locale, 'Generate different secret', 'Generera annan hemlighet')
+      : $loginTotpConfigured
+        ? t(locale, 'Rotate secret', 'Rotera hemlighet')
+        : t(locale, 'Generate secret', 'Generera hemlighet');
 
   let currentSettings: SecuritySettings = get(securitySettings);
   let passwordModalOpen = false;
@@ -200,7 +216,7 @@
   const toErrorMessage = (error: unknown): string => {
     if (typeof error === 'string') return error;
     if (error instanceof Error) return error.message;
-    return 'An unexpected error occurred.';
+    return locale === 'sv' ? 'Ett oväntat fel inträffade.' : 'An unexpected error occurred.';
   };
 
   const formatSecret = (secret: string) => secret.replace(/(.{4})/g, '$1 ').trim();
@@ -732,8 +748,12 @@
         <ShieldCheck class="h-5 w-5" aria-hidden="true" />
       </div>
       <div>
-        <CardTitle>Two-factor authentication</CardTitle>
-        <CardDescription>Protect vault unlocks with a time-based one-time password.</CardDescription>
+        <CardTitle>
+          {t(locale, 'Two-factor authentication', 'Tvåfaktorsautentisering')}
+        </CardTitle>
+        <CardDescription>
+          {t(locale, 'Protect vault unlocks with a time-based one-time password.', 'Skydda valvupplåsning med tidsbaserade engångskoder.')}
+        </CardDescription>
       </div>
     </CardHeader>
     <CardContent class="space-y-5 pt-4">
@@ -741,7 +761,9 @@
         <Alert>
           <Check class="h-4 w-4 text-primary" aria-hidden="true" />
           <div class="space-y-1">
-            <AlertTitle>Authenticator enabled</AlertTitle>
+            <AlertTitle>
+              {t(locale, 'Authenticator enabled', 'Autentiserare aktiverad')}
+            </AlertTitle>
             <AlertDescription>{totpSetupSuccess}</AlertDescription>
           </div>
         </Alert>
@@ -751,7 +773,9 @@
         <Alert>
           <Shield class="h-4 w-4 text-primary" aria-hidden="true" />
           <div class="space-y-1">
-            <AlertTitle>Authenticator disabled</AlertTitle>
+            <AlertTitle>
+              {t(locale, 'Authenticator disabled', 'Autentiserare inaktiverad')}
+            </AlertTitle>
             <AlertDescription>{totpDisableSuccess}</AlertDescription>
           </div>
         </Alert>
@@ -761,7 +785,9 @@
         <Alert variant="destructive">
           <AlertCircle class="h-4 w-4" aria-hidden="true" />
           <div class="space-y-1">
-            <AlertTitle>Unable to load status</AlertTitle>
+            <AlertTitle>
+              {t(locale, 'Unable to load status', 'Det gick inte att läsa in status')}
+            </AlertTitle>
             <AlertDescription>{totpStatusError}</AlertDescription>
           </div>
         </Alert>
@@ -771,7 +797,9 @@
         <Alert variant="destructive">
           <AlertCircle class="h-4 w-4" aria-hidden="true" />
           <div class="space-y-1">
-            <AlertTitle>Unable to generate secret</AlertTitle>
+            <AlertTitle>
+              {t(locale, 'Unable to generate secret', 'Det gick inte att generera hemlighet')}
+            </AlertTitle>
             <AlertDescription>{totpGenerationError}</AlertDescription>
           </div>
         </Alert>
@@ -780,11 +808,21 @@
       <div class="space-y-3 rounded-lg border border-border/60 bg-muted/20 p-4">
         <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p class="text-sm font-semibold text-foreground">Current status</p>
+            <p class="text-sm font-semibold text-foreground">
+              {t(locale, 'Current status', 'Aktuell status')}
+            </p>
             <p class="text-sm text-muted-foreground">
               {$loginTotpConfigured
-                ? 'Unlocking requires both your master password and an authenticator token.'
-                : 'Generate a secret to require an authenticator token when unlocking the vault.'}
+                ? t(
+                    locale,
+                    'Unlocking requires both your master password and an authenticator token.',
+                    'Upplåsning kräver både ditt huvudlösenord och en autentiseringskod.'
+                  )
+                : t(
+                    locale,
+                    'Generate a secret to require an authenticator token when unlocking the vault.',
+                    'Generera en hemlighet för att kräva en autentiseringskod vid upplåsning.'
+                  )}
             </p>
           </div>
           <Badge
@@ -904,14 +942,16 @@
           </div>
 
           <div class="space-y-2">
-            <Label for="totp-verification">Step 2 — Confirm a code</Label>
+            <Label for="totp-verification">
+              {t(locale, 'Step 2 — Confirm a code', 'Steg 2 — Bekräfta en kod')}
+            </Label>
             <Input
               id="totp-verification"
               type="text"
               inputmode="numeric"
               maxlength={TOTP_CODE_LENGTH}
               autocomplete="one-time-code"
-              placeholder="Enter 6-digit code"
+              placeholder={t(locale, 'Enter 6-digit code', 'Ange sexsiffrig kod')}
               bind:value={totpVerificationCode}
               oninput={sanitizeTotpCode}
             />
@@ -924,7 +964,9 @@
             <Alert variant="destructive">
               <AlertCircle class="h-4 w-4" aria-hidden="true" />
               <div class="space-y-1">
-                <AlertTitle>Unable to generate secret</AlertTitle>
+              <AlertTitle>
+                {t(locale, 'Unable to generate secret', 'Det gick inte att generera hemlighet')}
+              </AlertTitle>
                 <AlertDescription>{totpGenerationError}</AlertDescription>
               </div>
             </Alert>
@@ -942,23 +984,31 @@
               {:else}
                 <Check class="h-4 w-4" aria-hidden="true" />
               {/if}
-              {isConfirmingTotp ? 'Verifying…' : 'Verify & enable'}
+              {isConfirmingTotp
+                ? t(locale, 'Verifying…', 'Verifierar…')
+                : t(locale, 'Verify & enable', 'Verifiera och aktivera')}
             </Button>
-            <Button
-              type="button"
-              variant="outline"
-              class="gap-2"
-              onclick={handleGenerateTotpSecret}
-              disabled={isGeneratingTotpSecret}
-            >
-              <RefreshCw class={`h-4 w-4 ${isGeneratingTotpSecret ? 'animate-spin' : ''}`} aria-hidden="true" />
-              Generate another secret
+              <Button
+                type="button"
+                variant="outline"
+                class="gap-2"
+                onclick={handleGenerateTotpSecret}
+                disabled={isGeneratingTotpSecret}
+              >
+                <RefreshCw class={`h-4 w-4 ${isGeneratingTotpSecret ? 'animate-spin' : ''}`} aria-hidden="true" />
+              {t(locale, 'Generate another secret', 'Generera en ny hemlighet')}
+              </Button>
+            <Button type="button" variant="ghost" onclick={cancelTotpSetup}>
+              {t(locale, 'Cancel', 'Avbryt')}
             </Button>
-            <Button type="button" variant="ghost" onclick={cancelTotpSetup}>Cancel</Button>
           </div>
 
           <p class="text-xs text-muted-foreground">
-            Codes rotate every 30 seconds. If verification fails, wait for the next code before trying again.
+            {t(
+              locale,
+              'Codes rotate every 30 seconds. If verification fails, wait for the next code before trying again.',
+              'Koder roterar var 30:e sekund. Om verifiering misslyckas, vänta på nästa kod innan du försöker igen.'
+            )}
           </p>
         </div>
       {/if}
@@ -972,8 +1022,16 @@
               <p class="text-sm font-semibold text-foreground">Stored secret on this device</p>
               <p class="text-sm text-muted-foreground">
                 {storedSecret
-                  ? 'Copy the secret if you need to enrol another authenticator or keep an offline backup.'
-                  : 'This device does not have a local copy of the secret. Rotate the secret to capture it again.'}
+                  ? t(
+                      locale,
+                      'Copy the secret if you need to enrol another authenticator or keep an offline backup.',
+                      'Kopiera hemligheten om du behöver registrera en annan autentiserare eller spara en offline-kopia.'
+                    )
+                  : t(
+                      locale,
+                      'This device does not have a local copy of the secret. Rotate the secret to capture it again.',
+                      'Denna enhet har ingen lokal kopia av hemligheten. Rotera hemligheten för att fånga den igen.'
+                    )}
               </p>
             </div>
           </div>
@@ -990,7 +1048,7 @@
                   onclick={() => copySecret(storedSecret, 'stored')}
                 >
                   <Copy class="h-4 w-4" aria-hidden="true" />
-                  Copy secret
+                  {t(locale, 'Copy secret', 'Kopiera hemlighet')}
                 </Button>
                 <Button
                   type="button"
@@ -1000,7 +1058,7 @@
                   disabled={!currentProvisioningUri}
                 >
                   <Link2 class="h-4 w-4" aria-hidden="true" />
-                  Copy setup link
+                  {t(locale, 'Copy setup link', 'Kopiera installationslänk')}
                 </Button>
               </div>
               {#if secretCopyFeedback?.context === 'stored'}
@@ -1021,11 +1079,19 @@
               {/if}
             </div>
           {:else}
-            <Alert>
+              <Alert>
               <AlertCircle class="h-4 w-4" aria-hidden="true" />
               <div class="space-y-1">
-                <AlertTitle>No local secret available</AlertTitle>
-                <AlertDescription>Rotate the secret to store a copy on this device for backup access.</AlertDescription>
+                <AlertTitle>
+                  {t(locale, 'No local secret available', 'Ingen lokal hemlighet tillgänglig')}
+                </AlertTitle>
+                <AlertDescription>
+                  {t(
+                    locale,
+                    'Rotate the secret to store a copy on this device for backup access.',
+                    'Rotera hemligheten för att spara en kopia på denna enhet för backupåtkomst.'
+                  )}
+                </AlertDescription>
               </div>
             </Alert>
           {/if}
@@ -1040,30 +1106,42 @@
         <Lock class="h-5 w-5" aria-hidden="true" />
       </div>
       <div>
-        <CardTitle>Master Password &amp; Encryption</CardTitle>
-        <CardDescription>Manage the master password and key derivation policy.</CardDescription>
+        <CardTitle>
+          {t(locale, 'Master Password & Encryption', 'Huvudlösenord & kryptering')}
+        </CardTitle>
+        <CardDescription>
+          {t(locale, 'Manage the master password and key derivation policy.', 'Hantera huvudlösenordet och nyckelderiveringspolicyn.')}
+        </CardDescription>
       </div>
     </CardHeader>
     <CardContent class="flex flex-col gap-5 pt-4">
       <div class="flex flex-col gap-2 rounded-lg border border-border/60 bg-muted/20 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <p class="text-sm font-semibold text-foreground">Master Password</p>
-          <p class="text-sm text-muted-foreground">Update the password used to unlock your vault.</p>
+          <p class="text-sm font-semibold text-foreground">
+            {t(locale, 'Master Password', 'Huvudlösenord')}
+          </p>
+          <p class="text-sm text-muted-foreground">
+            {t(locale, 'Update the password used to unlock your vault.', 'Uppdatera lösenordet som används för att låsa upp ditt valv.')}
+          </p>
         </div>
         <Button variant="outline" onclick={openPasswordModal}>
-          Change Password
+          {t(locale, 'Change Password', 'Ändra lösenord')}
         </Button>
       </div>
 
       <div class="flex flex-col gap-2 rounded-lg border border-border/60 bg-muted/20 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <p class="text-sm font-semibold text-foreground">Key Derivation</p>
+          <p class="text-sm font-semibold text-foreground">
+            {t(locale, 'Key Derivation', 'Nyckelderivering')}
+          </p>
           <p class="text-sm text-muted-foreground">
-            {argon2Loading ? 'Loading key derivation parameters…' : argon2Summary}
+            {argon2Loading
+              ? t(locale, 'Loading key derivation parameters…', 'Läser in parametrar för nyckelderivering…')
+              : argon2Summary}
           </p>
         </div>
         <Button variant="outline" size="sm" onclick={openKdfModal}>
-          Reconfigure KDF
+          {t(locale, 'Reconfigure KDF', 'Konfigurera om KDF')}
         </Button>
       </div>
     </CardContent>
@@ -1075,15 +1153,23 @@
         <CalendarClock class="h-5 w-5" aria-hidden="true" />
       </div>
       <div>
-        <CardTitle>Auto-lock Controls</CardTitle>
-        <CardDescription>Define when the vault should automatically lock itself.</CardDescription>
+        <CardTitle>
+          {t(locale, 'Auto-lock Controls', 'Kontroller för autolåsning')}
+        </CardTitle>
+        <CardDescription>
+          {t(locale, 'Define when the vault should automatically lock itself.', 'Definiera när valvet automatiskt ska låsa sig.')}
+        </CardDescription>
       </div>
     </CardHeader>
     <CardContent class="flex flex-col gap-4 pt-4">
       <div class="flex items-start justify-between gap-4 rounded-lg border border-border/60 bg-muted/20 px-4 py-3">
         <div>
-          <p class="text-sm font-semibold text-foreground">Lock on Suspend</p>
-          <p class="text-sm text-muted-foreground">Lock whenever the system sleeps or hibernates.</p>
+          <p class="text-sm font-semibold text-foreground">
+            {t(locale, 'Lock on Suspend', 'Lås vid viloläge')}
+          </p>
+          <p class="text-sm text-muted-foreground">
+            {t(locale, 'Lock whenever the system sleeps or hibernates.', 'Lås valvet när systemet går i vila eller viloläge.')}
+          </p>
         </div>
         <Switch
           checked={currentSettings.lockOnSuspend}
@@ -1094,8 +1180,12 @@
 
       <div class="flex items-start justify-between gap-4 rounded-lg border border-border/60 bg-muted/20 px-4 py-3">
         <div>
-          <p class="text-sm font-semibold text-foreground">Lock on Minimise</p>
-          <p class="text-sm text-muted-foreground">Lock the vault when the window is minimised.</p>
+          <p class="text-sm font-semibold text-foreground">
+            {t(locale, 'Lock on Minimise', 'Lås vid minimering')}
+          </p>
+          <p class="text-sm text-muted-foreground">
+            {t(locale, 'Lock the vault when the window is minimised.', 'Lås valvet när fönstret minimeras.')}
+          </p>
         </div>
         <Switch
           checked={currentSettings.lockOnMinimize}
@@ -1105,17 +1195,24 @@
       </div>
 
       <div class="flex flex-col gap-2 rounded-lg border border-border/60 bg-muted/20 px-4 py-4">
-        <Label class="text-sm font-semibold text-foreground">Auto-lock After Inactivity</Label>
-        <p class="text-sm text-muted-foreground">Lock the vault automatically after the selected idle period.</p>
+        <Label class="text-sm font-semibold text-foreground">
+          {t(locale, 'Auto-lock After Inactivity', 'Autolåsning efter inaktivitet')}
+        </Label>
+        <p class="text-sm text-muted-foreground">
+          {t(locale, 'Lock the vault automatically after the selected idle period.', 'Lås valvet automatiskt efter vald inaktivitetsperiod.')}
+        </p>
         <Select type="single" value={currentSettings.autoLockInactivity} onValueChange={updateAutoLock}>
           <SelectTrigger aria-label="Select auto-lock inactivity" class="w-full sm:w-56">
             <span data-slot="select-value" class="truncate text-sm">
-              {autoLockOptions.find((option) => option.value === currentSettings.autoLockInactivity)?.label ?? 'Select duration'}
+              {getAutoLockLabel(currentSettings.autoLockInactivity, locale) ||
+                t(locale, 'Select duration', 'Välj tidslängd')}
             </span>
           </SelectTrigger>
           <SelectContent>
             {#each autoLockOptions as option}
-              <SelectItem value={option.value}>{option.label}</SelectItem>
+              <SelectItem value={option.value}>
+                {getAutoLockLabel(option.value, locale)}
+              </SelectItem>
             {/each}
           </SelectContent>
         </Select>
@@ -1129,15 +1226,31 @@
         <Fingerprint class="h-5 w-5" aria-hidden="true" />
       </div>
       <div>
-        <CardTitle>Biometric &amp; Session</CardTitle>
-        <CardDescription>Control biometric unlock availability and session persistence.</CardDescription>
+        <CardTitle>
+          {t(locale, 'Biometric & Session', 'Biometrik & session')}
+        </CardTitle>
+        <CardDescription>
+          {t(
+            locale,
+            'Control biometric unlock availability and session persistence.',
+            'Styr när biometrisk upplåsning är tillgänglig och hur sessioner bevaras.'
+          )}
+        </CardDescription>
       </div>
     </CardHeader>
     <CardContent class="flex flex-col gap-4 pt-4">
       <div class="flex items-start justify-between gap-4 rounded-lg border border-border/60 bg-muted/20 px-4 py-3">
         <div>
-          <p class="text-sm font-semibold text-foreground">Biometric Unlock</p>
-          <p class="text-sm text-muted-foreground">Allow fingerprint or face recognition to unlock the vault.</p>
+          <p class="text-sm font-semibold text-foreground">
+            {t(locale, 'Biometric Unlock', 'Biometrisk upplåsning')}
+          </p>
+          <p class="text-sm text-muted-foreground">
+            {t(
+              locale,
+              'Allow fingerprint or face recognition to unlock the vault.',
+              'Tillåt fingeravtryck eller ansiktsigenkänning för att låsa upp valvet.'
+            )}
+          </p>
         </div>
         <Switch
           checked={currentSettings.biometricUnlock}
@@ -1148,8 +1261,16 @@
 
       <div class="flex items-start justify-between gap-4 rounded-lg border border-border/60 bg-muted/20 px-4 py-3">
         <div>
-          <p class="text-sm font-semibold text-foreground">Session Persistence</p>
-          <p class="text-sm text-muted-foreground">Remember the unlocked session between restarts.</p>
+          <p class="text-sm font-semibold text-foreground">
+            {t(locale, 'Session Persistence', 'Sessionsbeständighet')}
+          </p>
+          <p class="text-sm text-muted-foreground">
+            {t(
+              locale,
+              'Remember the unlocked session between restarts.',
+              'Kom ihåg upplåst session mellan omstarter.'
+            )}
+          </p>
         </div>
         <Switch
           checked={currentSettings.sessionPersistence}
@@ -1167,11 +1288,19 @@
       </div>
       <div class="flex w-full flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <CardTitle>Paired Devices</CardTitle>
-          <CardDescription>Review devices authorised for biometric or key-based unlock.</CardDescription>
+          <CardTitle>
+            {t(locale, 'Paired Devices', 'Parkopplade enheter')}
+          </CardTitle>
+          <CardDescription>
+            {t(
+              locale,
+              'Review devices authorised for biometric or key-based unlock.',
+              'Granska enheter som är auktoriserade för biometrisk eller nyckelbaserad upplåsning.'
+            )}
+          </CardDescription>
         </div>
         <Button variant="outline" size="sm" onclick={handlePairDevice} disabled={devicesLoading}>
-          Pair New Device
+          {t(locale, 'Pair New Device', 'Parkoppla ny enhet')}
         </Button>
       </div>
     </CardHeader>
@@ -1179,10 +1308,12 @@
       {#if devicesLoading}
         <div class="flex items-center gap-2 text-sm text-muted-foreground">
           <Loader2 class="h-4 w-4 animate-spin" aria-hidden="true" />
-          <span>Loading devices…</span>
+          <span>{t(locale, 'Loading devices…', 'Läser in enheter…')}</span>
         </div>
       {:else if devices.length === 0}
-        <p class="text-sm text-muted-foreground">No devices have been paired yet.</p>
+        <p class="text-sm text-muted-foreground">
+          {t(locale, 'No devices have been paired yet.', 'Inga enheter har parkopplats ännu.')}
+        </p>
       {:else}
         {#each devices as device}
           <div
@@ -1198,7 +1329,13 @@
               <div>
                 <p class="text-sm font-semibold text-foreground">{device.name}</p>
                 <p class="text-xs text-muted-foreground">
-                  {device.lastSeen ?? 'No recent activity'}{device.isCurrent ? ' • Current device' : ''}
+                  {(device.lastSeen ??
+                    (locale === 'sv' ? 'Ingen senaste aktivitet' : 'No recent activity'))}
+                  {device.isCurrent
+                    ? locale === 'sv'
+                      ? ' • Aktuell enhet'
+                      : ' • Current device'
+                    : ''}
                 </p>
               </div>
             </div>
@@ -1231,7 +1368,7 @@
             {#if isRevokingDevices}
               <Loader2 class="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
             {/if}
-            Revoke All Devices
+            {t(locale, 'Revoke All Devices', 'Återkalla alla enheter')}
           </Button>
         </div>
       {/if}
@@ -1244,8 +1381,12 @@
         <EyeOff class="h-5 w-5" aria-hidden="true" />
       </div>
       <div>
-        <CardTitle>Privacy Controls</CardTitle>
-        <CardDescription>Fine-tune privacy and diagnostic data handling.</CardDescription>
+        <CardTitle>
+          {t(locale, 'Privacy Controls', 'Integritetskontroller')}
+        </CardTitle>
+        <CardDescription>
+          {t(locale, 'Fine-tune privacy and diagnostic data handling.', 'Finjustera integritet och hantering av diagnostikdata.')}
+        </CardDescription>
       </div>
     </CardHeader>
     <CardContent class="flex flex-col gap-5 pt-4">
@@ -1253,8 +1394,32 @@
         {#each privacyToggles as toggle}
           <div class="flex items-start justify-between gap-4 rounded-lg border border-border/60 bg-muted/20 px-4 py-3">
             <div>
-              <p class="text-sm font-semibold text-foreground">{toggle.title}</p>
-              <p class="text-sm text-muted-foreground">{toggle.description}</p>
+              <p class="text-sm font-semibold text-foreground">
+                {toggle.key === 'externalBreachCheck'
+                  ? t(locale, 'External Breach Check', 'Extern intrångskontroll')
+                  : toggle.key === 'localReuseDetection'
+                    ? t(locale, 'Local Reuse Detection', 'Lokal återanvändningsdetektering')
+                    : t(locale, 'Secure RAM Handling', 'Säkrare RAM-hantering')}
+              </p>
+              <p class="text-sm text-muted-foreground">
+                {toggle.key === 'externalBreachCheck'
+                  ? t(
+                      locale,
+                      'Cross-reference vault items against known breach databases.',
+                      'Jämför valvposter mot kända läckage-databaser.'
+                    )
+                  : toggle.key === 'localReuseDetection'
+                    ? t(
+                        locale,
+                        'Alert when passwords repeat across vault entries.',
+                        'Varna när lösenord återanvänds mellan poster i valvet.'
+                      )
+                    : t(
+                        locale,
+                        'Allocate hardened memory regions for sensitive operations.',
+                        'Tilldela härdade minnesområden för känsliga operationer.'
+                      )}
+              </p>
             </div>
             <Switch
               checked={currentSettings[toggle.key]}
@@ -1268,11 +1433,11 @@
       <div class="grid gap-3 sm:grid-cols-2">
         <Button variant="outline" class="justify-start gap-3" onclick={() => {}}>
           <HardDrive class="h-4 w-4" aria-hidden="true" />
-          Access Local Logs
+          {t(locale, 'Access Local Logs', 'Öppna lokala loggar')}
         </Button>
         <Button variant="outline" class="justify-start gap-3" onclick={() => {}}>
           <Trash2 class="h-4 w-4" aria-hidden="true" />
-          Clear Local Logs
+          {t(locale, 'Clear Local Logs', 'Rensa lokala loggar')}
         </Button>
       </div>
 
@@ -1293,8 +1458,12 @@
         <Shield class="h-5 w-5" aria-hidden="true" />
       </div>
       <div>
-        <CardTitle>Security Actions</CardTitle>
-        <CardDescription>Execute advanced maintenance and security tasks.</CardDescription>
+        <CardTitle>
+          {t(locale, 'Security Actions', 'Säkerhetsåtgärder')}
+        </CardTitle>
+        <CardDescription>
+          {t(locale, 'Execute advanced maintenance and security tasks.', 'Utför avancerade underhålls- och säkerhetsåtgärder.')}
+        </CardDescription>
       </div>
     </CardHeader>
     <CardContent class="pt-4">
@@ -1314,8 +1483,32 @@
               <action.Icon class="h-5 w-5 text-primary" aria-hidden="true" />
             {/if}
             <div class="space-y-1">
-              <p class="text-sm font-semibold text-foreground">{action.title}</p>
-              <p class="text-xs text-muted-foreground whitespace-normal break-words">{action.description}</p>
+              <p class="text-sm font-semibold text-foreground">
+                {action.id === 'rekey'
+                  ? t(locale, 'Re-key Vault', 'Byt valvnyckel')
+                  : action.id === 'wipe-memory'
+                    ? t(locale, 'Clear Memory', 'Rensa minne')
+                    : t(locale, 'Integrity Check', 'Integritetskontroll')}
+              </p>
+              <p class="text-xs text-muted-foreground whitespace-normal break-words">
+                {action.id === 'rekey'
+                  ? t(
+                      locale,
+                      'Rotate encryption keys and re-encrypt stored data.',
+                      'Rotera krypteringsnycklar och kryptera om lagrad data.'
+                    )
+                  : action.id === 'wipe-memory'
+                    ? t(
+                        locale,
+                        'Scrub sensitive material from memory immediately.',
+                        'Rensa känslig information från minnet omedelbart.'
+                      )
+                    : t(
+                        locale,
+                        'Verify vault contents for tampering or corruption.',
+                        'Verifiera valvets innehåll för manipulation eller korruption.'
+                      )}
+              </p>
             </div>
           </Button>
         {/each}

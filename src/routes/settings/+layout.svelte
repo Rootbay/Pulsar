@@ -5,26 +5,26 @@
   import { Button } from '$lib/components/ui/button';
   import { settingsStore } from '$lib/stores';
   import { Bell, Menu, Search, Settings, ShieldCheck, Palette, Clipboard, Info, Database, Sliders, Wand2, Globe } from '@lucide/svelte';
+  import { currentLocale } from '$lib/i18n';
 
-  type NavItem = { href: string; label: string; Icon: typeof Settings };
+  const t = (locale: 'en' | 'sv', en: string, sv: string) => (locale === 'sv' ? sv : en);
+  $: locale = $currentLocale as 'en' | 'sv';
+
+  type NavItem = { href: string; label: (locale: 'en' | 'sv') => string; Icon: typeof Settings };
   const navItems: NavItem[] = [
-    { href: '/settings/general', label: 'General', Icon: Settings },
-    { href: '/settings/appearance', label: 'Appearance', Icon: Palette },
-    { href: '/settings/security', label: 'Security', Icon: ShieldCheck },
-    { href: '/settings/clipboard', label: 'Clipboard', Icon: Clipboard },
-    { href: '/settings/autofill', label: 'Autofill', Icon: Globe },
-    { href: '/settings/generator', label: 'Generator', Icon: Wand2 },
-    { href: '/settings/vault', label: 'Vault', Icon: Database },
-    { href: '/settings/backup', label: 'Backup', Icon: Database },
-    { href: '/settings/advanced', label: 'Advanced', Icon: Sliders },
-    { href: '/settings/about', label: 'About', Icon: Info }
+    { href: '/settings/general', label: (l) => t(l, 'General', 'Allmänt'), Icon: Settings },
+    { href: '/settings/appearance', label: (l) => t(l, 'Appearance', 'Utseende'), Icon: Palette },
+    { href: '/settings/security', label: (l) => t(l, 'Security', 'Säkerhet'), Icon: ShieldCheck },
+    { href: '/settings/clipboard', label: (l) => t(l, 'Clipboard', 'Urklipp'), Icon: Clipboard },
+    { href: '/settings/autofill', label: (l) => t(l, 'Autofill', 'Autofyll'), Icon: Globe },
+    { href: '/settings/generator', label: (l) => t(l, 'Generator', 'Generator'), Icon: Wand2 },
+    { href: '/settings/vault', label: (l) => t(l, 'Vault', 'Valv'), Icon: Database },
+    { href: '/settings/backup', label: (l) => t(l, 'Backup', 'Säkerhetskopior'), Icon: Database },
+    { href: '/settings/advanced', label: (l) => t(l, 'Advanced', 'Avancerat'), Icon: Sliders },
+    { href: '/settings/about', label: (l) => t(l, 'About', 'Om Pulsar'), Icon: Info }
   ];
 
-  function isActive(href: string): boolean {
-    const current = $page.url.pathname.replace(/\/$/, '');
-    const target = href.replace(/\/$/, '');
-    return current === target;
-  }
+  $: currentPath = $page.url.pathname.replace(/\/$/, '');
 </script>
 
 <div class="flex h-screen w-full overflow-hidden bg-background">
@@ -32,18 +32,27 @@
   <aside class="hidden h-screen w-64 shrink-0 overflow-y-auto border-r border-border/60 bg-card/50 p-4 md:block">
     <nav class="space-y-1">
       {#each navItems as { href, label, Icon }}
-        <a href={href} class={`flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm transition ${isActive(href) ? 'bg-muted text-foreground' : 'text-muted-foreground hover:bg-muted/60'}`}>
+        <a
+          href={href}
+          class={`flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm transition ${
+            currentPath === href.replace(/\/$/, '')
+              ? 'bg-muted text-foreground'
+              : 'text-muted-foreground hover:bg-muted/60'
+          }`}
+        >
           <Icon class="size-4" />
-          <span>{label}</span>
+          <span>{label(locale)}</span>
         </a>
       {/each}
     </nav>
 
     <div class="mt-6 border-t border-border/60 pt-4">
-      <p class="px-3 text-xs font-medium text-muted-foreground">More</p>
+      <p class="px-3 text-xs font-medium text-muted-foreground">
+        {locale === 'sv' ? 'Mer' : 'More'}
+      </p>
       <a href="/settings/security" class="mt-2 flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm text-muted-foreground hover:bg-muted/60">
         <ShieldCheck class="size-4" />
-        <span>Sessions</span>
+        <span>{locale === 'sv' ? 'Sessioner' : 'Sessions'}</span>
       </a>
     </div>
   </aside>

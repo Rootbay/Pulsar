@@ -11,6 +11,7 @@
   import { Switch } from '$lib/components/ui/switch';
   import { cn } from '$lib/utils';
   import { Palette, Contrast, LayoutDashboard, Waves, Monitor } from '@lucide/svelte';
+  import { currentLocale } from '$lib/i18n';
 
   type ThemeOption = AppearanceSettings['theme'];
   type DensityOption = AppearanceSettings['pageDensity'];
@@ -18,11 +19,10 @@
     [K in keyof AppearanceSettings]: AppearanceSettings[K] extends boolean ? K : never;
   }[keyof AppearanceSettings];
 
-  const themeOptions: Array<{ value: ThemeOption; label: string }> = [
-    { value: 'system', label: 'System' },
-    { value: 'light', label: 'Light' },
-    { value: 'dark', label: 'Dark' }
-  ];
+  const t = (locale: 'en' | 'sv', en: string, sv: string) => (locale === 'sv' ? sv : en);
+  $: locale = $currentLocale as 'en' | 'sv';
+
+  const themeOptions: ThemeOption[] = ['system', 'light', 'dark'];
 
   const toggleOptions: Array<{
     key: BooleanSettingKey;
@@ -109,7 +109,7 @@
   }
 
   function isThemeOption(value: string): value is ThemeOption {
-    return themeOptions.some((option) => option.value === value);
+    return themeOptions.some((option) => option === value);
   }
 
   function updateTheme(value: string) {
@@ -137,8 +137,11 @@
     applyChanges({ pageDensity: value });
   }
 
-  function getThemeLabel(value: ThemeOption) {
-    return themeOptions.find((option) => option.value === value)?.label ?? 'Select theme';
+  function getThemeLabel(value: ThemeOption, locale: 'en' | 'sv') {
+    if (value === 'system') return t(locale, 'System', 'System');
+    if (value === 'light') return t(locale, 'Light', 'Ljust');
+    if (value === 'dark') return t(locale, 'Dark', 'Mörkt');
+    return 'System';
   }
 </script>
 
@@ -149,33 +152,43 @@
         <Palette class="h-5 w-5" aria-hidden="true" />
       </div>
       <div>
-        <CardTitle>Theme &amp; Display</CardTitle>
-        <CardDescription>Customise the application look and spacing.</CardDescription>
+        <CardTitle>{t(locale, 'Theme & Display', 'Tema & visning')}</CardTitle>
+        <CardDescription>
+          {t(locale, 'Customise the application look and spacing.', 'Anpassa appens utseende och mellanrum.')}
+        </CardDescription>
       </div>
     </CardHeader>
     <CardContent class="flex flex-col gap-6 pt-4">
       <div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
         <div class="space-y-2">
-          <Label class="text-sm font-medium text-foreground">Theme</Label>
-          <Select type="single" value={theme} onValueChange={updateTheme}>
-            <SelectTrigger aria-label="Select theme" class="w-full sm:w-56">
-              <span data-slot="select-value" class="flex items-center gap-2 truncate text-sm">
-                <Monitor class="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-                {getThemeLabel(theme)}
-              </span>
-            </SelectTrigger>
-            <SelectContent>
-              {#each themeOptions as option}
-                <SelectItem value={option.value}>{option.label}</SelectItem>
-              {/each}
-            </SelectContent>
-          </Select>
+          <Label class="text-sm font-medium text-foreground">
+            {t(locale, 'Theme', 'Tema')}
+          </Label>
+          {#key locale}
+            <Select type="single" value={theme} onValueChange={updateTheme}>
+              <SelectTrigger aria-label="Select theme" class="w-full sm:w-56">
+                <span data-slot="select-value" class="flex items-center gap-2 truncate text-sm">
+                  <Monitor class="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                  {getThemeLabel(theme, locale)}
+                </span>
+              </SelectTrigger>
+              <SelectContent>
+                {#each themeOptions as option}
+                  <SelectItem value={option}>{getThemeLabel(option, locale)}</SelectItem>
+                {/each}
+              </SelectContent>
+            </Select>
+          {/key}
         </div>
 
         <div class="flex items-center justify-between gap-4 rounded-lg border border-border/60 bg-muted/20 px-4 py-3">
           <div class="space-y-1">
-            <p class="text-sm font-semibold text-foreground">Compact Mode</p>
-            <p class="text-sm text-muted-foreground">Reduce spacing and padding.</p>
+            <p class="text-sm font-semibold text-foreground">
+              {t(locale, 'Compact Mode', 'Kompakt läge')}
+            </p>
+            <p class="text-sm text-muted-foreground">
+              {t(locale, 'Reduce spacing and padding.', 'Minska mellanrum och padding.')}
+            </p>
           </div>
           <Switch
             checked={compactMode}
@@ -187,7 +200,7 @@
 
       <div class="space-y-2">
         <Label class="text-sm font-medium text-foreground">
-          Font Size
+          {t(locale, 'Font Size', 'Textstorlek')}
         </Label>
         <div class="flex items-center gap-4">
           <input
@@ -206,8 +219,16 @@
         {#each toggleOptions as option (option.key)}
           <div class="flex items-center justify-between gap-4 rounded-lg border border-border/60 bg-muted/20 px-4 py-3">
             <div class="space-y-1">
-              <p class="text-sm font-semibold text-foreground">{option.title}</p>
-              <p class="text-sm text-muted-foreground">{option.description}</p>
+              <p class="text-sm font-semibold text-foreground">
+                {option.key === 'highContrast'
+                  ? t(locale, 'High Contrast', 'Hög kontrast')
+                  : t(locale, 'Reduced Motion', 'Minskad rörelse')}
+              </p>
+              <p class="text-sm text-muted-foreground">
+                {option.key === 'highContrast'
+                  ? t(locale, 'Increase contrast for improved readability.', 'Öka kontrasten för bättre läsbarhet.')
+                  : t(locale, 'Minimise animations and motion effects.', 'Minimera animationer och rörelse.')}
+              </p>
             </div>
             <Switch
               checked={option.key === 'highContrast' ? highContrast : reducedMotion}
@@ -226,8 +247,10 @@
         <LayoutDashboard class="h-5 w-5" aria-hidden="true" />
       </div>
       <div>
-        <CardTitle>Page Density</CardTitle>
-        <CardDescription>Choose how much information appears on each view.</CardDescription>
+        <CardTitle>{t(locale, 'Page Density', 'Sidtäthet')}</CardTitle>
+        <CardDescription>
+          {t(locale, 'Choose how much information appears on each view.', 'Välj hur mycket information som visas per vy.')}
+        </CardDescription>
       </div>
     </CardHeader>
     <CardContent class="pt-4">
@@ -247,7 +270,13 @@
             onclick={() => selectDensity(option.value)}
           >
             <div>
-              <p class="text-sm font-semibold text-foreground">{option.title}</p>
+              <p class="text-sm font-semibold text-foreground">
+                {option.value === 'comfortable'
+                  ? t(locale, 'Comfortable', 'Bekväm')
+                  : option.value === 'compact'
+                    ? t(locale, 'Compact', 'Kompakt')
+                    : t(locale, 'Dense', 'Tät')}
+              </p>
             </div>
             <div
               class={cn(

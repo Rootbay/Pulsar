@@ -11,17 +11,18 @@
   import { Switch } from '$lib/components/ui/switch';
   import { cn } from '$lib/utils';
   import { Gauge, TriangleAlert, ShieldCheck, ShieldAlert } from '@lucide/svelte';
+  import { currentLocale } from '$lib/i18n';
 
   type KdfPreset = AdvancedSettings['kdfPreset'];
 
-  const kdfPresets: Array<{
-    value: KdfPreset;
-    label: string;
-  }> = [
-    { value: 'fast', label: 'Fast' },
-    { value: 'balanced', label: 'Balanced' },
-    { value: 'secure', label: 'Secure' },
-    { value: 'paranoid', label: 'Paranoid' }
+  const t = (locale: 'en' | 'sv', en: string, sv: string) => (locale === 'sv' ? sv : en);
+  $: locale = $currentLocale as 'en' | 'sv';
+
+  const kdfPresets: Array<{ value: KdfPreset }> = [
+    { value: 'fast' },
+    { value: 'balanced' },
+    { value: 'secure' },
+    { value: 'paranoid' }
   ];
 
   const presetConfig: Record<KdfPreset, { time: number; memory: number; parallel: number }> = {
@@ -110,18 +111,34 @@
         <Gauge class="h-5 w-5" aria-hidden="true" />
       </div>
       <div>
-        <CardTitle>KDF Tuning (Argon2id)</CardTitle>
-        <CardDescription>Adjust key-derivation hardness to balance security with unlock speed.</CardDescription>
+        <CardTitle>
+          {t(locale, 'KDF Tuning (Argon2id)', 'KDF-inställning (Argon2id)')}
+        </CardTitle>
+        <CardDescription>
+          {t(
+            locale,
+            'Adjust key-derivation hardness to balance security with unlock speed.',
+            'Justera nyckelderiveringens styrka för att balansera säkerhet mot upplåsningshastighet.'
+          )}
+        </CardDescription>
       </div>
     </CardHeader>
     <CardContent class="flex flex-col gap-6 pt-4">
       <div class="flex items-start gap-3 rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm text-warning-foreground">
         <TriangleAlert class="mt-0.5 h-4 w-4" aria-hidden="true" />
-        <p>Increasing these parameters strengthens security but also slows down authentication.</p>
+        <p>
+          {t(
+            locale,
+            'Increasing these parameters strengthens security but also slows down authentication.',
+            'Att öka dessa parametrar stärker säkerheten men gör autentisering långsammare.'
+          )}
+        </p>
       </div>
 
       <div class="space-y-3">
-        <Label class="text-sm font-medium text-foreground">Presets</Label>
+        <Label class="text-sm font-medium text-foreground">
+          {t(locale, 'Presets', 'Förval')}
+        </Label>
         <div class="flex flex-wrap gap-2">
           {#each kdfPresets as preset}
             <Button
@@ -136,7 +153,13 @@
               )}
               onclick={() => selectPreset(preset.value)}
             >
-              {preset.label}
+              {preset.value === 'fast'
+                ? t(locale, 'Fast', 'Snabb')
+                : preset.value === 'balanced'
+                  ? t(locale, 'Balanced', 'Balanserad')
+                  : preset.value === 'secure'
+                    ? t(locale, 'Secure', 'Säker')
+                    : t(locale, 'Paranoid', 'Paranoid')}
             </Button>
           {/each}
         </div>
@@ -144,7 +167,9 @@
 
       <div class="space-y-5">
         <div class="space-y-2">
-          <Label class="text-sm font-medium text-foreground" for="time-cost">Time Cost (iterations)</Label>
+          <Label class="text-sm font-medium text-foreground" for="time-cost">
+            {t(locale, 'Time Cost (iterations)', 'Tidskostnad (iterationer)')}
+          </Label>
           <div class="flex items-center gap-4">
             <input
               id="time-cost"
@@ -160,7 +185,9 @@
         </div>
 
         <div class="space-y-2">
-          <Label class="text-sm font-medium text-foreground" for="memory-cost">Memory Cost (MB)</Label>
+          <Label class="text-sm font-medium text-foreground" for="memory-cost">
+            {t(locale, 'Memory Cost (MB)', 'Minneskostnad (MB)')}
+          </Label>
           <div class="flex items-center gap-4">
             <input
               id="memory-cost"
@@ -177,7 +204,9 @@
         </div>
 
         <div class="space-y-2">
-          <Label class="text-sm font-medium text-foreground" for="parallelism">Parallelism (threads)</Label>
+          <Label class="text-sm font-medium text-foreground" for="parallelism">
+            {t(locale, 'Parallelism (threads)', 'Parallelism (trådar)')}
+          </Label>
           <div class="flex items-center gap-4">
             <input
               id="parallelism"
@@ -201,16 +230,32 @@
         <ShieldCheck class="h-5 w-5" aria-hidden="true" />
       </div>
       <div>
-        <CardTitle>Memory Hardening</CardTitle>
-        <CardDescription>Apply additional safeguards to keep sensitive data in memory protected.</CardDescription>
+        <CardTitle>
+          {t(locale, 'Memory Hardening', 'Hårdare minnesskydd')}
+        </CardTitle>
+        <CardDescription>
+          {t(
+            locale,
+            'Apply additional safeguards to keep sensitive data in memory protected.',
+            'Lägg till extra skydd för att hålla känslig data i minnet skyddad.'
+          )}
+        </CardDescription>
       </div>
     </CardHeader>
     <CardContent class="flex flex-col gap-4 pt-4">
       {#each memoryToggles as toggle}
         <div class="flex items-start justify-between gap-4 rounded-lg border border-border/60 bg-muted/20 px-4 py-3">
           <div>
-            <p class="text-sm font-semibold text-foreground">{toggle.title}</p>
-            <p class="text-sm text-muted-foreground">{toggle.description}</p>
+            <p class="text-sm font-semibold text-foreground">
+              {toggle.key === 'lockMemoryPages'
+                ? t(locale, 'Lock Memory Pages', 'Lås minnessidor')
+                : t(locale, 'Secure Memory Allocation', 'Säker minnesallokering')}
+            </p>
+            <p class="text-sm text-muted-foreground">
+              {toggle.key === 'lockMemoryPages'
+                ? t(locale, 'Prevent sensitive pages from being swapped to disk.', 'Förhindra att känsliga sidor växlas ut till disk.')
+                : t(locale, 'Use hardened allocators for secrets kept in RAM.', 'Använd härdade allokerare för hemligheter i RAM.')}
+            </p>
           </div>
           <Switch
             checked={toggle.key === 'lockMemoryPages' ? lockMemoryPages : secureMemoryAllocation}
@@ -228,18 +273,30 @@
         <ShieldAlert class="h-5 w-5" aria-hidden="true" />
       </div>
       <div>
-        <CardTitle>Destructive Actions</CardTitle>
-        <CardDescription>These operations permanently remove data and cannot be undone.</CardDescription>
+        <CardTitle>
+          {t(locale, 'Destructive Actions', 'Förstörande åtgärder')}
+        </CardTitle>
+        <CardDescription>
+          {t(locale, 'These operations permanently remove data and cannot be undone.', 'Dessa åtgärder tar bort data permanent och kan inte ångras.')}
+        </CardDescription>
       </div>
     </CardHeader>
     <CardContent class="pt-4">
       <div class="space-y-4 rounded-lg border border-destructive/40 bg-destructive/10 p-4">
         <div>
-          <p class="text-sm font-semibold text-destructive">Wipe Vault Database</p>
-          <p class="text-sm text-destructive/80">Enter the confirmation phrase to enable vault wiping.</p>
+          <p class="text-sm font-semibold text-destructive">
+            {t(locale, 'Wipe Vault Database', 'Radera valvdatabas')}
+          </p>
+          <p class="text-sm text-destructive/80">
+            {t(locale, 'Enter the confirmation phrase to enable vault wiping.', 'Skriv in bekräftelsefrasen för att aktivera radering av valvet.')}
+          </p>
         </div>
         <Input
-          placeholder={`Type "${WIPE_CONFIRMATION_TOKEN}" to confirm`}
+          placeholder={
+            locale === 'sv'
+              ? `Skriv "${WIPE_CONFIRMATION_TOKEN}" för att bekräfta`
+              : `Type "${WIPE_CONFIRMATION_TOKEN}" to confirm`
+          }
           value={wipeConfirmationText}
           oninput={handleWipeInput}
           class={cn(
@@ -250,7 +307,7 @@
           )}
         />
         <Button type="button" variant="destructive" class="w-full" disabled={!canWipeVault} onclick={() => {}}>
-          Wipe Vault Database
+          {t(locale, 'Wipe Vault Database', 'Radera valvdatabas')}
         </Button>
       </div>
     </CardContent>

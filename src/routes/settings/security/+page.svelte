@@ -1520,20 +1520,28 @@
 <Dialog open={passwordModalOpen} onOpenChange={handleDialogChange}>
   <DialogContent class="sm:max-w-lg">
     <DialogHeader>
-      <DialogTitle>Change Master Password</DialogTitle>
+      <DialogTitle>
+        {t(locale, 'Change Master Password', 'Byt huvudlösenord')}
+      </DialogTitle>
       <DialogDescription>
-        Provide your current master password and enter a new secure password to re-encrypt the vault.
+        {t(
+          locale,
+          'Provide your current master password and enter a new secure password to re-encrypt the vault.',
+          'Ange ditt nuvarande huvudlösenord och ett nytt säkert lösenord för att kryptera om valvet.'
+        )}
       </DialogDescription>
     </DialogHeader>
 
     <div class="space-y-4">
       <div class="space-y-2">
-        <Label for="current-password">Current Password</Label>
+        <Label for="current-password">
+          {t(locale, 'Current Password', 'Nuvarande lösenord')}
+        </Label>
         <div class="relative">
           <Input
             id="current-password"
             type={showCurrentPassword ? 'text' : 'password'}
-            placeholder="Enter current password"
+            placeholder={t(locale, 'Enter current password', 'Ange nuvarande lösenord')}
             bind:value={currentPassword}
           />
           <Button
@@ -1541,7 +1549,9 @@
             variant="ghost"
             size="icon"
             class="absolute right-1 top-1/2 -translate-y-1/2"
-            aria-label={showCurrentPassword ? 'Hide current password' : 'Show current password'}
+            aria-label={showCurrentPassword
+              ? t(locale, 'Hide current password', 'Dölj nuvarande lösenord')
+              : t(locale, 'Show current password', 'Visa nuvarande lösenord')}
             onclick={togglePasswordVisibility}
           >
             {#if showCurrentPassword}
@@ -1554,28 +1564,36 @@
       </div>
 
       <div class="space-y-2">
-        <Label for="new-password">New Password</Label>
+        <Label for="new-password">{t(locale, 'New Password', 'Nytt lösenord')}</Label>
         <Input
           id="new-password"
           type="password"
-          placeholder="Enter new password"
+          placeholder={t(locale, 'Enter new password', 'Ange nytt lösenord')}
           bind:value={newPassword}
         />
       </div>
 
       <div class="space-y-2">
-        <Label for="confirm-password">Confirm New Password</Label>
+        <Label for="confirm-password">
+          {t(locale, 'Confirm New Password', 'Bekräfta nytt lösenord')}
+        </Label>
         <Input
           id="confirm-password"
           type="password"
-          placeholder="Confirm new password"
+          placeholder={t(locale, 'Confirm new password', 'Bekräfta nytt lösenord')}
           bind:value={confirmPassword}
         />
       </div>
 
       <div class="flex items-start gap-3 rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
         <TriangleAlert class="mt-0.5 h-4 w-4" aria-hidden="true" />
-        <p>Changing the master password re-encrypts the vault. The operation may take several minutes for large vaults.</p>
+        <p>
+          {t(
+            locale,
+            'Changing the master password re-encrypts the vault. The operation may take several minutes for large vaults.',
+            'Att byta huvudlösenord krypterar om valvet och kan ta några minuter för stora valv.'
+          )}
+        </p>
       </div>
       {#if changePasswordError}
         <p class="text-sm text-destructive">{changePasswordError}</p>
@@ -1584,7 +1602,7 @@
 
     <DialogFooter class="gap-2">
       <Button type="button" variant="outline" onclick={closePasswordModal}>
-        Cancel
+        {t(locale, 'Cancel', 'Avbryt')}
       </Button>
       <Button
         type="button"
@@ -1596,7 +1614,7 @@
         {#if isChangingPassword}
           <Loader2 class="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
         {/if}
-        Change Password
+        {t(locale, 'Change Password', 'Byt lösenord')}
       </Button>
     </DialogFooter>
   </DialogContent>
@@ -1605,35 +1623,41 @@
 <Dialog open={kdfModalOpen} onOpenChange={handleKdfDialogChange}>
   <DialogContent class="sm:max-w-lg">
     <DialogHeader>
-      <DialogTitle>Reconfigure Key Derivation</DialogTitle>
+      <DialogTitle>
+        {t(locale, 'Reconfigure Key Derivation', 'Ändra nyckelderivering')}
+      </DialogTitle>
       <DialogDescription>
-        Adjust the Argon2id parameters used when deriving the vault encryption key.
+        {t(
+          locale,
+          'Adjust the Argon2id parameters used when deriving the vault encryption key.',
+          'Justera Argon2id-parametrarna som används för att härleda valvets krypteringsnyckel.'
+        )}
       </DialogDescription>
     </DialogHeader>
 
     <div class="space-y-4">
       <div class="grid gap-3 sm:grid-cols-3">
         <div class="space-y-2">
-          <Label for="kdf-memory">Memory (MiB)</Label>
+          <Label for="kdf-memory">{t(locale, 'Memory (MiB)', 'Minne (MiB)')}</Label>
           <Input id="kdf-memory" type="number" min="8" bind:value={kdfMemoryMb} />
         </div>
         <div class="space-y-2">
-          <Label for="kdf-time">Time Cost</Label>
+          <Label for="kdf-time">{t(locale, 'Time Cost', 'Tidskostnad')}</Label>
           <Input id="kdf-time" type="number" min="1" bind:value={kdfTimeCost} />
         </div>
         <div class="space-y-2">
-          <Label for="kdf-parallelism">Parallelism</Label>
+          <Label for="kdf-parallelism">{t(locale, 'Parallelism', 'Parallellism')}</Label>
           <Input id="kdf-parallelism" type="number" min="1" bind:value={kdfParallelism} />
         </div>
       </div>
 
       <div class="space-y-2">
-        <Label for="kdf-password">Current Password</Label>
+        <Label for="kdf-password">{t(locale, 'Current Password', 'Nuvarande lösenord')}</Label>
         <div class="relative">
           <Input
             id="kdf-password"
             type={showKdfPassword ? 'text' : 'password'}
-            placeholder="Enter current password"
+            placeholder={t(locale, 'Enter current password', 'Ange nuvarande lösenord')}
             bind:value={kdfCurrentPassword}
           />
           <Button
@@ -1641,7 +1665,9 @@
             variant="ghost"
             size="icon"
             class="absolute right-1 top-1/2 -translate-y-1/2"
-            aria-label={showKdfPassword ? 'Hide current password' : 'Show current password'}
+            aria-label={showKdfPassword
+              ? t(locale, 'Hide current password', 'Dölj nuvarande lösenord')
+              : t(locale, 'Show current password', 'Visa nuvarande lösenord')}
             onclick={toggleKdfPasswordVisibility}
           >
             {#if showKdfPassword}
@@ -1655,7 +1681,13 @@
 
       <div class="flex items-start gap-3 rounded-lg border border-border/60 bg-muted/20 p-3 text-sm text-muted-foreground">
         <TriangleAlert class="mt-0.5 h-4 w-4 text-primary" aria-hidden="true" />
-        <p>Updating Argon2 parameters will re-encrypt the vault and may take a few moments.</p>
+        <p>
+          {t(
+            locale,
+            'Updating Argon2 parameters will re-encrypt the vault and may take a few moments.',
+            'Att uppdatera Argon2-parametrarna krypterar om valvet och kan ta en stund.'
+          )}
+        </p>
       </div>
 
       {#if kdfError}
@@ -1665,7 +1697,7 @@
 
     <DialogFooter class="gap-2">
       <Button type="button" variant="outline" onclick={() => handleKdfDialogChange(false)}>
-        Cancel
+        {t(locale, 'Cancel', 'Avbryt')}
       </Button>
       <Button
         type="button"
@@ -1676,7 +1708,7 @@
         {#if isUpdatingKdf}
           <Loader2 class="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
         {/if}
-        Apply Changes
+        {t(locale, 'Apply Changes', 'Verkställ ändringar')}
       </Button>
     </DialogFooter>
   </DialogContent>

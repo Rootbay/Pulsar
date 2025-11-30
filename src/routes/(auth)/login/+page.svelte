@@ -1,4 +1,4 @@
-<svelte:head>
+﻿<svelte:head>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
   <link
@@ -23,7 +23,11 @@
     CardTitle
   } from '$lib/components/ui/card';
   import { isDatabaseLoaded, isLocked, needsPasswordSetup, totpVerified, totpRequired } from '$lib/stores';
-  import { Lock, Loader2, Eye, EyeOff } from '@lucide/svelte';
+  import { currentLocale } from '$lib/i18n';
+  import { Lock, Loader2, Eye, EyeOff, ArrowLeft } from '@lucide/svelte';
+
+  const t = (locale: 'en' | 'sv', en: string, sv: string) => (locale === 'sv' ? sv : en);
+  $: locale = $currentLocale as 'en' | 'sv';
 
   let password = '';
   let loginError: string | null = null;
@@ -64,7 +68,10 @@
       console.error('Unlock failed:', error);
       totpRequired.set(false);
       totpVerified.set(false);
-      loginError = typeof error === 'string' ? error : 'An unknown error occurred.';
+      loginError =
+        typeof error === 'string'
+          ? error
+          : t(locale, 'An unknown error occurred.', 'Ett okÃ¤nt fel intrÃ¤ffade.');
     } finally {
       isUnlocking = false;
     }
@@ -85,11 +92,23 @@
 
   $: canSubmit = password.trim().length > 0 && !isUnlocking;
 
+  function goBack() {
+    goto('/select-vault', { replaceState: true });
+  }
+
   // Background blobs: keep only slow pulse (no mouse tracking)
 </script>
 
 <!-- Background -->
 <div class="relative min-h-screen bg-gradient-to-b from-background to-background/80">
+    <button
+      type="button"
+      class="absolute left-4 top-4 z-10 flex items-center gap-1 rounded-md px-2 py-1 text-sm text-muted-foreground transition hover:text-foreground"
+      onclick={goBack}
+    >
+      <ArrowLeft class="h-4 w-4" />
+      {t(locale, 'Back', 'Tillbaka')}
+    </button>
     <div class="pointer-events-none absolute inset-0 -z-10">
       <div class="absolute left-[10%] top-[10%] size-[28rem] rounded-full bg-primary/10 blur-3xl blob-a"></div>
       <div class="absolute right-[10%] bottom-[12%] size-[22rem] rounded-full bg-muted/40 blur-2xl blob-b"></div>
@@ -98,23 +117,34 @@
   <!-- Centered card -->
   <div class="mx-auto grid min-h-screen w-full place-items-center px-4">
     <Card class="w-full max-w-md border-border/60 bg-card/80 backdrop-blur supports-[backdrop-filter]:bg-card/70">
+      <div class="flex w-full justify-start">
+        <Button variant="ghost" size="sm" onclick={goBack} class="mb-2">
+          {t(locale, 'Back', 'Tillbaka')}
+        </Button>
+      </div>
       <form class="flex flex-col" onsubmit={handleSubmit}>
         <CardHeader class="space-y-0 text-center">
           <div class="mx-auto mb-2 flex size-12 items-center justify-center rounded-xl bg-primary/10 text-primary">
             <Lock class="size-6" />
           </div>
-          <CardTitle class="text-2xl font-semibold tracking-tight">Welcome back</CardTitle>
-          <CardDescription class="mt-0">Unlock your vault with your master password</CardDescription>
+          <CardTitle class="text-2xl font-semibold tracking-tight">
+            {t(locale, 'Welcome back', 'Valkommen tillbaka')}
+          </CardTitle>
+          <CardDescription class="mt-0">
+            {t(locale, 'Unlock your vault with your master password', 'Las upp ditt valv med ditt huvudlosenord')}
+          </CardDescription>
         </CardHeader>
 
         <CardContent class="mt-6 space-y-4">
           <div class="space-y-2">
-            <Label for="master-password">Master password</Label>
+            <Label for="master-password">
+              {t(locale, 'Master password', 'Huvudlosenord')}
+            </Label>
             <div class="relative">
               <Input
                 id="master-password"
                 type={showPassword ? 'text' : 'password'}
-                placeholder="••••••••••"
+                placeholder={t(locale, 'Enter your master password', 'Ange ditt huvudlosenord')}
                 bind:value={password}
                 autocomplete="current-password"
                 disabled={isUnlocking}
@@ -124,7 +154,11 @@
                 type="button"
                 class="absolute inset-y-0 right-0 flex items-center px-3 text-muted-foreground hover:text-foreground"
                 onclick={() => (showPassword = !showPassword)}
-                aria-label={showPassword ? 'Hide password' : 'Show password'}
+                aria-label={
+                  showPassword
+                    ? t(locale, 'Hide password', 'DÃ¶lj lÃ¶senord')
+                    : t(locale, 'Show password', 'Visa lÃ¶senord')
+                }
                 tabindex="-1"
               >
                 {#if showPassword}
@@ -144,20 +178,22 @@
         <CardFooter class="mt-6 flex flex-col gap-2">
           <Button type="submit" class="w-full" disabled={!canSubmit}>
             {#if isUnlocking}
-              <Loader2 class="mr-2 size-4 animate-spin" /> Unlocking…
+              <Loader2 class="mr-2 size-4 animate-spin" /> {t(locale, 'Unlockingâ€¦', 'LÃ¥ser uppâ€¦')}
             {:else}
-              Unlock
+              {t(locale, 'Unlock', 'LÃ¥s upp')}
             {/if}
           </Button>
           <Button type="button" variant="ghost" class="w-full" onclick={handleChangeDatabase}>
-            Open another vault
+            {t(locale, 'Open another vault', 'Ã–ppna ett annat valv')}
           </Button>
         </CardFooter>
       </form>
     </Card>
 
     <div class="mt-6 text-center text-xs">
-      <span class="crypto-tagline text-muted-foreground">Secure by Argon2id + XChaCha20-Poly1305</span>
+      <span class="crypto-tagline text-muted-foreground">
+        {t(locale, 'Secure by Argon2id + XChaCha20-Poly1305', 'SÃ¤ker med Argon2id + XChaCha20-Poly1305')}
+      </span>
     </div>
   </div>
 </div>
@@ -236,5 +272,9 @@
 
   /* (no mouse-responsive overlay; keep gentle pulses only) */
 </style>
+
+
+
+
 
 

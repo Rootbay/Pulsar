@@ -276,8 +276,12 @@
   function openProvider(provider: string) {
     backupSettings.update((current) => ({ ...current, selectedProvider: provider }));
     openModal({
-      title: `Configure ${provider}`,
-      description: `Provide credentials for your ${provider} connection.`,
+      title: t(locale, `Configure ${provider}`, `Konfigurera ${provider}`),
+      description: t(
+        locale,
+        `Provide credentials for your ${provider} connection.`,
+        `Ange uppgifter för din ${provider}-anslutning.`
+      ),
       onConfirm: () => {}
     });
   }

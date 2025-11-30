@@ -32,6 +32,11 @@
     totpRequired
   } from '$lib/stores';
   import { loginTotpSecret } from '$lib/stores/totp';
+  import { currentLocale } from '$lib/i18n';
+  import { ArrowLeft } from '@lucide/svelte';
+
+  const t = (locale: 'en' | 'sv', en: string, sv: string) => (locale === 'sv' ? sv : en);
+  $: locale = $currentLocale as 'en' | 'sv';
 
   const CODE_LENGTH = 6;
   const TOKEN_PERIOD = 30;
@@ -237,9 +242,21 @@
       copyFeedbackTimeout = null;
     }
   });
+
+  function goBack() {
+    goto('/login', { replaceState: true });
+  }
 </script>
 
 <div class="relative flex min-h-screen items-start justify-center bg-background px-4 pb-16 pt-20">
+  <button
+    type="button"
+    class="absolute left-4 top-4 flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+    onclick={goBack}
+  >
+    <ArrowLeft class="h-4 w-4" />
+    {t(locale, 'Back', 'Tillbaka')}
+  </button>
   <div
     class="pointer-events-none absolute left-1/2 top-1/2 h-[min(90vw,32rem)] w-[min(90vw,32rem)] -translate-x-1/2 -translate-y-1/2 rounded-full blur-3xl bg-primary-glow"
     aria-hidden="true"

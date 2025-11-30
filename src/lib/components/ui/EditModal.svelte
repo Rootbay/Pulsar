@@ -2,6 +2,7 @@
     import Input from './Input.svelte';
     import Switch from './Switch.svelte';
     import { createEventDispatcher } from 'svelte';
+    import { currentLocale } from '$lib/i18n';
 
     export let show: boolean;
     export let item: any; // This will be either a preset or a rule
@@ -10,6 +11,8 @@
     const dispatch = createEventDispatcher();
 
     let editedItem: any;
+    const t = (locale: 'en' | 'sv', en: string, sv: string) => (locale === 'sv' ? sv : en);
+    $: locale = $currentLocale as 'en' | 'sv';
 
     $: if (item) {
         editedItem = { ...item };
@@ -39,78 +42,82 @@
         </svg>
     </button>
     <div class="dialog-header">
-        <h2 class="dialog-title">Edit {type === 'preset' ? 'Preset' : 'Rule'}</h2>
+        <h2 class="dialog-title">
+            {type === 'preset'
+                ? t(locale, 'Edit Preset', 'Redigera förval')
+                : t(locale, 'Edit Rule', 'Redigera regel')}
+        </h2>
     </div>
     <div class="dialog-content">
         {#if type === 'preset'}
-            <Input title="Preset Name" bind:inputValue={editedItem.name} />
-            <Input title="Length" type="number" bind:inputValue={editedItem.length} />
+            <Input title={t(locale, 'Preset Name', 'Namn på förval')} bind:inputValue={editedItem.name} />
+            <Input title={t(locale, 'Length', 'Längd')} type="number" bind:inputValue={editedItem.length} />
             <div class="toggle-group">
-                <span class="toggle-label">Include uppercase (A-Z)</span>
+                <span class="toggle-label">{t(locale, 'Include uppercase (A-Z)', 'Inkludera versaler (A-Z)')}</span>
                 <Switch bind:checked={editedItem.settings.uppercase} />
             </div>
             <div class="toggle-group">
-                <span class="toggle-label">Include lowercase (a-z)</span>
+                <span class="toggle-label">{t(locale, 'Include lowercase (a-z)', 'Inkludera gemener (a-z)')}</span>
                 <Switch bind:checked={editedItem.settings.lowercase} />
             </div>
             <div class="toggle-group">
-                <span class="toggle-label">Include digits (0-9)</span>
+                <span class="toggle-label">{t(locale, 'Include digits (0-9)', 'Inkludera siffror (0-9)')}</span>
                 <Switch bind:checked={editedItem.settings.digits} />
             </div>
             <div class="toggle-group">
-                <span class="toggle-label">Include symbols (!@#$...)</span>
+                <span class="toggle-label">{t(locale, 'Include symbols (!@#$...)', 'Inkludera symboler (!@#$...)')}</span>
                 <Switch bind:checked={editedItem.settings.symbols} />
             </div>
             <div class="toggle-group">
-                <span class="toggle-label">Avoid ambiguous characters</span>
+                <span class="toggle-label">{t(locale, 'Avoid ambiguous characters', 'Undvik tvetydiga tecken')}</span>
                 <Switch bind:checked={editedItem.settings.ambiguous} />
             </div>
             <div class="toggle-group">
-                <span class="toggle-label">Exclude similar</span>
+                <span class="toggle-label">{t(locale, 'Exclude similar', 'Exkludera liknande tecken')}</span>
                 <Switch bind:checked={editedItem.settings.similar} />
             </div>
             <div class="toggle-group">
-                <span class="toggle-label">Pronounceable mode</span>
+                <span class="toggle-label">{t(locale, 'Pronounceable mode', 'Uttalbart läge')}</span>
                 <Switch bind:checked={editedItem.settings.pronounceable} />
             </div>
         {:else if type === 'rule'}
             <Input title="URL" bind:inputValue={editedItem.url} />
-            <Input title="Length" type="number" bind:inputValue={editedItem.length} />
-            <Input title="Type" bind:inputValue={editedItem.type} />
-            <Input title="Description" bind:inputValue={editedItem.desc} />
+            <Input title={t(locale, 'Length', 'Längd')} type="number" bind:inputValue={editedItem.length} />
+            <Input title={t(locale, 'Type', 'Typ')} bind:inputValue={editedItem.type} />
+            <Input title={t(locale, 'Description', 'Beskrivning')} bind:inputValue={editedItem.desc} />
             <div class="toggle-group">
-                <span class="toggle-label">Include uppercase (A-Z)</span>
+                <span class="toggle-label">{t(locale, 'Include uppercase (A-Z)', 'Inkludera versaler (A-Z)')}</span>
                 <Switch bind:checked={editedItem.settings.uppercase} />
             </div>
             <div class="toggle-group">
-                <span class="toggle-label">Include lowercase (a-z)</span>
+                <span class="toggle-label">{t(locale, 'Include lowercase (a-z)', 'Inkludera gemener (a-z)')}</span>
                 <Switch bind:checked={editedItem.settings.lowercase} />
             </div>
             <div class="toggle-group">
-                <span class="toggle-label">Include digits (0-9)</span>
+                <span class="toggle-label">{t(locale, 'Include digits (0-9)', 'Inkludera siffror (0-9)')}</span>
                 <Switch bind:checked={editedItem.settings.digits} />
             </div>
             <div class="toggle-group">
-                <span class="toggle-label">Include symbols (!@#$...)</span>
+                <span class="toggle-label">{t(locale, 'Include symbols (!@#$...)', 'Inkludera symboler (!@#$...)')}</span>
                 <Switch bind:checked={editedItem.settings.symbols} />
             </div>
             <div class="toggle-group">
-                <span class="toggle-label">Avoid ambiguous characters</span>
+                <span class="toggle-label">{t(locale, 'Avoid ambiguous characters', 'Undvik tvetydiga tecken')}</span>
                 <Switch bind:checked={editedItem.settings.ambiguous} />
             </div>
             <div class="toggle-group">
-                <span class="toggle-label">Exclude similar</span>
+                <span class="toggle-label">{t(locale, 'Exclude similar', 'Exkludera liknande tecken')}</span>
                 <Switch bind:checked={editedItem.settings.similar} />
             </div>
             <div class="toggle-group">
-                <span class="toggle-label">Pronounceable mode</span>
+                <span class="toggle-label">{t(locale, 'Pronounceable mode', 'Uttalbart läge')}</span>
                 <Switch bind:checked={editedItem.settings.pronounceable} />
             </div>
         {/if}
     </div>
     <div class="dialog-footer">
-        <button class="button" on:click={handleCancel}>Cancel</button>
-        <button class="button primary" on:click={handleSave}>Save</button>
+        <button class="button" on:click={handleCancel}>{t(locale, 'Cancel', 'Avbryt')}</button>
+        <button class="button primary" on:click={handleSave}>{t(locale, 'Save', 'Spara')}</button>
     </div>
   </div>
 </div>

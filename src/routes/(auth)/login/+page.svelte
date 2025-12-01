@@ -71,7 +71,7 @@
       loginError =
         typeof error === 'string'
           ? error
-          : t(locale, 'An unknown error occurred.', 'Ett okÃ¤nt fel intrÃ¤ffade.');
+          : t(locale, 'An unknown error occurred.', 'Ett okänt fel inträffade.');
     } finally {
       isUnlocking = false;
     }
@@ -85,16 +85,17 @@
     totpVerified.set(false);
   };
 
+  const goBack = async () => {
+    await handleChangeDatabase();
+    await goto('/select-vault', { replaceState: true });
+  };
+
   const handleSubmit = (event: SubmitEvent) => {
     event.preventDefault();
     void handleUnlock();
   };
 
   $: canSubmit = password.trim().length > 0 && !isUnlocking;
-
-  function goBack() {
-    goto('/select-vault', { replaceState: true });
-  }
 
   // Background blobs: keep only slow pulse (no mouse tracking)
 </script>
@@ -117,34 +118,29 @@
   <!-- Centered card -->
   <div class="mx-auto grid min-h-screen w-full place-items-center px-4">
     <Card class="w-full max-w-md border-border/60 bg-card/80 backdrop-blur supports-[backdrop-filter]:bg-card/70">
-      <div class="flex w-full justify-start">
-        <Button variant="ghost" size="sm" onclick={goBack} class="mb-2">
-          {t(locale, 'Back', 'Tillbaka')}
-        </Button>
-      </div>
       <form class="flex flex-col" onsubmit={handleSubmit}>
         <CardHeader class="space-y-0 text-center">
           <div class="mx-auto mb-2 flex size-12 items-center justify-center rounded-xl bg-primary/10 text-primary">
             <Lock class="size-6" />
           </div>
           <CardTitle class="text-2xl font-semibold tracking-tight">
-            {t(locale, 'Welcome back', 'Valkommen tillbaka')}
+            {t(locale, 'Welcome back', 'Välkommen tillbaka')}
           </CardTitle>
           <CardDescription class="mt-0">
-            {t(locale, 'Unlock your vault with your master password', 'Las upp ditt valv med ditt huvudlosenord')}
+            {t(locale, 'Unlock your vault with your master password', 'Lås upp ditt valv med ditt huvudlösenord')}
           </CardDescription>
         </CardHeader>
 
         <CardContent class="mt-6 space-y-4">
           <div class="space-y-2">
             <Label for="master-password">
-              {t(locale, 'Master password', 'Huvudlosenord')}
+              {t(locale, 'Master password', 'Huvudlösenord')}
             </Label>
             <div class="relative">
               <Input
                 id="master-password"
                 type={showPassword ? 'text' : 'password'}
-                placeholder={t(locale, 'Enter your master password', 'Ange ditt huvudlosenord')}
+                placeholder={t(locale, 'Enter your master password', 'Ange ditt huvudlösenord')}
                 bind:value={password}
                 autocomplete="current-password"
                 disabled={isUnlocking}
@@ -156,8 +152,8 @@
                 onclick={() => (showPassword = !showPassword)}
                 aria-label={
                   showPassword
-                    ? t(locale, 'Hide password', 'DÃ¶lj lÃ¶senord')
-                    : t(locale, 'Show password', 'Visa lÃ¶senord')
+                    ? t(locale, 'Hide password', 'Dölj lösenord')
+                    : t(locale, 'Show password', 'Visa lösenord')
                 }
                 tabindex="-1"
               >
@@ -178,13 +174,13 @@
         <CardFooter class="mt-6 flex flex-col gap-2">
           <Button type="submit" class="w-full" disabled={!canSubmit}>
             {#if isUnlocking}
-              <Loader2 class="mr-2 size-4 animate-spin" /> {t(locale, 'Unlockingâ€¦', 'LÃ¥ser uppâ€¦')}
+              <Loader2 class="mr-2 size-4 animate-spin" /> {t(locale, 'Unlocking…', 'Låser upp…')}
             {:else}
-              {t(locale, 'Unlock', 'LÃ¥s upp')}
+              {t(locale, 'Unlock', 'Lås upp')}
             {/if}
           </Button>
           <Button type="button" variant="ghost" class="w-full" onclick={handleChangeDatabase}>
-            {t(locale, 'Open another vault', 'Ã–ppna ett annat valv')}
+            {t(locale, 'Open another vault', 'Öppna ett annat valv')}
           </Button>
         </CardFooter>
       </form>
@@ -192,7 +188,7 @@
 
     <div class="mt-6 text-center text-xs">
       <span class="crypto-tagline text-muted-foreground">
-        {t(locale, 'Secure by Argon2id + XChaCha20-Poly1305', 'SÃ¤ker med Argon2id + XChaCha20-Poly1305')}
+        {t(locale, 'Secure by Argon2id + XChaCha20-Poly1305', 'Säker med Argon2id + XChaCha20-Poly1305')}
       </span>
     </div>
   </div>
@@ -272,6 +268,7 @@
 
   /* (no mouse-responsive overlay; keep gentle pulses only) */
 </style>
+
 
 
 

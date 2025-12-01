@@ -243,7 +243,15 @@
     }
   });
 
-  function goBack() {
+  async function goBack() {
+    try {
+      await invoke('lock');
+    } catch (error) {
+      console.error('Failed to lock while leaving TOTP screen:', error);
+    }
+    totpRequired.set(false);
+    totpVerified.set(false);
+    isLocked.set(true);
     goto('/login', { replaceState: true });
   }
 </script>

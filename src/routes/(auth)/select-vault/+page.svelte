@@ -268,20 +268,9 @@
     }
   };
 
-  function goBack() {
-    goto('/', { replaceState: true });
-  }
 </script>
 
 <div class="relative min-h-screen bg-background">
-  <button
-    type="button"
-    class="absolute left-4 top-4 z-10 flex items-center gap-1 rounded-md px-2 py-1 text-sm text-muted-foreground transition hover:text-foreground"
-    onclick={goBack}
-  >
-    <ArrowLeft class="h-4 w-4" />
-    {t(locale, 'Back', 'Tillbaka')}
-  </button>
   <div class="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
     <div class="absolute left-[8%] top-[12%] h-[22rem] w-[22rem] rounded-full bg-primary/10 blur-3xl"></div>
     <div class="absolute right-[10%] bottom-[10%] h-[18rem] w-[18rem] rounded-full bg-muted/40 blur-2xl"></div>

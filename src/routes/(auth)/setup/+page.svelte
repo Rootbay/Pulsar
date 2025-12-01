@@ -143,7 +143,17 @@
     void handleSetMasterPassword();
   }
 
-  function goBack() {
+  async function goBack() {
+    try {
+      await invoke('lock');
+    } catch (error) {
+      console.error('Failed to lock while leaving setup:', error);
+    }
+    isDatabaseLoaded.set(false);
+    isLocked.set(true);
+    needsPasswordSetup.set(false);
+    totpVerified.set(false);
+    totpRequired.set(false);
     goto('/select-vault', { replaceState: true });
   }
 </script>

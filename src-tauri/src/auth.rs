@@ -396,7 +396,6 @@ async fn finalize_unlock(
         *pending_guard = None;
     }
 
-    // Register current device in the registry
     if let Err(e) = register_device(state).await {
         eprintln!("Failed to register device: {}", e);
     }
@@ -921,7 +920,6 @@ pub async fn enable_biometrics(
     state: State<'_, AppState>,
     password: String,
 ) -> Result<()> {
-    // 1. Verify password first
     let db_path = get_db_path(&state).await?;
     let metadata = match read_password_metadata(db_path.as_path()).await? {
         Some(meta) => Some(meta),
@@ -947,15 +945,11 @@ pub async fn enable_biometrics(
         return Err(Error::Validation("Invalid password".to_string()));
     }
 
-    // 2. Generate Biometric Key (High Entropy)
     let mut bio_key_bytes = [0u8; 32];
     OsRng.fill_bytes(&mut bio_key_bytes);
     let bio_key_b64 = general_purpose::STANDARD.encode(bio_key_bytes);
 
-    // 3. Encrypt Master Password with Biometric Key
     let encrypted_password_blob = encrypt(&password, &bio_key_bytes)?;
-
-    // 4. Store Encrypted Password in Database
     let db_pool = get_db_pool(&state).await?;
     sqlx::query(
         "INSERT OR REPLACE INTO configuration (key, value) VALUES ('biometric_encrypted_password', ?)",
@@ -964,7 +958,6 @@ pub async fn enable_biometrics(
     .execute(&db_pool)
     .await?;
 
-    // 5. Store Biometric Key in Keyring (Vault Specific)
     let vault_user = get_vault_id(&db_path);
     let entry = Entry::new(KEYRING_SERVICE, &vault_user).map_err(|e| Error::Internal(e.to_string()))?;
     entry.set_password(&bio_key_b64).map_err(|e| Error::Internal(e.to_string()))?;
@@ -977,11 +970,9 @@ pub async fn disable_biometrics(state: State<'_, AppState>) -> Result<()> {
     let db_path = get_db_path(&state).await?;
     let vault_user = get_vault_id(&db_path);
 
-    // Remove from Keyring
     let entry = Entry::new(KEYRING_SERVICE, &vault_user).map_err(|e| Error::Internal(e.to_string()))?;
     let _ = entry.delete_credential(); 
 
-    // Remove from Database
     if let Ok(db_pool) = get_db_pool(&state).await {
         let _ = sqlx::query("DELETE FROM configuration WHERE key = 'biometric_encrypted_password'")
             .execute(&db_pool)
@@ -1010,7 +1001,6 @@ pub async fn unlock_with_biometrics(
     let db_path = get_db_path(&state).await?;
     let vault_user = get_vault_id(&db_path);
 
-    // 1. Retrieve Biometric Key from Keyring
     let entry = Entry::new(KEYRING_SERVICE, &vault_user).map_err(|e| Error::Internal(e.to_string()))?;
     let bio_key_b64 = entry.get_password().map_err(|e| {
         if matches!(e, keyring::Error::NoEntry) {
@@ -1024,7 +1014,6 @@ pub async fn unlock_with_biometrics(
         .decode(&bio_key_b64)
         .map_err(|_| Error::Internal("Invalid biometric key format".to_string()))?;
 
-    // 2. Retrieve Encrypted Password from DB
     let db_pool = get_db_pool(&state).await?;
     let row = sqlx::query("SELECT value FROM configuration WHERE key = 'biometric_encrypted_password'")
         .fetch_optional(&db_pool)
@@ -1035,11 +1024,9 @@ pub async fn unlock_with_biometrics(
         None => return Err(Error::Internal("Biometric configuration corrupted (DB entry missing)".to_string())),
     };
 
-    // 3. Decrypt Master Password
     let master_password = decrypt(&encrypted_password_blob, &bio_key_bytes)
         .map_err(|_| Error::Internal("Biometric decryption failed".to_string()))?;
 
-    // 4. Unlock
     unlock(state, master_password).await
 }
 

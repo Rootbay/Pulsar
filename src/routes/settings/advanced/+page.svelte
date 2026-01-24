@@ -1,13 +1,17 @@
-
 <script lang="ts">
   import { get } from 'svelte/store';
-  import { onDestroy } from 'svelte';
-  import { invoke } from '@tauri-apps/api/core';
+  import { callBackend } from '$lib/utils/backend';
   import { toast } from 'svelte-sonner';
   import { advancedSettings } from '$lib/stores/advanced';
   import type { AdvancedSettings } from '$lib/config/settings';
   import { Button } from '$lib/components/ui/button';
-  import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '$lib/components/ui/card';
+  import {
+    Card,
+    CardContent,
+    CardDescription,
+    CardHeader,
+    CardTitle
+  } from '$lib/components/ui/card';
   import { Input } from '$lib/components/ui/input';
   import { Label } from '$lib/components/ui/label';
   import { Switch } from '$lib/components/ui/switch';
@@ -18,7 +22,7 @@
   type KdfPreset = AdvancedSettings['kdfPreset'];
 
   const t = (locale: 'en' | 'sv', en: string, sv: string) => (locale === 'sv' ? sv : en);
-  $: locale = $currentLocale as 'en' | 'sv';
+  let locale = $derived($currentLocale as 'en' | 'sv');
 
   const kdfPresets: Array<{ value: KdfPreset }> = [
     { value: 'fast' },
@@ -53,30 +57,24 @@
 
   const WIPE_CONFIRMATION_TOKEN = 'DELETE VAULT';
 
-  let currentSettings: AdvancedSettings = get(advancedSettings);
-  let { kdfPreset, timeCost, memoryCost, parallelism, wipeConfirmationText, lockMemoryPages, secureMemoryAllocation } =
-    currentSettings;
+  let currentSettings = $state<AdvancedSettings>(get(advancedSettings));
 
-  const unsubscribe = advancedSettings.subscribe((value) => {
-    currentSettings = value;
-    ({
-      kdfPreset,
-      timeCost,
-      memoryCost,
-      parallelism,
-      wipeConfirmationText,
-      lockMemoryPages,
-      secureMemoryAllocation
-    } = value);
-  });
+  let kdfPreset = $derived(currentSettings.kdfPreset);
+  let timeCost = $derived(currentSettings.timeCost);
+  let memoryCost = $derived(currentSettings.memoryCost);
+  let parallelism = $derived(currentSettings.parallelism);
+  let wipeConfirmationText = $state('');
+  let lockMemoryPages = $derived(currentSettings.lockMemoryPages);
+  let secureMemoryAllocation = $derived(currentSettings.secureMemoryAllocation);
 
-  onDestroy(() => {
-    unsubscribe();
+  $effect(() => {
+    return advancedSettings.subscribe((value) => {
+      currentSettings = value;
+    });
   });
 
   function applyChanges(partial: Partial<AdvancedSettings>) {
-    currentSettings = { ...currentSettings, ...partial };
-    advancedSettings.set(currentSettings);
+    advancedSettings.set({ ...currentSettings, ...partial });
   }
 
   function selectPreset(preset: KdfPreset) {
@@ -100,28 +98,32 @@
 
   function handleWipeInput(event: Event) {
     const value = (event.target as HTMLInputElement).value;
-    applyChanges({ wipeConfirmationText: value });
+    wipeConfirmationText = value;
   }
 
   async function handleWipeVault() {
     if (!canWipeVault) return;
-    
+
     try {
-      await invoke('wipe_vault_database');
+      await callBackend('wipe_vault_database');
       toast.success(t(locale, 'Vault database wiped successfully.', 'Valvdatabasen har raderats.'));
-      applyChanges({ wipeConfirmationText: '' });
+      wipeConfirmationText = '';
     } catch (error) {
-      toast.error(`${t(locale, 'Failed to wipe vault', 'Misslyckades med att radera valvet')}: ${error}`);
+      toast.error(
+        `${t(locale, 'Failed to wipe vault', 'Misslyckades med att radera valvet')}: ${error}`
+      );
     }
   }
 
-  $: canWipeVault = wipeConfirmationText.trim() === WIPE_CONFIRMATION_TOKEN;
+  const canWipeVault = $derived(wipeConfirmationText.trim() === WIPE_CONFIRMATION_TOKEN);
 </script>
 
-<div class="flex-1 min-h-0 space-y-6 px-6 py-8">
-  <Card class="border-border/60 bg-card/80 backdrop-blur supports-[backdrop-filter]:bg-card/70">
-    <CardHeader class="flex flex-row items-start gap-3 border-b border-border/40 pb-4">
-      <div class="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
+<div class="min-h-0 flex-1 space-y-6 px-6 py-8">
+  <Card class="border-border/60 bg-card/80 supports-backdrop-filter:bg-card/70 backdrop-blur">
+    <CardHeader class="border-border/40 flex flex-row items-start gap-3 border-b pb-4">
+      <div
+        class="bg-primary/10 text-primary flex h-10 w-10 items-center justify-center rounded-full"
+      >
         <Gauge class="h-5 w-5" aria-hidden="true" />
       </div>
       <div>
@@ -138,7 +140,9 @@
       </div>
     </CardHeader>
     <CardContent class="flex flex-col gap-6 pt-4">
-      <div class="flex items-start gap-3 rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm text-warning-foreground">
+      <div
+        class="border-warning/40 bg-warning/10 text-warning-foreground flex items-start gap-3 rounded-lg border p-3 text-sm"
+      >
         <TriangleAlert class="mt-0.5 h-4 w-4" aria-hidden="true" />
         <p>
           {t(
@@ -150,7 +154,7 @@
       </div>
 
       <div class="space-y-3">
-        <Label class="text-sm font-medium text-foreground">
+        <Label class="text-foreground text-sm font-medium">
           {t(locale, 'Presets', 'Förval')}
         </Label>
         <div class="flex flex-wrap gap-2">
@@ -160,7 +164,7 @@
               size="sm"
               variant="outline"
               class={cn(
-                'rounded-full border-border/60 bg-muted/20 px-4 py-1.5 text-sm font-medium transition-colors',
+                'border-border/60 bg-muted/20 rounded-full px-4 py-1.5 text-sm font-medium transition-colors',
                 kdfPreset === preset.value
                   ? 'border-primary/60 bg-primary/10 text-primary shadow-sm'
                   : 'hover:border-primary/50 hover:text-primary'
@@ -181,7 +185,7 @@
 
       <div class="space-y-5">
         <div class="space-y-2">
-          <Label class="text-sm font-medium text-foreground" for="time-cost">
+          <Label class="text-foreground text-sm font-medium" for="time-cost">
             {t(locale, 'Time Cost (iterations)', 'Tidskostnad (iterationer)')}
           </Label>
           <div class="flex items-center gap-4">
@@ -191,15 +195,15 @@
               min="1"
               max="20"
               value={timeCost}
-              class="h-1.5 flex-1 appearance-none rounded-full bg-secondary accent-primary"
+              class="bg-secondary accent-primary h-1.5 flex-1 appearance-none rounded-full"
               oninput={(event) => handleSliderInput('timeCost', event)}
             />
-            <span class="w-16 text-right text-sm text-muted-foreground">{timeCost}</span>
+            <span class="text-muted-foreground w-16 text-right text-sm">{timeCost}</span>
           </div>
         </div>
 
         <div class="space-y-2">
-          <Label class="text-sm font-medium text-foreground" for="memory-cost">
+          <Label class="text-foreground text-sm font-medium" for="memory-cost">
             {t(locale, 'Memory Cost (MB)', 'Minneskostnad (MB)')}
           </Label>
           <div class="flex items-center gap-4">
@@ -210,15 +214,15 @@
               max="1024"
               step="16"
               value={memoryCost}
-              class="h-1.5 flex-1 appearance-none rounded-full bg-secondary accent-primary"
+              class="bg-secondary accent-primary h-1.5 flex-1 appearance-none rounded-full"
               oninput={(event) => handleSliderInput('memoryCost', event)}
             />
-            <span class="w-20 text-right text-sm text-muted-foreground">{memoryCost}&nbsp;MB</span>
+            <span class="text-muted-foreground w-20 text-right text-sm">{memoryCost}&nbsp;MB</span>
           </div>
         </div>
 
         <div class="space-y-2">
-          <Label class="text-sm font-medium text-foreground" for="parallelism">
+          <Label class="text-foreground text-sm font-medium" for="parallelism">
             {t(locale, 'Parallelism (threads)', 'Parallelism (trådar)')}
           </Label>
           <div class="flex items-center gap-4">
@@ -228,19 +232,21 @@
               min="1"
               max="16"
               value={parallelism}
-              class="h-1.5 flex-1 appearance-none rounded-full bg-secondary accent-primary"
+              class="bg-secondary accent-primary h-1.5 flex-1 appearance-none rounded-full"
               oninput={(event) => handleSliderInput('parallelism', event)}
             />
-            <span class="w-20 text-right text-sm text-muted-foreground">{parallelism}</span>
+            <span class="text-muted-foreground w-20 text-right text-sm">{parallelism}</span>
           </div>
         </div>
       </div>
     </CardContent>
   </Card>
 
-  <Card class="border-border/60 bg-card/80 backdrop-blur supports-[backdrop-filter]:bg-card/70">
-    <CardHeader class="flex flex-row items-start gap-3 border-b border-border/40 pb-4">
-      <div class="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
+  <Card class="border-border/60 bg-card/80 supports-backdrop-filter:bg-card/70 backdrop-blur">
+    <CardHeader class="border-border/40 flex flex-row items-start gap-3 border-b pb-4">
+      <div
+        class="bg-primary/10 text-primary flex h-10 w-10 items-center justify-center rounded-full"
+      >
         <ShieldCheck class="h-5 w-5" aria-hidden="true" />
       </div>
       <div>
@@ -258,17 +264,27 @@
     </CardHeader>
     <CardContent class="flex flex-col gap-4 pt-4">
       {#each memoryToggles as toggle}
-        <div class="flex items-start justify-between gap-4 rounded-lg border border-border/60 bg-muted/20 px-4 py-3">
+        <div
+          class="border-border/60 bg-muted/20 flex items-start justify-between gap-4 rounded-lg border px-4 py-3"
+        >
           <div>
-            <p class="text-sm font-semibold text-foreground">
+            <p class="text-foreground text-sm font-semibold">
               {toggle.key === 'lockMemoryPages'
                 ? t(locale, 'Lock Memory Pages', 'Lås minnessidor')
                 : t(locale, 'Secure Memory Allocation', 'Säker minnesallokering')}
             </p>
-            <p class="text-sm text-muted-foreground">
+            <p class="text-muted-foreground text-sm">
               {toggle.key === 'lockMemoryPages'
-                ? t(locale, 'Prevent sensitive pages from being swapped to disk.', 'Förhindra att känsliga sidor växlas ut till disk.')
-                : t(locale, 'Use hardened allocators for secrets kept in RAM.', 'Använd härdade allokerare för hemligheter i RAM.')}
+                ? t(
+                    locale,
+                    'Prevent sensitive pages from being swapped to disk.',
+                    'Förhindra att känsliga sidor växlas ut till disk.'
+                  )
+                : t(
+                    locale,
+                    'Use hardened allocators for secrets kept in RAM.',
+                    'Använd härdade allokerare för hemligheter i RAM.'
+                  )}
             </p>
           </div>
           <Switch
@@ -281,9 +297,11 @@
     </CardContent>
   </Card>
 
-  <Card class="border-border/60 bg-card/80 backdrop-blur supports-[backdrop-filter]:bg-card/70">
-    <CardHeader class="flex flex-row items-start gap-3 border-b border-border/40 pb-4">
-      <div class="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
+  <Card class="border-border/60 bg-card/80 supports-backdrop-filter:bg-card/70 backdrop-blur">
+    <CardHeader class="border-border/40 flex flex-row items-start gap-3 border-b pb-4">
+      <div
+        class="bg-primary/10 text-primary flex h-10 w-10 items-center justify-center rounded-full"
+      >
         <ShieldAlert class="h-5 w-5" aria-hidden="true" />
       </div>
       <div>
@@ -291,26 +309,32 @@
           {t(locale, 'Destructive Actions', 'Förstörande åtgärder')}
         </CardTitle>
         <CardDescription>
-          {t(locale, 'These operations permanently remove data and cannot be undone.', 'Dessa åtgärder tar bort data permanent och kan inte ångras.')}
+          {t(
+            locale,
+            'These operations permanently remove data and cannot be undone.',
+            'Dessa åtgärder tar bort data permanent och kan inte ångras.'
+          )}
         </CardDescription>
       </div>
     </CardHeader>
     <CardContent class="pt-4">
-      <div class="space-y-4 rounded-lg border border-destructive/40 bg-destructive/10 p-4">
+      <div class="border-destructive/40 bg-destructive/10 space-y-4 rounded-lg border p-4">
         <div>
-          <p class="text-sm font-semibold text-destructive">
+          <p class="text-destructive text-sm font-semibold">
             {t(locale, 'Wipe Vault Database', 'Radera valvdatabas')}
           </p>
-          <p class="text-sm text-destructive/80">
-            {t(locale, 'Enter the confirmation phrase to enable vault wiping.', 'Skriv in bekräftelsefrasen för att aktivera radering av valvet.')}
+          <p class="text-destructive/80 text-sm">
+            {t(
+              locale,
+              'Enter the confirmation phrase to enable vault wiping.',
+              'Skriv in bekräftelsefrasen för att aktivera radering av valvet.'
+            )}
           </p>
         </div>
         <Input
-          placeholder={
-            locale === 'sv'
-              ? `Skriv "${WIPE_CONFIRMATION_TOKEN}" för att bekräfta`
-              : `Type "${WIPE_CONFIRMATION_TOKEN}" to confirm`
-          }
+          placeholder={locale === 'sv'
+            ? `Skriv "${WIPE_CONFIRMATION_TOKEN}" för att bekräfta`
+            : `Type "${WIPE_CONFIRMATION_TOKEN}" to confirm`}
           value={wipeConfirmationText}
           oninput={handleWipeInput}
           class={cn(
@@ -320,7 +344,13 @@
               : ''
           )}
         />
-        <Button type="button" variant="destructive" class="w-full" disabled={!canWipeVault} onclick={handleWipeVault}>
+        <Button
+          type="button"
+          variant="destructive"
+          class="w-full"
+          disabled={!canWipeVault}
+          onclick={handleWipeVault}
+        >
           {t(locale, 'Wipe Vault Database', 'Radera valvdatabas')}
         </Button>
       </div>

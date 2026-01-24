@@ -1,23 +1,23 @@
 <script lang="ts">
-  import { createEventDispatcher } from 'svelte';
+  import type { Snippet } from 'svelte';
   import { ChevronRight } from '@lucide/svelte';
 
-  export let title: string;
-  export let subtitle: string;
-  export let active: boolean = false;
-  export let type: string;
-  export let color: string;
-
-  const dispatch = createEventDispatcher();
-
-  function handleClick() {
-    dispatch('click');
+  interface Props {
+    title: string;
+    subtitle: string;
+    active?: boolean;
+    type: string;
+    color: string;
+    onclick?: () => void;
+    icon?: Snippet;
   }
+
+  let { title, subtitle, active = false, type, color, onclick, icon }: Props = $props();
 </script>
 
-<button class="sidebar-item" class:active on:click={handleClick}>
+<button class="sidebar-item" class:active {onclick}>
   <div class="sidebar-icon {type}" style="color: {color};">
-    <slot name="icon"></slot>
+    {@render icon?.()}
   </div>
   <div class="sidebar-text">
     <div class="sidebar-title">{title}</div>
@@ -113,7 +113,7 @@
     background: hsl(0 0% 50% / 0.1);
     color: hsl(0 0% 50%);
   }
-  
+
   .sidebar-text {
     flex: 1;
   }

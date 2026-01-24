@@ -1,22 +1,44 @@
 <script lang="ts">
-  import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from '$lib/components/ui/context-menu';
+  import {
+    ContextMenu,
+    ContextMenuContent,
+    ContextMenuItem,
+    ContextMenuSeparator,
+    ContextMenuTrigger
+  } from '$lib/components/ui/context-menu';
   import { Skeleton } from '$lib/components/ui/skeleton';
   import TagIcon from '../../ui/TagIcon.svelte';
   import Favicon from '../../ui/Favicon.svelte';
   import type { ItemSection, TagMeta } from './utils';
   import type { PasswordItem } from '$lib/types/password';
 
-  export let sections: ItemSection[] = [];
-  export let selectedItemId: number | null = null;
-  export let showSkeleton = false;
-  export let tagMap: Map<string, TagMeta> = new Map();
-  export let skeletonPlaceholders: (count: number) => number[];
-  export let getFallback: (item: PasswordItem, tagMap: Map<string, TagMeta>) => TagMeta;
-  export let isPinned: (item: PasswordItem) => boolean;
-  export let onSelect: (item: PasswordItem) => void;
-  export let onPinToggle: (item: PasswordItem) => void;
-  export let onEdit: (item: PasswordItem) => void;
-  export let onRemove: (item: PasswordItem) => void;
+  interface Props {
+    sections?: ItemSection[];
+    selectedItemId?: number | null;
+    showSkeleton?: boolean;
+    tagMap?: Map<string, TagMeta>;
+    skeletonPlaceholders: (count: number) => number[];
+    getFallback: (item: PasswordItem, tagMap: Map<string, TagMeta>) => TagMeta;
+    isPinned: (item: PasswordItem) => boolean;
+    onSelect?: (item: PasswordItem) => void;
+    onPinToggle?: (item: PasswordItem) => void;
+    onEdit?: (item: PasswordItem) => void;
+    onRemove?: (item: PasswordItem) => void;
+  }
+
+  let {
+    sections = [],
+    selectedItemId = null,
+    showSkeleton = false,
+    tagMap = new Map(),
+    skeletonPlaceholders,
+    getFallback,
+    isPinned,
+    onSelect,
+    onPinToggle,
+    onEdit,
+    onRemove
+  }: Props = $props();
 </script>
 
 {#each sections as section (section.title)}
@@ -68,14 +90,18 @@
                   </div>
                   <div class="itemTags">
                     <TagIcon
-                      tagNames={item.tags ? item.tags.split(',').map((tag: string) => tag.trim()) : []}
+                      tagNames={item.tags
+                        ? item.tags.split(',').map((tag: string) => tag.trim())
+                        : []}
                       {tagMap}
                     />
                   </div>
                 </a>
               </ContextMenuTrigger>
               <ContextMenuContent class="w-48">
-                <ContextMenuItem onSelect={() => onPinToggle?.(item)}>{isPinned(item) ? 'Unpin' : 'Pin'}</ContextMenuItem>
+                <ContextMenuItem onSelect={() => onPinToggle?.(item)}
+                  >{isPinned(item) ? 'Unpin' : 'Pin'}</ContextMenuItem
+                >
                 <ContextMenuSeparator />
                 <ContextMenuItem onSelect={() => onEdit?.(item)}>Edit Entry</ContextMenuItem>
                 <ContextMenuItem
@@ -92,4 +118,3 @@
     </ul>
   {/if}
 {/each}
-

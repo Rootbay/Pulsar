@@ -106,9 +106,7 @@ export async function initClipboardService(): Promise<void> {
   clipboardServiceReady.set(true);
 }
 
-export async function updateClipboardSettings(
-  partial: Partial<ClipboardSettings>
-): Promise<void> {
+export async function updateClipboardSettings(partial: Partial<ClipboardSettings>): Promise<void> {
   const current = get(clipboardSettings);
   const next: ClipboardSettings = { ...current, ...partial };
 

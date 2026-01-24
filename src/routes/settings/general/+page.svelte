@@ -1,15 +1,26 @@
 <script lang="ts">
-  import { onDestroy } from 'svelte';
   import { generalSettings } from '$lib/stores/general';
   import type { GeneralSettings } from '$lib/config/settings';
   import KeyboardShortcutsPopup from '$lib/components/KeyboardShortcutsPopup.svelte';
   import { Button } from '$lib/components/ui/button';
-  import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '$lib/components/ui/card';
+  import {
+    Card,
+    CardContent,
+    CardDescription,
+    CardHeader,
+    CardTitle
+  } from '$lib/components/ui/card';
   import { Label } from '$lib/components/ui/label';
   import { Select, SelectContent, SelectItem, SelectTrigger } from '$lib/components/ui/select';
   import { Switch } from '$lib/components/ui/switch';
   import { Smartphone, Key, Lock, Settings } from '@lucide/svelte';
   import { currentLocale } from '$lib/i18n';
+
+  interface Props {
+    onclose?: () => void;
+  }
+
+  let { onclose }: Props = $props();
 
   type BooleanSettingKey = {
     [K in keyof GeneralSettings]: GeneralSettings[K] extends boolean ? K : never;
@@ -17,20 +28,17 @@
 
   type SelectSettingKey = Exclude<keyof GeneralSettings, BooleanSettingKey>;
 
-  let currentGeneralSettings: GeneralSettings;
-  let locale: 'en' | 'sv' = 'en';
-  $: locale = $currentLocale;
+  let currentGeneralSettings = $state<GeneralSettings>({} as GeneralSettings);
+  let locale = $derived($currentLocale as 'en' | 'sv');
   const t = (en: string, sv: string) => (locale === 'sv' ? sv : en);
 
-  const unsubscribe = generalSettings.subscribe((value) => {
-    currentGeneralSettings = value;
+  $effect(() => {
+    return generalSettings.subscribe((value) => {
+      currentGeneralSettings = value;
+    });
   });
 
-  onDestroy(() => {
-    unsubscribe();
-  });
-
-  let showKeyboardShortcutsPopup = false;
+  let showKeyboardShortcutsPopup = $state(false);
 
   const selectOptions: Record<SelectSettingKey, { value: string; label: string }[]> = {
     appLanguage: [
@@ -98,22 +106,29 @@
   }
 
   function getOptionLabel(setting: SelectSettingKey) {
-    const option = selectOptions[setting].find((item) => item.value === currentGeneralSettings[setting]);
+    const option = selectOptions[setting].find(
+      (item) => item.value === currentGeneralSettings[setting]
+    );
     return option?.label ?? 'Select an option';
   }
 </script>
 
-<div class="flex-1 min-h-0 space-y-6 px-6 py-8">
-  <Card class="border-border/60 bg-card/80 backdrop-blur supports-[backdrop-filter]:bg-card/70">
-    <CardHeader class="flex flex-row items-start gap-3 border-b border-border/40 pb-4">
+<div class="min-h-0 flex-1 space-y-6 px-6 py-8">
+  <Card class="border-border/60 bg-card/80 supports-backdrop-filter:bg-card/70 backdrop-blur">
+    <CardHeader class="border-border/40 flex flex-row items-start gap-3 border-b pb-4">
       <div class="flex items-center gap-3">
-        <div class="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
+        <div
+          class="bg-primary/10 text-primary flex h-10 w-10 items-center justify-center rounded-full"
+        >
           <Settings size={20} color="currentColor" aria-hidden="true" />
         </div>
         <div>
           <CardTitle>{t('General Settings', 'Allmänna inställningar')}</CardTitle>
           <CardDescription>
-            {t('Manage default language, startup behaviour, and layout.', 'Hantera standardspråk, uppstart och layout.')}
+            {t(
+              'Manage default language, startup behaviour, and layout.',
+              'Hantera standardspråk, uppstart och layout.'
+            )}
           </CardDescription>
         </div>
       </div>
@@ -121,7 +136,7 @@
     <CardContent class="flex flex-col gap-8 pt-4">
       <div class="grid gap-6 md:grid-cols-2">
         <div class="space-y-2">
-          <Label class="text-sm font-medium text-foreground">
+          <Label class="text-foreground text-sm font-medium">
             {t('App Language', 'Språk')}
           </Label>
           {#each [locale] as l (l)}
@@ -145,7 +160,7 @@
         </div>
 
         <div class="space-y-2">
-          <Label class="text-sm font-medium text-foreground">
+          <Label class="text-foreground text-sm font-medium">
             {t('Default Vault on Startup', 'Standardvalv vid uppstart')}
           </Label>
           <Select
@@ -169,16 +184,18 @@
 
       <div class="space-y-5">
         {#each toggleSettings as toggleSetting (toggleSetting.key)}
-          <div class="flex items-center justify-between gap-4 rounded-lg border border-border/60 bg-muted/20 px-4 py-3">
+          <div
+            class="border-border/60 bg-muted/20 flex items-center justify-between gap-4 rounded-lg border px-4 py-3"
+          >
             <div class="space-y-1">
-              <p class="text-sm font-medium text-foreground">
+              <p class="text-foreground text-sm font-medium">
                 {locale === 'sv' && toggleSetting.key === 'startOnSystemBoot'
                   ? 'Starta med systemet'
                   : locale === 'sv' && toggleSetting.key === 'showInSystemTray'
                     ? 'Visa i systemfältet'
                     : toggleSetting.title}
               </p>
-              <p class="text-sm text-muted-foreground">
+              <p class="text-muted-foreground text-sm">
                 {locale === 'sv' && toggleSetting.key === 'startOnSystemBoot'
                   ? 'Öppna Pulsar automatiskt när datorn startar.'
                   : locale === 'sv' && toggleSetting.key === 'showInSystemTray'
@@ -196,7 +213,7 @@
       </div>
 
       <div class="space-y-2">
-        <Label class="text-sm font-medium text-foreground">
+        <Label class="text-foreground text-sm font-medium">
           {t('Default View on Open', 'Standardvy vid öppning')}
         </Label>
         <Select
@@ -219,10 +236,14 @@
     </CardContent>
   </Card>
 
-  <Card class="border-border/60 bg-card/80 backdrop-blur supports-[backdrop-filter]:bg-card/70">
-    <CardHeader class="flex flex-col gap-3 border-b border-border/40 pb-4 sm:flex-row sm:items-start sm:justify-between">
+  <Card class="border-border/60 bg-card/80 supports-backdrop-filter:bg-card/70 backdrop-blur">
+    <CardHeader
+      class="border-border/40 flex flex-col gap-3 border-b pb-4 sm:flex-row sm:items-start sm:justify-between"
+    >
       <div class="flex items-center gap-3">
-        <div class="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
+        <div
+          class="bg-primary/10 text-primary flex h-10 w-10 items-center justify-center rounded-full"
+        >
           <Lock size={20} color="currentColor" aria-hidden="true" />
         </div>
         <div>
@@ -230,7 +251,10 @@
             {t('Two-Factor Authentication', 'Tvåfaktorsautentisering')}
           </CardTitle>
           <CardDescription>
-            {t('Add extra layers of protection to vault access.', 'Lägg till extra skyddslager för valvåtkomst.')}
+            {t(
+              'Add extra layers of protection to vault access.',
+              'Lägg till extra skyddslager för valvåtkomst.'
+            )}
           </CardDescription>
         </div>
       </div>
@@ -242,12 +266,14 @@
     </CardHeader>
     <CardContent class="flex flex-col gap-4 pt-4">
       {#each authenticationMethods as method (method.key)}
-        <div class="flex items-center justify-between gap-4 rounded-lg border border-border/60 bg-muted/20 px-4 py-3">
+        <div
+          class="border-border/60 bg-muted/20 flex items-center justify-between gap-4 rounded-lg border px-4 py-3"
+        >
           <div class="space-y-1">
-            <p class="text-sm font-medium text-foreground">
+            <p class="text-foreground text-sm font-medium">
               {t('TOTP (Time-based)', 'TOTP (tidsbaserad)')}
             </p>
-            <p class="text-sm text-muted-foreground">
+            <p class="text-muted-foreground text-sm">
               {t('Built-in authenticator support.', 'Inbyggt stöd för autentiserare.')}
             </p>
           </div>
@@ -258,16 +284,21 @@
           />
         </div>
       {/each}
-      <p class="text-sm text-muted-foreground">
-        Configure per-vault overrides from the vaults settings page to enforce different requirements.
+      <p class="text-muted-foreground text-sm">
+        Configure per-vault overrides from the vaults settings page to enforce different
+        requirements.
       </p>
     </CardContent>
   </Card>
 
-  <Card class="border-border/60 bg-card/80 backdrop-blur supports-[backdrop-filter]:bg-card/70">
-    <CardHeader class="flex flex-col gap-3 border-b border-border/40 pb-4 sm:flex-row sm:items-start sm:justify-between">
+  <Card class="border-border/60 bg-card/80 supports-backdrop-filter:bg-card/70 backdrop-blur">
+    <CardHeader
+      class="border-border/40 flex flex-col gap-3 border-b pb-4 sm:flex-row sm:items-start sm:justify-between"
+    >
       <div class="flex items-center gap-3">
-        <div class="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
+        <div
+          class="bg-primary/10 text-primary flex h-10 w-10 items-center justify-center rounded-full"
+        >
           <Key size={20} aria-hidden="true" />
         </div>
         <div>
@@ -275,16 +306,24 @@
             {t('Keyboard Shortcuts', 'Tangentbordsgenvägar')}
           </CardTitle>
           <CardDescription>
-            {t('Customize shortcuts for frequently used actions.', 'Anpassa genvägar för vanliga åtgärder.')}
+            {t(
+              'Customize shortcuts for frequently used actions.',
+              'Anpassa genvägar för vanliga åtgärder.'
+            )}
           </CardDescription>
         </div>
       </div>
-      <Button variant="outline" size="sm" class="mt-3 sm:mt-0" onclick={() => (showKeyboardShortcutsPopup = true)}>
+      <Button
+        variant="outline"
+        size="sm"
+        class="mt-3 sm:mt-0"
+        onclick={() => (showKeyboardShortcutsPopup = true)}
+      >
         {t('Configure Shortcuts', 'Konfigurera genvägar')}
       </Button>
     </CardHeader>
     <CardContent class="pt-4">
-      <p class="text-sm text-muted-foreground">
+      <p class="text-muted-foreground text-sm">
         {t(
           'Personalize key combinations to match your workflow and speed up navigation.',
           'Anpassa tangentkombinationer efter ditt arbetssätt och snabba upp navigeringen.'
@@ -295,5 +334,5 @@
 </div>
 
 {#if showKeyboardShortcutsPopup}
-  <KeyboardShortcutsPopup on:close={() => (showKeyboardShortcutsPopup = false)} />
+  <KeyboardShortcutsPopup onclose={() => (showKeyboardShortcutsPopup = false)} />
 {/if}

@@ -3,23 +3,23 @@ import { appSettings } from './appSettings';
 import type { BackupSettings } from '../config/settings';
 
 function createBackupSettingsStore() {
-    const { subscribe } = derived(appSettings, ($appSettings) => $appSettings.backup);
+  const { subscribe } = derived(appSettings, ($appSettings) => $appSettings.backup);
 
-    return {
-        subscribe,
-        set: (value: BackupSettings) => {
-            appSettings.update((settings) => {
-                settings.backup = value;
-                return settings;
-            });
-        },
-        update: (callback: (settings: BackupSettings) => BackupSettings) => {
-            appSettings.update((settings) => {
-                settings.backup = callback(settings.backup);
-                return settings;
-            });
-        }
-    };
+  return {
+    subscribe,
+    set: (value: BackupSettings) => {
+      appSettings.update((settings) => {
+        settings.backup = value;
+        return settings;
+      });
+    },
+    update: (callback: (settings: BackupSettings) => BackupSettings) => {
+      appSettings.update((settings) => {
+        settings.backup = callback(settings.backup);
+        return settings;
+      });
+    }
+  };
 }
 
 export const backupSettings = createBackupSettingsStore();

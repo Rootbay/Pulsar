@@ -1,30 +1,31 @@
 <script lang="ts">
-    import Icon from "$lib/components/ui/Icon.svelte";
-    
-    export let tagName: string;
-    export let buttons: any[] = [];
-  import { flip } from 'svelte/animate';
-  import { fade, scale } from 'svelte/transition';
+  import Icon from '$lib/components/ui/Icon.svelte';
+  import { fade } from 'svelte/transition';
   import { tick } from 'svelte';
 
-  export let tagNames: string[] = [];
-  export let tagMap: Map<string, { color: string, icon: string }>;
+  interface Props {
+    tagNames?: string[];
+    tagMap: Map<string, { color: string; icon: string }>;
+  }
 
-  let prevFirst: string | null = null;
-  let pulseFirst = false;
+  let { tagNames = [], tagMap }: Props = $props();
 
-  $: if (tagNames) {
+  let prevFirst = $state<string | null>(null);
+  let pulseFirst = $state(false);
+
+  $effect(() => {
     const first = tagNames[0] ?? null;
     if (prevFirst === null) {
       prevFirst = first;
     } else if (first !== prevFirst) {
       pulseFirst = false;
-      tick();
-      pulseFirst = true;
-      prevFirst = first;
-      setTimeout(() => (pulseFirst = false), 320);
+      tick().then(() => {
+        pulseFirst = true;
+        prevFirst = first;
+        setTimeout(() => (pulseFirst = false), 320);
+      });
     }
-  }
+  });
 </script>
 
 {#each tagNames as tagName, i (tagName)}
@@ -43,7 +44,7 @@
   {/if}
 {/each}
 
-  <style>
+<style>
   .tag-icon-container {
     position: relative;
     width: 23px;
@@ -61,7 +62,9 @@
     border-radius: 11.5px;
     background: transparent;
     opacity: 0;
-    transition: background-color 280ms ease, opacity 280ms ease;
+    transition:
+      background-color 280ms ease,
+      opacity 280ms ease;
   }
 
   .tag-icon-container :global(svg) {
@@ -70,7 +73,9 @@
     width: 17px;
     height: 17px;
     display: block;
-      transition: fill 280ms ease, transform 220ms ease;
+    transition:
+      fill 280ms ease,
+      transform 220ms ease;
   }
 
   /* Pulse the first tag briefly when it changes */
@@ -78,8 +83,17 @@
     animation: firstTagPulse 320ms ease-out;
   }
   @keyframes firstTagPulse {
-    0% { transform: scale(0.92); filter: saturate(0.9); }
-    60% { transform: scale(1.06); filter: saturate(1.05); }
-    100% { transform: scale(1); filter: none; }
+    0% {
+      transform: scale(0.92);
+      filter: saturate(0.9);
+    }
+    60% {
+      transform: scale(1.06);
+      filter: saturate(1.05);
+    }
+    100% {
+      transform: scale(1);
+      filter: none;
+    }
   }
 </style>

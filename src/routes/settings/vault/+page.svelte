@@ -29,11 +29,7 @@
     ShieldCheck,
     Trash2
   } from '@lucide/svelte';
-  import {
-    exportVaultBackup,
-    importVaultBackup,
-    notifyVaultRefresh
-  } from '$lib/utils/backup';
+  import { exportVaultBackup, importVaultBackup, notifyVaultRefresh } from '$lib/utils/backup';
   import { currentLocale } from '$lib/i18n';
 
   interface BackendVault {
@@ -72,8 +68,9 @@
     $vaults.reduce((sum, vault) => sum + (vault.itemCount ?? 0), 0)
   );
 
-  const encryptedCount = derived(vaultsStore, ($vaults) =>
-    $vaults.filter((vault) => vault.encrypted).length
+  const encryptedCount = derived(
+    vaultsStore,
+    ($vaults) => $vaults.filter((vault) => vault.encrypted).length
   );
 
   const WEAK_PASSWORDS = 23;
@@ -149,7 +146,7 @@
     return t(locale, 'just now', 'nyss');
   }
 
-  function formatItemBadge(count?: number, locale: 'en' | 'sv'): string {
+  function formatItemBadge(count: number | undefined, locale: 'en' | 'sv'): string {
     if (typeof count === 'number') {
       const base = locale === 'sv' ? 'post' : 'item';
       const pluralSuffix = count === 1 ? '' : locale === 'sv' ? 'er' : 's';
@@ -280,9 +277,7 @@
       }
 
       await importVaultBackup(passphrase.trim(), { sourcePath });
-      toast.success(
-        t(locale, 'Vault imported successfully.', 'Valv importerat.')
-      );
+      toast.success(t(locale, 'Vault imported successfully.', 'Valv importerat.'));
       notifyVaultRefresh('import');
       await refreshVaults();
     } catch (cause) {
@@ -291,7 +286,12 @@
       }
 
       console.error('Failed to import vault:', cause);
-      toast.error(resolveErrorMessage(cause, t(locale, 'Failed to import vault.', 'Misslyckades med att importera valv.')));
+      toast.error(
+        resolveErrorMessage(
+          cause,
+          t(locale, 'Failed to import vault.', 'Misslyckades med att importera valv.')
+        )
+      );
     } finally {
       busyAction = null;
     }
@@ -328,7 +328,10 @@
 
       console.error('Failed to create vault:', cause);
       toast.error(
-        resolveErrorMessage(cause, t(locale, 'Failed to create vault.', 'Misslyckades med att skapa valv.'))
+        resolveErrorMessage(
+          cause,
+          t(locale, 'Failed to create vault.', 'Misslyckades med att skapa valv.')
+        )
       );
     } finally {
       busyAction = null;
@@ -344,7 +347,11 @@
 
     try {
       const passphrase = window.prompt(
-        t(locale, 'Enter a passphrase to secure the backup', 'Ange en lösenfras för att skydda säkerhetskopian')
+        t(
+          locale,
+          'Enter a passphrase to secure the backup',
+          'Ange en lösenfras för att skydda säkerhetskopian'
+        )
       );
       if (!passphrase?.trim()) {
         return;
@@ -357,7 +364,10 @@
     } catch (cause) {
       console.error('Failed to run backup:', cause);
       toast.error(
-        resolveErrorMessage(cause, t(locale, 'Failed to run backup.', 'Misslyckades med att skapa säkerhetskopia.'))
+        resolveErrorMessage(
+          cause,
+          t(locale, 'Failed to run backup.', 'Misslyckades med att skapa säkerhetskopia.')
+        )
       );
     } finally {
       busyAction = null;
@@ -374,7 +384,11 @@
     try {
       const sourcePath = await invoke<string>('pick_open_file');
       const passphrase = window.prompt(
-        t(locale, 'Enter the backup passphrase to restore', 'Ange säkerhetskopians lösenfras för att återställa')
+        t(
+          locale,
+          'Enter the backup passphrase to restore',
+          'Ange säkerhetskopians lösenfras för att återställa'
+        )
       );
 
       if (!passphrase?.trim()) {
@@ -392,7 +406,10 @@
 
       console.error('Failed to restore vault:', cause);
       toast.error(
-        resolveErrorMessage(cause, t(locale, 'Failed to restore vault.', 'Misslyckades med att återställa valv.'))
+        resolveErrorMessage(
+          cause,
+          t(locale, 'Failed to restore vault.', 'Misslyckades med att återställa valv.')
+        )
       );
     } finally {
       busyAction = null;
@@ -447,7 +464,9 @@
 
       vaultsStore.update((vaults) =>
         vaults.map((vault) =>
-          vault.id === id ? { ...vault, name: settings.name, settings: { ...vault.settings, ...settings } } : vault
+          vault.id === id
+            ? { ...vault, name: settings.name, settings: { ...vault.settings, ...settings } }
+            : vault
         )
       );
     });
@@ -458,11 +477,13 @@
   });
 </script>
 
-  <div class="flex-1 min-h-0 space-y-6 px-6 py-8">
-  <Card class="border-border/60 bg-card/80 backdrop-blur supports-[backdrop-filter]:bg-card/70">
+<div class="min-h-0 flex-1 space-y-6 px-6 py-8">
+  <Card class="border-border/60 bg-card/80 supports-backdrop-filter:bg-card/70 backdrop-blur">
     <CardHeader class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
       <div class="flex items-center gap-3">
-        <div class="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
+        <div
+          class="bg-primary/10 text-primary flex h-10 w-10 items-center justify-center rounded-full"
+        >
           <FolderKanban class="size-5" aria-hidden="true" />
         </div>
         <div>
@@ -470,7 +491,11 @@
             {t(locale, 'Vault management', 'Valvhantering')}
           </CardTitle>
           <CardDescription>
-            {t(locale, 'Select a vault to inspect and adjust its settings.', 'Välj ett valv för att granska och justera dess inställningar.')}
+            {t(
+              locale,
+              'Select a vault to inspect and adjust its settings.',
+              'Välj ett valv för att granska och justera dess inställningar.'
+            )}
           </CardDescription>
         </div>
       </div>
@@ -501,19 +526,27 @@
       <div class="grid gap-4 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
         <div class="space-y-3">
           {#if loadingVaults}
-            <div class="rounded-xl border border-border/60 bg-muted/20 p-4 text-sm text-muted-foreground">
+            <div
+              class="border-border/60 bg-muted/20 text-muted-foreground rounded-xl border p-4 text-sm"
+            >
               {t(locale, 'Loading vaults…', 'Läser in valv…')}
             </div>
           {:else if !$vaultsStore.length}
-            <div class="rounded-xl border border-border/60 bg-muted/20 p-4 text-sm text-muted-foreground">
-              {t(locale, 'No vaults available yet. Create or import one to get started.', 'Inga valv tillgängliga ännu. Skapa eller importera ett för att komma igång.')}
+            <div
+              class="border-border/60 bg-muted/20 text-muted-foreground rounded-xl border p-4 text-sm"
+            >
+              {t(
+                locale,
+                'No vaults available yet. Create or import one to get started.',
+                'Inga valv tillgängliga ännu. Skapa eller importera ett för att komma igång.'
+              )}
             </div>
           {:else}
             {#each $vaultsStore as vault (vault.id)}
               <button
                 type="button"
                 class={cn(
-                  'flex w-full flex-col gap-3 rounded-xl border border-border/60 bg-background/80 p-4 text-left transition',
+                  'border-border/60 bg-background/80 flex w-full flex-col gap-3 rounded-xl border p-4 text-left transition',
                   $selectedVault?.id === vault.id
                     ? 'border-primary/60 bg-primary/10 text-primary shadow-sm'
                     : 'hover:border-primary/40 hover:bg-muted/40'
@@ -523,7 +556,7 @@
                 <div class="flex items-start justify-between gap-3">
                   <div class="flex-1 space-y-1">
                     <div class="flex flex-wrap items-center gap-2">
-                      <p class="text-sm font-semibold text-foreground">{vault.name}</p>
+                      <p class="text-foreground text-sm font-semibold">{vault.name}</p>
                       <div class="flex flex-wrap items-center gap-1 text-[10px]">
                         <Badge variant="secondary" class="capitalize">
                           {formatStatusLabel(vault.status, locale)}
@@ -531,21 +564,22 @@
                         <Badge variant="outline">{formatItemBadge(vault.itemCount, locale)}</Badge>
                       </div>
                     </div>
-                    <p class="text-xs text-muted-foreground">{vault.path}</p>
+                    <p class="text-muted-foreground text-xs">{vault.path}</p>
                   </div>
                 </div>
-                <div class="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
+                <div class="text-muted-foreground flex flex-wrap items-center gap-4 text-xs">
                   <span>{formatBytes(vault.sizeBytes)}</span>
                   <span>
-                    {t(locale, 'Last modified', 'Senast ändrad')} {formatRelativeTime(vault.modifiedAt)}
+                    {t(locale, 'Last modified', 'Senast ändrad')}
+                    {formatRelativeTime(vault.modifiedAt)}
                   </span>
                   {#if vault.encrypted}
-                    <span class="flex items-center gap-1 text-chart-success">
+                    <span class="text-chart-success flex items-center gap-1">
                       <ShieldCheck class="size-3" />
                       {t(locale, 'Encrypted', 'Krypterad')}
                     </span>
                   {:else}
-                    <span class="flex items-center gap-1 text-destructive">
+                    <span class="text-destructive flex items-center gap-1">
                       <ShieldAlert class="size-3" />
                       {t(locale, 'Not encrypted', 'Inte krypterad')}
                     </span>
@@ -556,21 +590,25 @@
           {/if}
         </div>
 
-        <div class="space-y-4 rounded-xl border border-border/60 bg-background/70 p-4">
+        <div class="border-border/60 bg-background/70 space-y-4 rounded-xl border p-4">
           <div class="flex items-start justify-between gap-2">
             <div>
-              <p class="text-sm font-semibold text-foreground">
+              <p class="text-foreground text-sm font-semibold">
                 {t(locale, 'Selected vault', 'Markerat valv')}
               </p>
-              <p class="text-xs text-muted-foreground">
-                {t(locale, 'Manage metadata and automation for this vault.', 'Hantera metadata och automatisering för detta valv.')}
+              <p class="text-muted-foreground text-xs">
+                {t(
+                  locale,
+                  'Manage metadata and automation for this vault.',
+                  'Hantera metadata och automatisering för detta valv.'
+                )}
               </p>
             </div>
             <Button
               type="button"
               variant="ghost"
               size="icon"
-              class="size-8 text-muted-foreground hover:text-destructive"
+              class="text-muted-foreground hover:text-destructive size-8"
               aria-label={$selectedVault ? `Remove vault ${$selectedVault.name}` : 'Remove vault'}
               onclick={() => $selectedVault && removeVault($selectedVault.id)}
               disabled={!$selectedVault || busyAction !== null}
@@ -581,7 +619,7 @@
 
           {#if $selectedVault}
             <div class="space-y-3">
-              <Label for="vault-name" class="text-sm font-medium text-foreground">
+              <Label for="vault-name" class="text-foreground text-sm font-medium">
                 {t(locale, 'Display name', 'Visningsnamn')}
               </Label>
               <Input
@@ -594,13 +632,19 @@
             </div>
 
             <div class="space-y-3">
-              <div class="flex items-center justify-between gap-3 rounded-lg border border-border/60 bg-muted/10 px-3 py-2">
+              <div
+                class="border-border/60 bg-muted/10 flex items-center justify-between gap-3 rounded-lg border px-3 py-2"
+              >
                 <div>
-                  <p class="text-sm font-medium text-foreground">
+                  <p class="text-foreground text-sm font-medium">
                     {t(locale, 'Store TOTP per entry', 'Spara TOTP per post')}
                   </p>
-                  <p class="text-xs text-muted-foreground">
-                    {t(locale, 'Allow storing 2FA secrets inside this vault.', 'Tillåt lagring av 2FA-hemligheter i detta valv.')}
+                  <p class="text-muted-foreground text-xs">
+                    {t(
+                      locale,
+                      'Allow storing 2FA secrets inside this vault.',
+                      'Tillåt lagring av 2FA-hemligheter i detta valv.'
+                    )}
                   </p>
                 </div>
                 <Switch
@@ -611,13 +655,19 @@
                 />
               </div>
 
-              <div class="flex items-center justify-between gap-3 rounded-lg border border-border/60 bg-muted/10 px-3 py-2">
+              <div
+                class="border-border/60 bg-muted/10 flex items-center justify-between gap-3 rounded-lg border px-3 py-2"
+              >
                 <div>
-                  <p class="text-sm font-medium text-foreground">
+                  <p class="text-foreground text-sm font-medium">
                     {t(locale, 'Automatic backups', 'Automatiska säkerhetskopior')}
                   </p>
-                  <p class="text-xs text-muted-foreground">
-                    {t(locale, 'Schedule periodic backups for this vault.', 'Schemalägg regelbundna säkerhetskopior för detta valv.')}
+                  <p class="text-muted-foreground text-xs">
+                    {t(
+                      locale,
+                      'Schedule periodic backups for this vault.',
+                      'Schemalägg regelbundna säkerhetskopior för detta valv.'
+                    )}
                   </p>
                 </div>
                 <Switch
@@ -628,13 +678,19 @@
                 />
               </div>
 
-              <div class="flex items-center justify-between gap-3 rounded-lg border border-border/60 bg-muted/10 px-3 py-2">
+              <div
+                class="border-border/60 bg-muted/10 flex items-center justify-between gap-3 rounded-lg border px-3 py-2"
+              >
                 <div>
-                  <p class="text-sm font-medium text-foreground">
+                  <p class="text-foreground text-sm font-medium">
                     {t(locale, 'Compression', 'Komprimering')}
                   </p>
-                  <p class="text-xs text-muted-foreground">
-                    {t(locale, 'Compress vault payloads to save disk space.', 'Komprimera valvets data för att spara diskutrymme.')}
+                  <p class="text-muted-foreground text-xs">
+                    {t(
+                      locale,
+                      'Compress vault payloads to save disk space.',
+                      'Komprimera valvets data för att spara diskutrymme.'
+                    )}
                   </p>
                 </div>
                 <Switch
@@ -679,8 +735,12 @@
               </Button>
             </div>
           {:else}
-            <p class="text-sm text-muted-foreground">
-              {t(locale, 'Select a vault from the list to adjust its settings.', 'Välj ett valv i listan för att ändra dess inställningar.')}
+            <p class="text-muted-foreground text-sm">
+              {t(
+                locale,
+                'Select a vault from the list to adjust its settings.',
+                'Välj ett valv i listan för att ändra dess inställningar.'
+              )}
             </p>
           {/if}
         </div>
@@ -688,9 +748,11 @@
     </CardContent>
   </Card>
 
-  <Card class="border-border/60 bg-card/80 backdrop-blur supports-[backdrop-filter]:bg-card/70">
+  <Card class="border-border/60 bg-card/80 supports-backdrop-filter:bg-card/70 backdrop-blur">
     <CardHeader class="flex items-start gap-3">
-      <div class="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
+      <div
+        class="bg-primary/10 text-primary flex h-10 w-10 items-center justify-center rounded-full"
+      >
         <ChartColumn class="size-5" aria-hidden="true" />
       </div>
       <div>
@@ -704,29 +766,29 @@
     </CardHeader>
     <CardContent>
       <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <div class="rounded-xl border border-border/60 bg-background/80 p-4">
-          <p class="text-xs text-muted-foreground">
+        <div class="border-border/60 bg-background/80 rounded-xl border p-4">
+          <p class="text-muted-foreground text-xs">
             {t(locale, 'Total items', 'Totalt antal poster')}
           </p>
-          <p class="text-2xl font-semibold text-foreground">{$totalItems}</p>
+          <p class="text-foreground text-2xl font-semibold">{$totalItems}</p>
         </div>
-        <div class="rounded-xl border border-border/60 bg-background/80 p-4">
-          <p class="text-xs text-muted-foreground">
+        <div class="border-border/60 bg-background/80 rounded-xl border p-4">
+          <p class="text-muted-foreground text-xs">
             {t(locale, 'Weak passwords detected', 'Svaga lösenord upptäckta')}
           </p>
-          <p class="text-2xl font-semibold text-destructive">{WEAK_PASSWORDS}</p>
+          <p class="text-destructive text-2xl font-semibold">{WEAK_PASSWORDS}</p>
         </div>
-        <div class="rounded-xl border border-border/60 bg-background/80 p-4">
-          <p class="text-xs text-muted-foreground">
+        <div class="border-border/60 bg-background/80 rounded-xl border p-4">
+          <p class="text-muted-foreground text-xs">
             {t(locale, 'Duplicate entries', 'Dubblerade poster')}
           </p>
-          <p class="text-2xl font-semibold text-chart-warning">{DUPLICATES}</p>
+          <p class="text-chart-warning text-2xl font-semibold">{DUPLICATES}</p>
         </div>
-        <div class="rounded-xl border border-border/60 bg-background/80 p-4">
-          <p class="text-xs text-muted-foreground">
+        <div class="border-border/60 bg-background/80 rounded-xl border p-4">
+          <p class="text-muted-foreground text-xs">
             {t(locale, 'Encrypted vaults', 'Krypterade valv')}
           </p>
-          <p class="text-2xl font-semibold text-chart-success">
+          <p class="text-chart-success text-2xl font-semibold">
             {$encryptedCount}/{$vaultsStore.length}
           </p>
         </div>
@@ -734,4 +796,3 @@
     </CardContent>
   </Card>
 </div>
-

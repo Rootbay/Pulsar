@@ -1,15 +1,11 @@
 <script lang="ts">
-    import Icon from "$lib/components/ui/Icon.svelte";
-    
-  import { onMount, tick } from "svelte";
-  import type { Snippet } from "svelte";
-
-  interface $$Slots {
-    default?: Snippet;
-    rightIcon?: Snippet;
-  }
+  import Icon from '$lib/components/ui/Icon.svelte';
+  import { onMount, tick } from 'svelte';
+  import type { Snippet } from 'svelte';
+  import type { HTMLInputAttributes, HTMLTextareaAttributes } from 'svelte/elements';
 
   interface Props {
+    id?: string;
     selectedColor?: string;
     inputValue?: string | null;
     placeholder?: string;
@@ -24,25 +20,28 @@
     isExpandable?: boolean;
     rightIcon?: Snippet;
     children?: Snippet;
+    [key: string]: any;
   }
 
   let {
+    id = undefined,
     selectedColor = undefined,
     inputValue = $bindable<string | null>(null),
-    placeholder = "",
-    initialInput = null,
+    placeholder = '',
+    initialInput = $bindable<HTMLInputElement | HTMLTextAreaElement | null>(null),
     title,
     showTitle = true,
     selectedIconPath = undefined,
     selectedIconName = undefined,
     readOnly = false,
     isMultiline = false,
-    type = "text",
+    type = 'text',
     isExpandable = false,
-    rightIcon
+    rightIcon,
+    ...rest
   }: Props = $props();
 
-  let expanded =  $state(false); 
+  let expanded = $state(false);
 
   $effect(() => {
     if (inputValue == null) {
@@ -50,14 +49,14 @@
     }
   });
 
-  const isPlaceholderValue = $derived(() => readOnly && (!inputValue || inputValue === 'N/A'));
+  const isPlaceholderValue = $derived(readOnly && (!inputValue || inputValue === 'N/A'));
 
   function resizeTextarea() {
     if (!isMultiline) return;
     const node = initialInput as HTMLTextAreaElement | null;
     if (!node) return;
-    node.style.height = "auto";
-    node.style.height = node.scrollHeight + "px";
+    node.style.height = 'auto';
+    node.style.height = node.scrollHeight + 'px';
   }
 
   onMount(() => {
@@ -115,7 +114,7 @@
   }}
 >
   <span class="titleIcon" style="color: {selectedColor || '#fff'}" title={selectedIconName || ''}>
-    <Icon path={selectedIconPath || ''} color="currentColor" size="24" viewBox='0 0 48 48' />
+    <Icon path={selectedIconPath || ''} color="currentColor" size="24" viewBox="0 0 48 48" />
   </span>
   <div class="titleAndInputContainer">
     {#if showTitle}
@@ -124,20 +123,24 @@
     {#if isMultiline}
       <div class="textarea-clip">
         <textarea
+          {id}
           bind:this={initialInput}
-          placeholder={placeholder}
+          {placeholder}
           bind:value={inputValue}
           oninput={resizeTextarea}
           readonly={readOnly}
+          {...rest}
         ></textarea>
       </div>
     {:else}
       <input
+        {id}
         bind:this={initialInput}
-        type={type}
-        placeholder={placeholder}
+        {type}
+        {placeholder}
         bind:value={inputValue}
         readonly={readOnly}
+        {...rest}
       />
     {/if}
   </div>
@@ -159,16 +162,19 @@
     background: #151516;
     border: none;
     box-sizing: border-box;
-    transition: color 260ms ease, background-color 150ms ease-out, box-shadow 150ms ease-out;
+    transition:
+      color 260ms ease,
+      background-color 150ms ease-out,
+      box-shadow 150ms ease-out;
     cursor: pointer; /* view mode clickable */
   }
 
   .inputContainer:hover {
-    background: #17171B;
+    background: #17171b;
   }
 
   .inputContainer:focus-within {
-    background: #17171B;
+    background: #17171b;
     box-shadow: none;
   }
 
@@ -179,7 +185,7 @@
     background: transparent;
     border: none;
     outline: none;
-    color: #D9D9D9;
+    color: #d9d9d9;
     font-size: 14px;
     padding: 0;
     min-height: 17px;
@@ -227,7 +233,7 @@
 
   .inputContainer input::placeholder,
   .inputContainer textarea::placeholder {
-    color: #D9D9D9;
+    color: #d9d9d9;
   }
 
   .titleAndInputContainer {

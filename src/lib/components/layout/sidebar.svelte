@@ -1,6 +1,5 @@
 <script lang="ts">
-  import { createEventDispatcher } from 'svelte';
-  import { invoke } from '@tauri-apps/api/core';
+  import { callBackend } from '$lib/utils/backend';
   import { iconPaths } from '$lib/icons';
   import { filterCategory, selectedTag } from '$lib/stores';
   import { goto } from '$app/navigation';
@@ -23,7 +22,6 @@
     SidebarMenuButton,
     SidebarMenuItem
   } from '$lib/components/ui/sidebar';
-  import { Button } from '$lib/components/ui/button';
 
   interface ButtonOption {
     id: number;
@@ -34,12 +32,16 @@
 
   const DEFAULT_TAG_COLOR = 'var(--sidebar-border)';
 
-  export let buttons: ButtonOption[] = [];
+  interface Props {
+    buttons?: ButtonOption[];
+    onopenPopup?: (detail: { mode: 'create' | 'edit'; tag?: ButtonOption }) => void;
+    ontagDeleted?: (detail: { id: number; text: string }) => void;
+  }
 
-  const dispatch = createEventDispatcher();
+  let { buttons = [], onopenPopup, ontagDeleted }: Props = $props();
 
   function handleOpenPopup() {
-    dispatch('openPopup', { mode: 'create' });
+    onopenPopup?.({ mode: 'create' });
   }
 
   function handleShowAll() {
@@ -52,13 +54,13 @@
   }
 
   function handleEdit(button: ButtonOption) {
-    dispatch('openPopup', { mode: 'edit', tag: button });
+    onopenPopup?.({ mode: 'edit', tag: button });
   }
 
   async function handleRemove(button: ButtonOption) {
     try {
-      await invoke('delete_button', { id: button.id });
-      dispatch('tagDeleted', {
+      await callBackend('delete_button', { id: button.id });
+      ontagDeleted?.({
         id: button.id,
         text: button.text
       });
@@ -68,10 +70,7 @@
   }
 </script>
 
-<SidebarRoot
-  collapsible="none"
-  class="bg-sidebar backdrop-blur"
->
+<SidebarRoot collapsible="none" class="bg-sidebar backdrop-blur">
   <SidebarHeader class="flex items-center justify-center py-5">
     <img src="/svelte.svg" alt="Pulsar logo" class="size-8" />
   </SidebarHeader>
@@ -87,7 +86,7 @@
               tooltipContent="All items"
               isActive={$selectedTag === null && $filterCategory === 'all'}
               style="--tag-color: var(--sidebar-border); --tag-hover: color-mix(in oklch, var(--sidebar-foreground) 40%, var(--sidebar-border)); --tag-active: color-mix(in oklch, var(--sidebar-foreground) 60%, var(--sidebar-border));"
-              class="h-[46px] w-[46px] justify-center rounded-lg cursor-pointer text-[color:var(--tag-color)] transition hover:text-[color:var(--tag-hover)] data-[active=true]:text-[color:var(--tag-active)] hover:bg-transparent active:!bg-transparent data-[active=true]:bg-transparent shadow-[0_0_0_1px_var(--sidebar-border)] hover:shadow-[0_0_0_1px_var(--tag-hover)] active:!shadow-[0_0_0_1px_var(--tag-hover)] data-[active=true]:shadow-[0_0_0_2px_var(--tag-active)] active:!text-[color:var(--tag-hover)] transition-shadow"
+              class="hover:text-color:var(--tag-hover) data-[active=true]:text-color:var(--tag-active) active:text-color:var(--tag-hover)! h-11.5 w-11.5 cursor-pointer justify-center rounded-lg text-(--tag-color) shadow-[0_0_0_1px_var(--sidebar-border)] transition hover:bg-transparent hover:shadow-[0_0_0_1px_var(--tag-hover)] active:bg-transparent! active:shadow-[0_0_0_1px_var(--tag-hover)]! data-[active=true]:bg-transparent data-[active=true]:shadow-[0_0_0_2px_var(--tag-active)]"
               onclick={handleShowAll}
             >
               <span class="inline-flex size-5 shrink-0 items-center justify-center">
@@ -107,7 +106,7 @@
                     tooltipContent={button.text}
                     isActive={$selectedTag === button.text}
                     style={`--tag-color: ${button.color || DEFAULT_TAG_COLOR};`}
-                    class="group h-[46px] w-[46px] justify-center rounded-lg cursor-pointer text-[color:var(--tag-color)] data-[active=true]:text-[color:var(--tag-color)] transition hover:text-[color:var(--tag-color)] hover:bg-transparent active:!bg-transparent data-[active=true]:bg-transparent shadow-[0_0_0_1px_var(--sidebar-border)] hover:shadow-[0_0_0_1px_var(--tag-color)] active:!shadow-[0_0_0_1px_var(--tag-color)] data-[active=true]:shadow-[0_0_0_2px_var(--tag-color)] active:!text-[color:var(--tag-color)] transition-shadow"
+                    class="group text-color:var(--tag-color) data-[active=true]:text-color:var(--tag-color) hover:text-color:var(--tag-color) active:!text-color:var(--tag-color) h-11.5 w-11.5 cursor-pointer justify-center rounded-lg shadow-[0_0_0_1px_var(--sidebar-border)] transition hover:bg-transparent hover:shadow-[0_0_0_1px_var(--tag-color)] active:bg-transparent! active:shadow-[0_0_0_1px_var(--tag-color)]! data-[active=true]:bg-transparent data-[active=true]:shadow-[0_0_0_2px_var(--tag-color)]"
                     onclick={() => handleTagClick(button.text)}
                   >
                     <span class="inline-flex size-5 shrink-0 items-center justify-center">
@@ -125,9 +124,9 @@
                 <ContextMenuContent class="w-44">
                   <ContextMenuItem onSelect={() => handleEdit(button)}>Edit Tag</ContextMenuItem>
                   <ContextMenuItem
-                    class="text-destructive focus:text-destructive data-[highlighted]:bg-destructive/10"
-                    onSelect={() => handleRemove(button)}
-                  >Remove Tag</ContextMenuItem>
+                    class="text-destructive focus:text-destructive data-highlighted:bg-destructive/10"
+                    onSelect={() => handleRemove(button)}>Remove Tag</ContextMenuItem
+                  >
                 </ContextMenuContent>
               </ContextMenu>
             </SidebarMenuItem>
@@ -138,7 +137,7 @@
               aria-label="Add new tag"
               tooltipContent="Add"
               style="--tag-color: var(--sidebar-border); --tag-hover: color-mix(in oklch, var(--sidebar-foreground) 40%, var(--sidebar-border)); --tag-active: color-mix(in oklch, var(--sidebar-foreground) 60%, var(--sidebar-border));"
-              class="h-[46px] w-[46px] justify-center rounded-lg cursor-pointer text-[color:var(--tag-color)] transition hover:text-[color:var(--tag-hover)] hover:bg-transparent active:!bg-transparent data-[active=true]:bg-transparent shadow-[0_0_0_1px_var(--sidebar-border)] hover:shadow-[0_0_0_1px_var(--tag-hover)] active:!shadow-[0_0_0_1px_var(--tag-hover)] data-[active=true]:shadow-[0_0_0_2px_var(--tag-active)] active:!text-[color:var(--tag-hover)] transition-shadow"
+              class="text-color:var(--tag-color) hover:text-color:var(--tag-hover) active:text-color:var(--tag-hover)! h-11.5 w-11.5 cursor-pointer justify-center rounded-lg shadow-[0_0_0_1px_var(--sidebar-border)] transition hover:bg-transparent hover:shadow-[0_0_0_1px_var(--tag-hover)] active:bg-transparent! active:shadow-[0_0_0_1px_var(--tag-hover)]! data-[active=true]:bg-transparent data-[active=true]:shadow-[0_0_0_2px_var(--tag-active)]"
               onclick={handleOpenPopup}
             >
               <span class="inline-flex size-5 shrink-0 items-center justify-center">
@@ -152,21 +151,23 @@
     </SidebarGroup>
   </SidebarContent>
 
-  <SidebarFooter class="mt-auto w-full border-t border-border/40 pt-4">
+  <SidebarFooter class="border-border/40 mt-auto w-full border-t pt-4">
     <SidebarMenu class="items-center">
       <SidebarMenuItem>
         <SidebarMenuButton
           size="lg"
           aria-label="Open settings"
           tooltipContent="Settings"
-          class="h-[46px] w-[46px] justify-center rounded-lg text-sidebar-foreground/70 transition hover:text-sidebar-foreground"
+          class="text-sidebar-foreground/70 hover:text-sidebar-foreground h-11.5 w-11.5 justify-center rounded-lg transition"
           onclick={() => goto('/settings/general')}
         >
-          <Settings style="w-5 h-5" className="size-5 opacity-70 transition-opacity group-hover/menu-item:opacity-100" />
+          <Settings
+            style="w-5 h-5"
+            className="size-5 opacity-70 transition-opacity group-hover/menu-item:opacity-100"
+          />
           <span class="sr-only">Settings</span>
         </SidebarMenuButton>
       </SidebarMenuItem>
     </SidebarMenu>
   </SidebarFooter>
 </SidebarRoot>
-

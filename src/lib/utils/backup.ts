@@ -47,7 +47,6 @@ export async function importVaultBackup(
   const { sourcePath = null, onProgress } = options;
 
   onProgress?.('decrypting');
-  // restore_vault_backend handles both decryption AND restoration in one go efficiently
   const snapshot = await invoke<VaultBackupSnapshot>('restore_vault_backend', {
     passphrase,
     path: sourcePath

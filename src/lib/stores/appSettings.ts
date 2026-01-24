@@ -1,132 +1,164 @@
-import { writable } from 'svelte/store';
 import { callBackend } from '../utils/backend';
 import {
-    type AdvancedSettings,
-    defaultAdvancedSettings,
-    type AppearanceSettings,
-    defaultAppearanceSettings,
-    type AutofillSettings,
-    defaultAutofillSettings,
-    type BackupSettings,
-    defaultBackupSettings,
-    type ClipboardSettings,
-    defaultClipboardSettings,
-    type GeneralSettings,
-    defaultGeneralSettings,
-    type GeneratorSettings,
-    defaultGeneratorSettings,
-    type SecuritySettings,
-    defaultSecuritySettings,
-    type VaultSettingsMap,
-    defaultVaultSettingsMap,
-    type PasswordPreset,
-    defaultPasswordPresets,
-    type SiteRule,
-    defaultSiteRules,
+  type AdvancedSettings,
+  defaultAdvancedSettings,
+  type AppearanceSettings,
+  defaultAppearanceSettings,
+  type AutofillSettings,
+  defaultAutofillSettings,
+  type BackupSettings,
+  defaultBackupSettings,
+  type ClipboardSettings,
+  defaultClipboardSettings,
+  type GeneralSettings,
+  defaultGeneralSettings,
+  type GeneratorSettings,
+  defaultGeneratorSettings,
+  type SecuritySettings,
+  defaultSecuritySettings,
+  type VaultSettingsMap,
+  defaultVaultSettingsMap,
+  type PasswordPreset,
+  defaultPasswordPresets,
+  type SiteRule,
+  defaultSiteRules
 } from '../config/settings';
 import { type Keybind, defaultKeybinds } from '../config/keybinds';
 
 export interface AllSettings {
-    advanced: AdvancedSettings;
-    appearance: AppearanceSettings;
-    autofill: AutofillSettings;
-    backup: BackupSettings;
-    clipboard: ClipboardSettings;
-    general: GeneralSettings;
-    generator: GeneratorSettings;
-    keybinds: Keybind[];
-    passwordPresets: PasswordPreset[];
-    recentDatabases: string[];
-    siteRules: SiteRule[];
-    security: SecuritySettings;
-    vaultSettingsById: VaultSettingsMap;
+  advanced: AdvancedSettings;
+  appearance: AppearanceSettings;
+  autofill: AutofillSettings;
+  backup: BackupSettings;
+  clipboard: ClipboardSettings;
+  general: GeneralSettings;
+  generator: GeneratorSettings;
+  keybinds: Keybind[];
+  passwordPresets: PasswordPreset[];
+  recentDatabases: string[];
+  siteRules: SiteRule[];
+  security: SecuritySettings;
+  vaultSettingsById: VaultSettingsMap;
 }
 
 const defaultAllSettings: AllSettings = {
-    advanced: defaultAdvancedSettings,
-    appearance: defaultAppearanceSettings,
-    autofill: defaultAutofillSettings,
-    backup: defaultBackupSettings,
-    clipboard: defaultClipboardSettings,
-    general: defaultGeneralSettings,
-    generator: defaultGeneratorSettings,
-    keybinds: defaultKeybinds,
-    passwordPresets: defaultPasswordPresets,
-    recentDatabases: [],
-    siteRules: defaultSiteRules,
-    security: defaultSecuritySettings,
-    vaultSettingsById: defaultVaultSettingsMap,
+  advanced: defaultAdvancedSettings,
+  appearance: defaultAppearanceSettings,
+  autofill: defaultAutofillSettings,
+  backup: defaultBackupSettings,
+  clipboard: defaultClipboardSettings,
+  general: defaultGeneralSettings,
+  generator: defaultGeneratorSettings,
+  keybinds: defaultKeybinds,
+  passwordPresets: defaultPasswordPresets,
+  recentDatabases: [],
+  siteRules: defaultSiteRules,
+  security: defaultSecuritySettings,
+  vaultSettingsById: defaultVaultSettingsMap
 };
 
-export const appSettings = writable<AllSettings>(defaultAllSettings);
+class SettingsManager {
+  #state = $state<AllSettings>(defaultAllSettings);
+  #isInitialized = false;
+  #saveTimeout: ReturnType<typeof setTimeout> | null = null;
 
-let isInitialized = false;
+  get current() {
+    return this.#state;
+  }
 
-export async function initAppSettings() {
-    if (isInitialized) return;
+  async init() {
+    if (this.#isInitialized) return;
 
     try {
-        const storedSettings = await callBackend<string | null>('get_all_settings');
-        if (storedSettings) {
-            try {
-                let loadedSettings: any = JSON.parse(storedSettings);
-                if (typeof loadedSettings === 'string') {
-                    try { loadedSettings = JSON.parse(loadedSettings); } catch {}
-                }
+      const storedSettings = await callBackend<string | null>('get_all_settings');
+      if (storedSettings) {
+        try {
+          let loadedSettings: any;
+          if (storedSettings.startsWith('"') && storedSettings.endsWith('"')) {
+            loadedSettings = JSON.parse(JSON.parse(storedSettings));
+          } else {
+            loadedSettings = JSON.parse(storedSettings);
+          }
 
-                if (typeof loadedSettings === 'object' && loadedSettings !== null) {
-                    const mergedSettings = {
-                        ...defaultAllSettings,
-                        ...loadedSettings,
-                        advanced: { ...defaultAllSettings.advanced, ...(loadedSettings.advanced || {}) },
-                        appearance: { ...defaultAllSettings.appearance, ...(loadedSettings.appearance || {}) },
-                        autofill: { ...defaultAllSettings.autofill, ...(loadedSettings.autofill || {}) },
-                        backup: { ...defaultAllSettings.backup, ...(loadedSettings.backup || {}) },
-                        clipboard: { ...defaultAllSettings.clipboard, ...(loadedSettings.clipboard || {}) },
-                        general: { ...defaultAllSettings.general, ...(loadedSettings.general || {}) },
-                        generator: { ...defaultAllSettings.generator, ...(loadedSettings.generator || {}) },
-                        security: { ...defaultAllSettings.security, ...(loadedSettings.security || {}) },
-                        vaultSettingsById: {
-                            ...defaultAllSettings.vaultSettingsById,
-                            ...(loadedSettings.vaultSettingsById
-                                || loadedSettings.vault
-                                || {}),
-                        },
-                        keybinds: loadedSettings.keybinds || defaultAllSettings.keybinds,
-                        passwordPresets: loadedSettings.passwordPresets || defaultAllSettings.passwordPresets,
-                        recentDatabases: loadedSettings.recentDatabases || defaultAllSettings.recentDatabases,
-                        siteRules: loadedSettings.siteRules || defaultAllSettings.siteRules,
-                    };
-                    appSettings.set(mergedSettings);
-                } else {
-                    appSettings.set(defaultAllSettings);
-                }
-            } catch (e) {
-                console.error("Failed to parse stored settings:", e);
-                appSettings.set(defaultAllSettings);
-            }
-        } else {
-            await callBackend('set_all_settings', { settings: JSON.stringify(defaultAllSettings) });
+          if (typeof loadedSettings === 'object' && loadedSettings !== null) {
+            this.#state = {
+              ...defaultAllSettings,
+              ...loadedSettings,
+              advanced: { ...defaultAllSettings.advanced, ...(loadedSettings.advanced || {}) },
+              appearance: {
+                ...defaultAllSettings.appearance,
+                ...(loadedSettings.appearance || {})
+              },
+              autofill: { ...defaultAllSettings.autofill, ...(loadedSettings.autofill || {}) },
+              backup: { ...defaultAllSettings.backup, ...(loadedSettings.backup || {}) },
+              clipboard: { ...defaultAllSettings.clipboard, ...(loadedSettings.clipboard || {}) },
+              general: { ...defaultAllSettings.general, ...(loadedSettings.general || {}) },
+              generator: { ...defaultAllSettings.generator, ...(loadedSettings.generator || {}) },
+              security: { ...defaultAllSettings.security, ...(loadedSettings.security || {}) },
+              vaultSettingsById: {
+                ...defaultAllSettings.vaultSettingsById,
+                ...(loadedSettings.vaultSettingsById || loadedSettings.vault || {})
+              }
+            };
+          }
+        } catch (e) {
+          console.error('Failed to parse stored settings:', e);
         }
+      } else {
+        await this.save();
+      }
     } catch (error) {
-        console.error('Failed to load settings:', error);
-        appSettings.set(defaultAllSettings);
+      console.error('Failed to load settings:', error);
     } finally {
-        isInitialized = true;
+      this.#isInitialized = true;
+
+      $effect.root(() => {
+        $effect(() => {
+          const currentState = this.#state;
+          if (this.#isInitialized) {
+            this.scheduleSave();
+          }
+        });
+      });
     }
+  }
+
+  scheduleSave() {
+    if (this.#saveTimeout) clearTimeout(this.#saveTimeout);
+    this.#saveTimeout = setTimeout(() => this.save(), 500);
+  }
+
+  async save() {
+    try {
+      await callBackend('set_all_settings', { settings: JSON.stringify(this.#state) });
+    } catch (error) {
+      console.error('Failed to save settings:', error);
+    }
+  }
+
+  update(updater: (settings: AllSettings) => void) {
+    updater(this.#state);
+    this.scheduleSave();
+  }
 }
 
-let saveTimeout: ReturnType<typeof setTimeout>;
-appSettings.subscribe(async (currentSettings) => {
-    if (!isInitialized) return;
+export const settingsManager = new SettingsManager();
 
-    clearTimeout(saveTimeout);
-    saveTimeout = setTimeout(async () => {
-        try {
-            await callBackend('set_all_settings', { settings: JSON.stringify(currentSettings) });
-        } catch (error) {
-            console.error('Failed to save settings:', error);
-        }
-    }, 500);
-});
+export const appSettings = {
+  subscribe(fn: (value: AllSettings) => void) {
+    return $effect.root(() => {
+      $effect(() => fn(settingsManager.current));
+    });
+  },
+  update(updater: (settings: AllSettings) => AllSettings) {
+    settingsManager.update((s) => {
+      const next = updater(s);
+      Object.assign(s, next);
+    });
+  },
+  set(value: AllSettings) {
+    settingsManager.update((s) => Object.assign(s, value));
+  }
+};
 
+export const initAppSettings = () => settingsManager.init();

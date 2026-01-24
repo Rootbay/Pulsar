@@ -1,12 +1,3 @@
-<svelte:head>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
-  <link
-    href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap"
-    rel="stylesheet"
-  />
-</svelte:head>
-
 <script lang="ts">
   import { browser } from '$app/environment';
   import { goto } from '$app/navigation';
@@ -111,7 +102,11 @@
 
   async function handleSetMasterPassword() {
     if (!newMasterPassword.trim() || !confirmMasterPassword.trim()) {
-      loginError = t(locale, 'Please fill in both password fields.', 'Fyll i båda lösenordsfälten.');
+      loginError = t(
+        locale,
+        'Please fill in both password fields.',
+        'Fyll i båda lösenordsfälten.'
+      );
       return;
     }
     if (newMasterPassword !== confirmMasterPassword) {
@@ -158,21 +153,32 @@
   }
 </script>
 
-<div class="relative flex min-h-screen items-start justify-center bg-background px-4 pb-16 pt-20">
+<svelte:head>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap"
+    rel="stylesheet"
+  />
+</svelte:head>
+
+<div class="bg-background relative flex min-h-screen items-start justify-center px-4 pt-20 pb-16">
   <button
     type="button"
-    class="absolute left-4 top-4 z-10 flex items-center gap-1 rounded-md px-2 py-1 text-sm text-muted-foreground transition hover:text-foreground"
+    class="text-muted-foreground hover:text-foreground absolute top-4 left-4 z-10 flex items-center gap-1 rounded-md px-2 py-1 text-sm transition"
     onclick={goBack}
   >
     <ArrowLeft class="h-4 w-4" />
     {t(locale, 'Back', 'Tillbaka')}
   </button>
   <div
-    class="pointer-events-none absolute left-1/2 top-1/2 h-[min(90vw,32rem)] w-[min(90vw,32rem)] -translate-x-1/2 -translate-y-1/2 rounded-full blur-3xl bg-primary-glow"
+    class="bg-primary-glow pointer-events-none absolute top-1/2 left-1/2 h-[min(90vw,32rem)] w-[min(90vw,32rem)] -translate-x-1/2 -translate-y-1/2 rounded-full blur-3xl"
     aria-hidden="true"
   ></div>
 
-  <Card class="relative z-10 w-full max-w-md border-border/60 bg-card/80 backdrop-blur supports-[backdrop-filter]:bg-card/70">
+  <Card
+    class="border-border/60 bg-card/80 supports-backdrop-filter:bg-card/70 relative z-10 w-full max-w-md backdrop-blur"
+  >
     <form class="flex flex-col gap-6" onsubmit={handleSubmit}>
       <CardHeader class="space-y-2 text-center">
         <CardTitle class="text-2xl font-semibold">
@@ -217,15 +223,15 @@
         </div>
 
         {#if newMasterPassword.length > 0}
-          <div class="space-y-3 rounded-xl border border-border/60 bg-muted/20 p-4">
-            <div class="flex items-center justify-between text-sm text-muted-foreground">
+          <div class="border-border/60 bg-muted/20 space-y-3 rounded-xl border p-4">
+            <div class="text-muted-foreground flex items-center justify-between text-sm">
               <span class="font-medium">
                 {t(locale, 'Strength', 'Styrka')}
               </span>
               <span class={`font-semibold ${strengthMeta.textClass}`}>{strengthLabelText}</span>
             </div>
             <Progress value={strengthScore} class={`h-2 ${strengthMeta.barClass}`} />
-            <p class="text-xs text-muted-foreground">
+            <p class="text-muted-foreground text-xs">
               {t(
                 locale,
                 'Longer is better. Mix uppercase, lowercase, numbers, and symbols.',
@@ -236,7 +242,9 @@
         {/if}
 
         {#if loginError}
-          <p class="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive">
+          <p
+            class="border-destructive/30 bg-destructive/10 text-destructive rounded-md border px-3 py-2 text-sm font-medium"
+          >
             {loginError}
           </p>
         {/if}
@@ -246,15 +254,15 @@
         <Button
           type="submit"
           class="w-full"
-          disabled={
-            isSetting ||
+          disabled={isSetting ||
             !newMasterPassword.trim() ||
-            newMasterPassword !== confirmMasterPassword
-          }
+            newMasterPassword !== confirmMasterPassword}
         >
-          {isSetting ? t(locale, 'Setting...', 'Sparar...') : t(locale, 'Set password', 'Sätt lösenord')}
+          {isSetting
+            ? t(locale, 'Setting...', 'Sparar...')
+            : t(locale, 'Set password', 'Sätt lösenord')}
         </Button>
-        <p class="text-center text-xs text-muted-foreground">
+        <p class="text-muted-foreground text-center text-xs">
           {t(
             locale,
             'This password stays on this device. Store it somewhere safe.',

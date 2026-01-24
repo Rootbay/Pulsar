@@ -1,238 +1,167 @@
 <script lang="ts">
+  import { onMount, onDestroy } from 'svelte';
   import { get } from 'svelte/store';
-  import { onDestroy, onMount } from 'svelte';
-  import { invoke } from '@tauri-apps/api/core';
-  import { writeText } from '@tauri-apps/plugin-clipboard-manager';
+  import { totpVerified, totpRequired } from '$lib/stores';
   import { securitySettings } from '$lib/stores/security';
-  import type { SecuritySettings } from '$lib/config/settings';
-  import { totpRequired, totpVerified } from '$lib/stores';
   import { loginTotpSecret, loginTotpConfigured } from '$lib/stores/totp';
+  import { callBackend } from '$lib/utils/backend';
+  import { invoke } from '@tauri-apps/api/core';
   import { Button } from '$lib/components/ui/button';
-  import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '$lib/components/ui/card';
-  import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '$lib/components/ui/dialog';
-  import { Input } from '$lib/components/ui/input';
+  import {
+    Card,
+    CardContent,
+    CardDescription,
+    CardHeader,
+    CardTitle
+  } from '$lib/components/ui/card';
   import { Label } from '$lib/components/ui/label';
   import { Select, SelectContent, SelectItem, SelectTrigger } from '$lib/components/ui/select';
   import { Switch } from '$lib/components/ui/switch';
+  import Input from '$lib/components/ui/Input.svelte';
   import { Badge } from '$lib/components/ui/badge';
-  import { Alert, AlertDescription, AlertTitle } from '$lib/components/ui/alert';
-  import { cn } from '$lib/utils';
-  import { currentLocale } from '$lib/i18n';
+  import { Alert, AlertTitle, AlertDescription } from '$lib/components/ui/alert';
+  import { Spinner } from '$lib/components/ui/spinner/index.js';
   import {
-    Lock,
-    RefreshCw,
-    Trash2,
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle
+  } from '$lib/components/ui/dialog';
+  import {
     ShieldCheck,
-    Fingerprint,
+    Lock,
+    KeyRound,
     Smartphone,
-    CalendarClock,
-    MonitorSmartphone,
-    EyeOff,
-    Eye,
+    Trash2,
+    RefreshCw,
+    FingerprintPattern,
     TriangleAlert,
-    HardDrive,
-    Shield,
+    Eye,
+    EyeOff,
     Copy,
-    Loader2,
-    AlertCircle,
-    QrCode,
+    CalendarClock,
+    CircleAlert,
     Check,
-    Link2
+    QrCode,
+    Link2,
+    MonitorSmartphone,
+    HardDrive
   } from '@lucide/svelte';
-  
-  const t = (locale: 'en' | 'sv', en: string, sv: string) => (locale === 'sv' ? sv : en);
-  $: locale = $currentLocale as 'en' | 'sv';
+  import { currentLocale } from '$lib/i18n';
+  import type { SecuritySettings } from '$lib/config/settings';
+  import { cn } from '$lib/utils';
+  import { toast } from 'svelte-sonner';
+  import { writeText } from '@tauri-apps/plugin-clipboard-manager';
 
-  type BooleanSettingKey = {
-    [K in keyof SecuritySettings]: SecuritySettings[K] extends boolean ? K : never;
-  }[keyof SecuritySettings];
+  interface Argon2Params {
+    memoryKib: number;
+    timeCost: number;
+    parallelism: number;
+  }
 
-  type AutoLockOption = {
-    value: SecuritySettings['autoLockInactivity'];
-    label: string;
-  };
-
-  type DeviceRecord = {
+  interface DeviceRecord {
     id: string;
     name: string;
     kind: string;
     lastSeen: string | null;
     isCurrent: boolean;
-  };
+  }
 
   type SecurityActionId = 'rekey' | 'wipe-memory' | 'integrity-check';
 
-  type Argon2Params = {
-    memoryKib: number;
-    timeCost: number;
-    parallelism: number;
-  };
-
-  const MIN_PASSWORD_LENGTH = 8;
-
-  const autoLockOptions: AutoLockOption[] = [
-    { value: 'Immediate', label: 'Immediate' },
-    { value: '1 minute', label: '1 minute' },
-    { value: '5 minutes', label: '5 minutes' },
-    { value: '15 minutes', label: '15 minutes' },
-    { value: 'Custom...', label: 'Custom...' }
-  ];
-
-  function getAutoLockLabel(value: SecuritySettings['autoLockInactivity'], locale: 'en' | 'sv'): string {
-    if (locale === 'sv') {
-      if (value === 'Immediate') return 'Omedelbart';
-      if (value === '1 minute') return '1 minut';
-      if (value === '5 minutes') return '5 minuter';
-      if (value === '15 minutes') return '15 minuter';
-      if (value === 'Custom...') return 'Anpassat…';
-    }
-    return autoLockOptions.find((option) => option.value === value)?.label ?? value;
-  }
-
-  const privacyToggles: Array<{
-    key: BooleanSettingKey;
-    title: string;
-    description: string;
-  }> = [
-    {
-      key: 'externalBreachCheck',
-      title: 'External Breach Check',
-      description: 'Cross-reference vault items against known breach databases.'
-    },
-    {
-      key: 'localReuseDetection',
-      title: 'Local Reuse Detection',
-      description: 'Alert when passwords repeat across vault entries.'
-    },
-    {
-      key: 'secureRAMHandling',
-      title: 'Secure RAM Handling',
-      description: 'Allocate hardened memory regions for sensitive operations.'
-    }
-  ];
-
-  const securityActions: Array<{
-    id: SecurityActionId;
-    title: string;
-    description: string;
-    Icon: typeof RefreshCw;
-  }> = [
-    {
-      id: 'rekey',
-      title: 'Re-key Vault',
-      description: 'Rotate encryption keys and re-encrypt stored data.',
-      Icon: RefreshCw
-    },
-    {
-      id: 'wipe-memory',
-      title: 'Clear Memory',
-      description: 'Scrub sensitive material from memory immediately.',
-      Icon: Trash2
-    },
-    {
-      id: 'integrity-check',
-      title: 'Integrity Check',
-      description: 'Verify vault contents for tampering or corruption.',
-      Icon: ShieldCheck
-    }
-  ];
-
-  const TOTP_CODE_LENGTH = 6;
-  const TOTP_ISSUER = 'Pulsar';
-  const TOTP_ACCOUNT = 'vault-login';
-
-  let isTotpStatusLoading = true;
-  let totpStatusError: string | null = null;
-  let pendingTotpSecret: string | null = null;
-  let pendingProvisioningUri: string | null = null;
-  let totpSetupSuccess: string | null = null;
-  let totpDisableSuccess: string | null = null;
-  let totpGenerationError: string | null = null;
-  let totpVerificationError: string | null = null;
-  let totpVerificationCode = '';
-  let isGeneratingTotpSecret = false;
-  let isConfirmingTotp = false;
-  let isDisablingTotp = false;
-
-  type CopyFeedback = {
+  interface CopyFeedback {
     context: 'pending' | 'stored';
     message: string;
     variant: 'success' | 'error';
-  };
+  }
 
-  let secretCopyFeedback: CopyFeedback | null = null;
-  let uriCopyFeedback: CopyFeedback | null = null;
-  let secretCopyTimeout: ReturnType<typeof setTimeout> | null = null;
-  let uriCopyTimeout: ReturnType<typeof setTimeout> | null = null;
-  let currentProvisioningUri: string | null = null;
+  const TOTP_ISSUER = 'Pulsar';
+  const TOTP_ACCOUNT = 'User';
+  const TOTP_CODE_LENGTH = 6;
+  const MIN_PASSWORD_LENGTH = 8;
 
-  $: currentProvisioningUri = $loginTotpSecret ? buildProvisioningUri($loginTotpSecret) : null;
-  $: generateButtonLabel =
-    pendingTotpSecret
-      ? t(locale, 'Generate different secret', 'Generera annan hemlighet')
-      : $loginTotpConfigured
-        ? t(locale, 'Rotate secret', 'Rotera hemlighet')
-        : t(locale, 'Generate secret', 'Generera hemlighet');
+  const t = (locale: 'en' | 'sv', en: string, sv: string) => (locale === 'sv' ? sv : en);
+  let locale = $derived($currentLocale as 'en' | 'sv');
 
-  let currentSettings: SecuritySettings = get(securitySettings);
-  let passwordModalOpen = false;
-  let showCurrentPassword = false;
-  let currentPassword = '';
-  let newPassword = '';
-  let confirmPassword = '';
-  let changePasswordError = '';
-  let isChangingPassword = false;
+  let currentSettings = $state<SecuritySettings>({ ...get(securitySettings) });
 
-  let kdfModalOpen = false;
-  let kdfCurrentPassword = '';
-  let showKdfPassword = false;
-  let kdfMemoryMb = 64;
-  let kdfTimeCost = 3;
-  let kdfParallelism = 4;
-  let kdfError = '';
-  let isUpdatingKdf = false;
+  const unsubscribe = securitySettings.subscribe((settings) => {
+    currentSettings = { ...settings };
+  });
 
-  let argon2Params: Argon2Params = {
+  const currentProvisioningUri = $derived(
+    $loginTotpSecret ? buildProvisioningUri($loginTotpSecret) : null
+  );
+  const generateButtonLabel = $derived(
+    $loginTotpSecret
+      ? t(locale, 'Regenerate Secret', 'Regenerera hemlighet')
+      : t(locale, 'Generate Secret', 'Generera hemlighet')
+  );
+
+  let passwordModalOpen = $state(false);
+  let showCurrentPassword = $state(false);
+  let currentPassword = $state('');
+  let newPassword = $state('');
+  let confirmPassword = $state('');
+  let changePasswordError = $state('');
+  let isChangingPassword = $state(false);
+
+  let kdfModalOpen = $state(false);
+  let kdfCurrentPassword = $state('');
+  let showKdfPassword = $state(false);
+  let kdfMemoryMb = $state(64);
+  let kdfTimeCost = $state(3);
+  let kdfParallelism = $state(4);
+  let kdfError = $state('');
+  let isUpdatingKdf = $state(false);
+
+  let argon2Params = $state<Argon2Params>({
     memoryKib: 64 * 1024,
     timeCost: 3,
     parallelism: 4
-  };
-  let argon2Loading = false;
+  });
+  let argon2Loading = $state(false);
 
-  let devices: DeviceRecord[] = [];
-  let devicesLoading = false;
-  let deviceActionPending: Record<string, boolean> = {};
-  let isRevokingDevices = false;
+  let devices = $state<DeviceRecord[]>([]);
+  let devicesLoading = $state(false);
+  let deviceActionPending = $state<Record<string, boolean>>({});
+  let isRevokingDevices = $state(false);
 
-  let securityActionPending: Record<SecurityActionId, boolean> = {
+  let securityActionPending = $state<Record<SecurityActionId, boolean>>({
     rekey: false,
     'wipe-memory': false,
     'integrity-check': false
-  };
+  });
 
-  let healthReport: { reusedPasswords: any[], weakPasswordsCount: number } | null = null;
-  let healthLoading = false;
-  let healthError: string | null = null;
+  let healthReport = $state<{ reusedPasswords: any[]; weakPasswordsCount: number } | null>(null);
+  let healthLoading = $state(false);
+  let healthError = $state<string | null>(null);
 
-  async function loadSecurityReport() {
-    healthLoading = true;
-    healthError = null;
-    try {
-      healthReport = await invoke('get_security_report');
-    } catch (error) {
-      healthError = parseError(error);
-    } finally {
-      healthLoading = false;
-    }
-  }
+  let isBiometricsEnabled = $state(false);
+  let isBiometricActionLoading = $state(false);
+  let biometricModalOpen = $state(false);
+  let biometricPassword = $state('');
+  let showBiometricPassword = $state(false);
+  let biometricError = $state('');
 
-  // Biometric State
-  let isBiometricsEnabled = false;
-  let isBiometricActionLoading = false;
-  let biometricModalOpen = false;
-  let biometricPassword = '';
-  let showBiometricPassword = false;
-  let biometricError = '';
+  let pendingTotpSecret = $state<string | null>(null);
+  let pendingProvisioningUri = $state<string | null>(null);
+  let totpVerificationCode = $state('');
+  let totpVerificationError = $state<string | null>(null);
+  let totpGenerationError = $state<string | null>(null);
+  let secretCopyFeedback = $state<CopyFeedback | null>(null);
+  let secretCopyTimeout: ReturnType<typeof setTimeout> | null = null;
+  let uriCopyFeedback = $state<CopyFeedback | null>(null);
+  let uriCopyTimeout: ReturnType<typeof setTimeout> | null = null;
+  let isTotpStatusLoading = $state(false);
+  let isGeneratingTotpSecret = $state(false);
+  let isConfirmingTotp = $state(false);
+  let isDisablingTotp = $state(false);
+  let totpStatusError = $state<string | null>(null);
+  let totpSetupSuccess = $state<string | null>(null);
+  let totpDisableSuccess = $state<string | null>(null);
 
   const memoryFormatter = new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 });
   const gigabyteFormatter = new Intl.NumberFormat(undefined, { maximumFractionDigits: 1 });
@@ -245,7 +174,17 @@
 
   const formatSecret = (secret: string) => secret.replace(/(.{4})/g, '$1 ').trim();
 
-  // ... (existing functions)
+  async function loadSecurityReport() {
+    healthLoading = true;
+    healthError = null;
+    try {
+      healthReport = await callBackend('get_security_report');
+    } catch (error) {
+      healthError = parseError(error);
+    } finally {
+      healthLoading = false;
+    }
+  }
 
   async function loadBiometricsStatus() {
     try {
@@ -257,12 +196,11 @@
 
   async function handleBiometricToggle() {
     if (isBiometricActionLoading) return;
-    
+
     if (isBiometricsEnabled) {
-      // Disable
       isBiometricActionLoading = true;
       try {
-        await invoke('disable_biometrics');
+        await callBackend('disable_biometrics');
         isBiometricsEnabled = false;
         toast.success('Biometric unlock disabled.');
       } catch (error) {
@@ -271,7 +209,6 @@
         isBiometricActionLoading = false;
       }
     } else {
-      // Enable - Open Modal
       biometricModalOpen = true;
       biometricPassword = '';
       biometricError = '';
@@ -286,22 +223,19 @@
 
     isBiometricActionLoading = true;
     biometricError = '';
-    
+
     try {
-        // Authenticate user presence first (native prompt)
-        const { authenticate } = await import('@tauri-apps/plugin-biometric');
-        await authenticate('Verify identity to enable biometric unlock');
-        
-        // If successful, store key
-        await invoke('enable_biometrics', { password: biometricPassword });
-        isBiometricsEnabled = true;
-        biometricModalOpen = false;
-        toast.success('Biometric unlock enabled.');
+      const { authenticate } = await import('@tauri-apps/plugin-biometric');
+      await authenticate('Verify identity to enable biometric unlock');
+
+      await callBackend('enable_biometrics', { password: biometricPassword });
+      isBiometricsEnabled = true;
+      biometricModalOpen = false;
+      toast.success('Biometric unlock enabled.');
     } catch (error) {
-        biometricError = parseError(error);
-        // If it was a biometric failure, it usually throws.
+      biometricError = parseError(error);
     } finally {
-        isBiometricActionLoading = false;
+      isBiometricActionLoading = false;
     }
   }
 
@@ -474,17 +408,20 @@
     totpVerificationError = null;
 
     try {
-      const expectedToken = await invoke<string>('generate_totp', { secret_b32: pendingTotpSecret });
+      const expectedToken = await invoke<string>('generate_totp', {
+        secret_b32: pendingTotpSecret
+      });
       if (expectedToken !== totpVerificationCode) {
         totpVerificationError =
           'The verification code did not match. Wait for the next code window and try again.';
         return;
       }
 
-      await invoke('configure_login_totp', { secret_b32: pendingTotpSecret });
+      await callBackend('configure_login_totp', { secret_b32: pendingTotpSecret });
       loginTotpSecret.set(pendingTotpSecret);
       loginTotpConfigured.set(true);
-      totpSetupSuccess = 'Login TOTP is now enabled. The new secret has been stored on this device.';
+      totpSetupSuccess =
+        'Login TOTP is now enabled. The new secret has been stored on this device.';
       totpDisableSuccess = null;
       pendingTotpSecret = null;
       pendingProvisioningUri = null;
@@ -509,7 +446,7 @@
     totpSetupSuccess = null;
 
     try {
-      await invoke('disable_login_totp');
+      await callBackend('disable_login_totp');
       loginTotpConfigured.set(false);
       loginTotpSecret.set(null);
       pendingTotpSecret = null;
@@ -527,18 +464,11 @@
   }
 
   onMount(() => {
-    void refreshTotpStatus();
-  });
-
-  const unsubscribe = securitySettings.subscribe((settings) => {
-    currentSettings = settings;
-  });
-
-  onMount(() => {
     loadArgon2Params();
     loadDevices();
     loadBiometricsStatus();
     loadSecurityReport();
+    refreshTotpStatus();
   });
 
   onDestroy(() => {
@@ -551,8 +481,11 @@
     securitySettings.set(currentSettings);
   }
 
-  function toggleSetting(setting: BooleanSettingKey) {
-    applyChanges({ [setting]: !currentSettings[setting] } as Partial<SecuritySettings>);
+  function toggleSetting(setting: keyof SecuritySettings) {
+    const val = currentSettings[setting];
+    if (typeof val === 'boolean') {
+      applyChanges({ [setting]: !val } as Partial<SecuritySettings>);
+    }
   }
 
   function updateAutoLock(value: SecuritySettings['autoLockInactivity']) {
@@ -637,15 +570,15 @@
     showKdfPassword = !showKdfPassword;
   }
 
-  function getDeviceIcon(kind: string): typeof Fingerprint {
+  function getDeviceIcon(kind: string): any {
     switch (kind) {
       case 'biometric':
-        return Fingerprint;
+        return FingerprintPattern;
       case 'device-key':
       case 'key':
         return Smartphone;
       default:
-        return Shield;
+        return ShieldCheck;
     }
   }
 
@@ -663,8 +596,10 @@
   async function loadArgon2Params() {
     argon2Loading = true;
     try {
-      const params = await invoke<Argon2Params>('get_argon2_params');
-      argon2Params = params;
+      const argon2Result = await callBackend<Argon2Params>('get_argon2_params');
+      if (argon2Result) {
+        argon2Params = { ...argon2Result };
+      }
     } catch (error) {
       toast.error(`Failed to load key derivation settings: ${parseError(error)}`);
     } finally {
@@ -704,7 +639,7 @@
 
     isChangingPassword = true;
     try {
-      await invoke('rotate_master_password', {
+      await callBackend('rotate_master_password', {
         currentPassword,
         newPassword
       });
@@ -735,7 +670,7 @@
 
     isUpdatingKdf = true;
     try {
-      await invoke('update_argon2_params', {
+      await callBackend('update_argon2_params', {
         currentPassword: kdfCurrentPassword,
         memoryKib: Math.round(kdfMemoryMb * 1024),
         timeCost: Math.round(kdfTimeCost),
@@ -754,7 +689,7 @@
   async function performMemoryWipe() {
     securityActionPending = { ...securityActionPending, 'wipe-memory': true };
     try {
-      await invoke('wipe_memory');
+      await callBackend('wipe_memory');
       toast.success('Sensitive data cleared from memory. The vault has been locked.');
     } catch (error) {
       toast.error(`Failed to clear memory: ${parseError(error)}`);
@@ -795,7 +730,7 @@
   async function removeDevice(device: DeviceRecord) {
     deviceActionPending = { ...deviceActionPending, [device.id]: true };
     try {
-      await invoke('remove_device', { deviceId: device.id });
+      await callBackend('remove_device', { deviceId: device.id });
       devices = devices.filter((entry) => entry.id !== device.id);
       const updated = { ...deviceActionPending };
       delete updated[device.id];
@@ -810,7 +745,7 @@
   async function revokeAllDevices() {
     isRevokingDevices = true;
     try {
-      await invoke('revoke_all_devices');
+      await callBackend('revoke_all_devices');
       devices = [];
       deviceActionPending = {};
       toast.success('All devices revoked.');
@@ -825,70 +760,132 @@
     toast.info('Device pairing is not yet available. Stay tuned!');
   }
 
-  $: argon2Summary = `Argon2id • memory ${formatArgonMemory(argon2Params.memoryKib)} • time cost ${argon2Params.timeCost} • parallelism ${argon2Params.parallelism}`;
+  const argon2Summary = $derived(
+    `Argon2id • memory ${formatArgonMemory(argon2Params.memoryKib)} • time cost ${argon2Params.timeCost} • parallelism ${argon2Params.parallelism}`
+  );
 
-  $: isPasswordFormValid =
-    currentPassword.trim().length > 0 &&
-    newPassword.trim().length >= MIN_PASSWORD_LENGTH &&
-    newPassword.trim() === confirmPassword.trim() &&
-    newPassword.trim() !== currentPassword.trim();
+  const isPasswordFormValid = $derived(
+    currentPassword.length > 0 && newPassword.length >= 8 && newPassword === confirmPassword
+  );
 
-  $: isKdfFormValid =
-    kdfCurrentPassword.trim().length > 0 &&
-    kdfMemoryMb >= 8 &&
-    kdfTimeCost >= 1 &&
-    kdfParallelism >= 1;
+  const isKdfFormValid = $derived(
+    kdfCurrentPassword.length > 0 && kdfMemoryMb >= 8 && kdfTimeCost >= 1 && kdfParallelism >= 1
+  );
+
+  const privacyToggles = [
+    { key: 'externalBreachCheck' as keyof SecuritySettings, title: 'External Breach Check' },
+    { key: 'localReuseDetection' as keyof SecuritySettings, title: 'Local Reuse Detection' },
+    { key: 'secureRAMHandling' as keyof SecuritySettings, title: 'Secure RAM Handling' }
+  ];
+
+  const securityActions = [
+    { id: 'rekey' as SecurityActionId, Icon: KeyRound },
+    { id: 'wipe-memory' as SecurityActionId, Icon: Trash2 },
+    { id: 'integrity-check' as SecurityActionId, Icon: ShieldCheck }
+  ];
+
+  const autoLockOptions = [
+    { value: '1 minute', label: '1 minute' },
+    { value: '5 minutes', label: '5 minutes' },
+    { value: '15 minutes', label: '15 minutes' },
+    { value: '30 minutes', label: '30 minutes' },
+    { value: '1 hour', label: '1 hour' },
+    { value: 'Never', label: 'Never' }
+  ];
+
+  function getAutoLockLabel(value: string): string {
+    const opt = autoLockOptions.find((o) => o.value === value);
+    return opt ? opt.label : value;
+  }
 </script>
 
-<div class="flex-1 min-h-0 space-y-6 px-6 py-8">
-    <Card class="border-border/60 bg-card/80 backdrop-blur supports-[backdrop-filter]:bg-card/70">
-    <CardHeader class="flex flex-row items-start gap-3 border-b border-border/40 pb-4">
-      <div class="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
+<div class="min-h-0 flex-1 space-y-6 px-6 py-8">
+  <Card class="border-border/60 bg-card/80 supports-backdrop-filter:bg-card/70 backdrop-blur">
+    <CardHeader class="border-border/40 flex flex-row items-start gap-3 border-b pb-4">
+      <div
+        class="bg-primary/10 text-primary flex h-10 w-10 items-center justify-center rounded-full"
+      >
         <ShieldCheck class="h-5 w-5" aria-hidden="true" />
       </div>
       <div class="flex w-full items-center justify-between">
         <div>
           <CardTitle>{t(locale, 'Vault Health', 'Valvets hälsa')}</CardTitle>
           <CardDescription>
-            {t(locale, 'Security analysis of your stored items.', 'Säkerhetsanalys av dina sparade poster.')}
+            {t(
+              locale,
+              'Security analysis of your stored items.',
+              'Säkerhetsanalys av dina sparade poster.'
+            )}
           </CardDescription>
         </div>
         <Button variant="ghost" size="sm" onclick={loadSecurityReport} disabled={healthLoading}>
-          <RefreshCw class={cn("h-4 w-4", healthLoading && "animate-spin")} />
+          <RefreshCw class={cn('h-4 w-4', healthLoading && 'animate-spin')} />
         </Button>
       </div>
     </CardHeader>
     <CardContent class="pt-4">
       {#if healthLoading && !healthReport}
         <div class="flex items-center justify-center py-8">
-          <Loader2 class="h-8 w-8 animate-spin text-primary/40" />
+          <Spinner class="text-primary/40 h-8 w-8" />
         </div>
       {:else if healthError}
         <Alert variant="destructive">
-          <AlertCircle class="h-4 w-4" />
+          <CircleAlert class="h-4 w-4" />
           <AlertTitle>Error</AlertTitle>
           <AlertDescription>{healthError}</AlertDescription>
         </Alert>
       {:else if healthReport}
         {@const reusedCount = healthReport.reusedPasswords.length}
         {@const weakCount = healthReport.weakPasswordsCount}
-        
+
         <div class="grid gap-4 sm:grid-cols-2">
-          <div class={cn("rounded-lg border p-4", reusedCount > 0 ? "border-destructive/40 bg-destructive/5" : "border-border/60 bg-muted/20")}>
-            <p class="text-sm font-semibold">{t(locale, 'Reused Passwords', 'Återanvända lösenord')}</p>
-            <p class={cn("text-2xl font-bold mt-1", reusedCount > 0 ? "text-destructive" : "text-foreground")}>{reusedCount}</p>
-            <p class="text-xs text-muted-foreground mt-1">
-              {reusedCount > 0 
-                ? t(locale, 'Multiple items share the same password.', 'Flera poster delar samma lösenord.')
+          <div
+            class={cn(
+              'rounded-lg border p-4',
+              reusedCount > 0
+                ? 'border-destructive/40 bg-destructive/5'
+                : 'border-border/60 bg-muted/20'
+            )}
+          >
+            <p class="text-sm font-semibold">
+              {t(locale, 'Reused Passwords', 'Återanvända lösenord')}
+            </p>
+            <p
+              class={cn(
+                'mt-1 text-2xl font-bold',
+                reusedCount > 0 ? 'text-destructive' : 'text-foreground'
+              )}
+            >
+              {reusedCount}
+            </p>
+            <p class="text-muted-foreground mt-1 text-xs">
+              {reusedCount > 0
+                ? t(
+                    locale,
+                    'Multiple items share the same password.',
+                    'Flera poster delar samma lösenord.'
+                  )
                 : t(locale, 'No password reuse detected.', 'Inga återanvända lösenord upptäckta.')}
             </p>
           </div>
 
-          <div class={cn("rounded-lg border p-4", weakCount > 0 ? "border-warning/40 bg-warning/5" : "border-border/60 bg-muted/20")}>
+          <div
+            class={cn(
+              'rounded-lg border p-4',
+              weakCount > 0 ? 'border-warning/40 bg-warning/5' : 'border-border/60 bg-muted/20'
+            )}
+          >
             <p class="text-sm font-semibold">{t(locale, 'Weak Passwords', 'Svaga lösenord')}</p>
-            <p class={cn("text-2xl font-bold mt-1", weakCount > 0 ? "text-warning-foreground" : "text-foreground")}>{weakCount}</p>
-            <p class="text-xs text-muted-foreground mt-1">
-              {weakCount > 0 
+            <p
+              class={cn(
+                'mt-1 text-2xl font-bold',
+                weakCount > 0 ? 'text-warning-foreground' : 'text-foreground'
+              )}
+            >
+              {weakCount}
+            </p>
+            <p class="text-muted-foreground mt-1 text-xs">
+              {weakCount > 0
                 ? t(locale, 'Passwords shorter than 8 characters.', 'Lösenord kortare än 8 tecken.')
                 : t(locale, 'No weak passwords detected.', 'Inga svaga lösenord upptäckta.')}
             </p>
@@ -896,7 +893,9 @@
         </div>
 
         {#if reusedCount > 0 || weakCount > 0}
-          <div class="mt-4 flex items-start gap-3 rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+          <div
+            class="border-destructive/40 bg-destructive/10 text-destructive mt-4 flex items-start gap-3 rounded-lg border p-3 text-sm"
+          >
             <TriangleAlert class="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
             <p>
               {t(
@@ -907,7 +906,9 @@
             </p>
           </div>
         {:else}
-          <div class="mt-4 flex items-start gap-3 rounded-lg border border-emerald-500/40 bg-emerald-500/10 p-3 text-sm text-emerald-600">
+          <div
+            class="mt-4 flex items-start gap-3 rounded-lg border border-emerald-500/40 bg-emerald-500/10 p-3 text-sm text-emerald-600"
+          >
             <Check class="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
             <p>{t(locale, 'Your vault health looks great!', 'Din valv hälsa ser utmärkt ut!')}</p>
           </div>
@@ -916,9 +917,11 @@
     </CardContent>
   </Card>
 
-    <Card class="border-border/60 bg-card/80 backdrop-blur supports-[backdrop-filter]:bg-card/70">
-    <CardHeader class="flex flex-row items-start gap-3 border-b border-border/40 pb-4">
-      <div class="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
+  <Card class="border-border/60 bg-card/80 supports-backdrop-filter:bg-card/70 backdrop-blur">
+    <CardHeader class="border-border/40 flex flex-row items-start gap-3 border-b pb-4">
+      <div
+        class="bg-primary/10 text-primary flex h-10 w-10 items-center justify-center rounded-full"
+      >
         <ShieldCheck class="h-5 w-5" aria-hidden="true" />
       </div>
       <div>
@@ -926,14 +929,18 @@
           {t(locale, 'Two-factor authentication', 'Tvåfaktorsautentisering')}
         </CardTitle>
         <CardDescription>
-          {t(locale, 'Protect vault unlocks with a time-based one-time password.', 'Skydda valvupplåsning med tidsbaserade engångskoder.')}
+          {t(
+            locale,
+            'Protect vault unlocks with a time-based one-time password.',
+            'Skydda valvupplåsning med tidsbaserade engångskoder.'
+          )}
         </CardDescription>
       </div>
     </CardHeader>
     <CardContent class="space-y-5 pt-4">
       {#if totpSetupSuccess}
         <Alert>
-          <Check class="h-4 w-4 text-primary" aria-hidden="true" />
+          <Check class="text-primary h-4 w-4" aria-hidden="true" />
           <div class="space-y-1">
             <AlertTitle>
               {t(locale, 'Authenticator enabled', 'Autentiserare aktiverad')}
@@ -945,7 +952,7 @@
 
       {#if totpDisableSuccess}
         <Alert>
-          <Shield class="h-4 w-4 text-primary" aria-hidden="true" />
+          <ShieldCheck class="text-primary h-4 w-4" aria-hidden="true" />
           <div class="space-y-1">
             <AlertTitle>
               {t(locale, 'Authenticator disabled', 'Autentiserare inaktiverad')}
@@ -957,7 +964,7 @@
 
       {#if totpStatusError}
         <Alert variant="destructive">
-          <AlertCircle class="h-4 w-4" aria-hidden="true" />
+          <CircleAlert class="h-4 w-4" aria-hidden="true" />
           <div class="space-y-1">
             <AlertTitle>
               {t(locale, 'Unable to load status', 'Det gick inte att läsa in status')}
@@ -969,7 +976,7 @@
 
       {#if totpGenerationError && !pendingTotpSecret}
         <Alert variant="destructive">
-          <AlertCircle class="h-4 w-4" aria-hidden="true" />
+          <CircleAlert class="h-4 w-4" aria-hidden="true" />
           <div class="space-y-1">
             <AlertTitle>
               {t(locale, 'Unable to generate secret', 'Det gick inte att generera hemlighet')}
@@ -979,13 +986,13 @@
         </Alert>
       {/if}
 
-      <div class="space-y-3 rounded-lg border border-border/60 bg-muted/20 p-4">
+      <div class="border-border/60 bg-muted/20 space-y-3 rounded-lg border p-4">
         <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p class="text-sm font-semibold text-foreground">
+            <p class="text-foreground text-sm font-semibold">
               {t(locale, 'Current status', 'Aktuell status')}
             </p>
-            <p class="text-sm text-muted-foreground">
+            <p class="text-muted-foreground text-sm">
               {$loginTotpConfigured
                 ? t(
                     locale,
@@ -1002,7 +1009,9 @@
           <Badge
             class={cn(
               'px-3 py-1 text-xs font-medium',
-              $loginTotpConfigured ? 'bg-emerald-500/15 text-emerald-500' : 'bg-muted text-muted-foreground'
+              $loginTotpConfigured
+                ? 'bg-emerald-500/15 text-emerald-500'
+                : 'bg-muted text-muted-foreground'
             )}
           >
             {$loginTotpConfigured ? 'Enabled' : 'Disabled'}
@@ -1017,7 +1026,7 @@
             disabled={isGeneratingTotpSecret || isTotpStatusLoading}
           >
             {#if isGeneratingTotpSecret}
-              <Loader2 class="h-4 w-4 animate-spin" aria-hidden="true" />
+              <Spinner class="h-4 w-4" aria-hidden="true" />
             {:else}
               <QrCode class="h-4 w-4" aria-hidden="true" />
             {/if}
@@ -1033,9 +1042,9 @@
               disabled={isDisablingTotp}
             >
               {#if isDisablingTotp}
-                <Loader2 class="h-4 w-4 animate-spin" aria-hidden="true" />
+                <Spinner class="h-4 w-4" aria-hidden="true" />
               {:else}
-                <Shield class="h-4 w-4" aria-hidden="true" />
+                <ShieldCheck class="h-4 w-4" aria-hidden="true" />
               {/if}
               Disable TOTP
             </Button>
@@ -1048,34 +1057,43 @@
             onclick={refreshTotpStatus}
             disabled={isTotpStatusLoading}
           >
-            <RefreshCw class={`h-4 w-4 ${isTotpStatusLoading ? 'animate-spin' : ''}`} aria-hidden="true" />
+            <RefreshCw
+              class={`h-4 w-4 ${isTotpStatusLoading ? 'animate-spin' : ''}`}
+              aria-hidden="true"
+            />
             Refresh status
           </Button>
         </div>
 
         {#if isTotpStatusLoading}
-          <p class="flex items-center gap-2 text-xs text-muted-foreground">
-            <Loader2 class="h-3 w-3 animate-spin" aria-hidden="true" />
+          <p class="text-muted-foreground flex items-center gap-2 text-xs">
+            <Spinner class="h-3 w-3" aria-hidden="true" />
             Checking configuration…
           </p>
         {/if}
       </div>
 
       {#if pendingTotpSecret}
-        <div class="space-y-4 rounded-lg border border-primary/40 bg-primary/5 p-4">
+        <div class="border-primary/40 bg-primary/5 space-y-4 rounded-lg border p-4">
           <div class="flex items-center gap-2">
-            <QrCode class="h-5 w-5 text-primary" aria-hidden="true" />
+            <QrCode class="text-primary h-5 w-5" aria-hidden="true" />
             <div>
-              <p class="text-sm font-semibold text-foreground">Step 1 — Add the secret to your authenticator</p>
-              <p class="text-sm text-muted-foreground">
+              <p class="text-foreground text-sm font-semibold">
+                Step 1 — Add the secret to your authenticator
+              </p>
+              <p class="text-muted-foreground text-sm">
                 Scan the QR code or copy the secret, then confirm a code to finish enabling TOTP.
               </p>
             </div>
           </div>
 
-          <div class="rounded-md border border-border/60 bg-background p-4">
-            <p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Secret</p>
-            <p class="mt-2 font-mono text-lg text-foreground break-words">{formatSecret(pendingTotpSecret)}</p>
+          <div class="border-border/60 bg-background rounded-md border p-4">
+            <p class="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
+              Secret
+            </p>
+            <p class="text-foreground mt-2 font-mono text-lg wrap-break-word">
+              {formatSecret(pendingTotpSecret)}
+            </p>
             <div class="mt-3 flex flex-wrap gap-2">
               <Button
                 type="button"
@@ -1121,26 +1139,26 @@
             </Label>
             <Input
               id="totp-verification"
-              type="text"
-              inputmode="numeric"
+              type="number"
               maxlength={TOTP_CODE_LENGTH}
               autocomplete="one-time-code"
               placeholder={t(locale, 'Enter 6-digit code', 'Ange sexsiffrig kod')}
-              bind:value={totpVerificationCode}
+              bind:inputValue={totpVerificationCode}
               oninput={sanitizeTotpCode}
+              title="Verification Code"
             />
             {#if totpVerificationError}
-              <p class="text-sm text-destructive">{totpVerificationError}</p>
+              <p class="text-destructive text-sm">{totpVerificationError}</p>
             {/if}
           </div>
 
           {#if totpGenerationError}
             <Alert variant="destructive">
-              <AlertCircle class="h-4 w-4" aria-hidden="true" />
+              <CircleAlert class="h-4 w-4" aria-hidden="true" />
               <div class="space-y-1">
-              <AlertTitle>
-                {t(locale, 'Unable to generate secret', 'Det gick inte att generera hemlighet')}
-              </AlertTitle>
+                <AlertTitle>
+                  {t(locale, 'Unable to generate secret', 'Det gick inte att generera hemlighet')}
+                </AlertTitle>
                 <AlertDescription>{totpGenerationError}</AlertDescription>
               </div>
             </Alert>
@@ -1154,7 +1172,7 @@
               disabled={isConfirmingTotp || totpVerificationCode.length !== TOTP_CODE_LENGTH}
             >
               {#if isConfirmingTotp}
-                <Loader2 class="h-4 w-4 animate-spin" aria-hidden="true" />
+                <Spinner class="h-4 w-4" aria-hidden="true" />
               {:else}
                 <Check class="h-4 w-4" aria-hidden="true" />
               {/if}
@@ -1162,22 +1180,25 @@
                 ? t(locale, 'Verifying…', 'Verifierar…')
                 : t(locale, 'Verify & enable', 'Verifiera och aktivera')}
             </Button>
-              <Button
-                type="button"
-                variant="outline"
-                class="gap-2"
-                onclick={handleGenerateTotpSecret}
-                disabled={isGeneratingTotpSecret}
-              >
-                <RefreshCw class={`h-4 w-4 ${isGeneratingTotpSecret ? 'animate-spin' : ''}`} aria-hidden="true" />
+            <Button
+              type="button"
+              variant="outline"
+              class="gap-2"
+              onclick={handleGenerateTotpSecret}
+              disabled={isGeneratingTotpSecret}
+            >
+              <RefreshCw
+                class={`h-4 w-4 ${isGeneratingTotpSecret ? 'animate-spin' : ''}`}
+                aria-hidden="true"
+              />
               {t(locale, 'Generate another secret', 'Generera en ny hemlighet')}
-              </Button>
+            </Button>
             <Button type="button" variant="ghost" onclick={cancelTotpSetup}>
               {t(locale, 'Cancel', 'Avbryt')}
             </Button>
           </div>
 
-          <p class="text-xs text-muted-foreground">
+          <p class="text-muted-foreground text-xs">
             {t(
               locale,
               'Codes rotate every 30 seconds. If verification fails, wait for the next code before trying again.',
@@ -1189,12 +1210,12 @@
 
       {#if $loginTotpConfigured && !pendingTotpSecret}
         {@const storedSecret = $loginTotpSecret}
-        <div class="space-y-3 rounded-lg border border-border/60 bg-muted/10 p-4">
+        <div class="border-border/60 bg-muted/10 space-y-3 rounded-lg border p-4">
           <div class="flex items-center gap-2">
-            <Shield class="h-5 w-5 text-primary" aria-hidden="true" />
+            <ShieldCheck class="text-primary h-5 w-5" aria-hidden="true" />
             <div>
-              <p class="text-sm font-semibold text-foreground">Stored secret on this device</p>
-              <p class="text-sm text-muted-foreground">
+              <p class="text-foreground text-sm font-semibold">Stored secret on this device</p>
+              <p class="text-muted-foreground text-sm">
                 {storedSecret
                   ? t(
                       locale,
@@ -1211,9 +1232,13 @@
           </div>
 
           {#if storedSecret}
-            <div class="rounded-md border border-border/60 bg-background p-4">
-              <p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Secret</p>
-              <p class="mt-2 font-mono text-lg text-foreground break-words">{formatSecret(storedSecret)}</p>
+            <div class="border-border/60 bg-background rounded-md border p-4">
+              <p class="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
+                Secret
+              </p>
+              <p class="text-foreground mt-2 font-mono text-lg wrap-break-word">
+                {formatSecret(storedSecret)}
+              </p>
               <div class="mt-3 flex flex-wrap gap-2">
                 <Button
                   type="button"
@@ -1253,8 +1278,8 @@
               {/if}
             </div>
           {:else}
-              <Alert>
-              <AlertCircle class="h-4 w-4" aria-hidden="true" />
+            <Alert>
+              <CircleAlert class="h-4 w-4" aria-hidden="true" />
               <div class="space-y-1">
                 <AlertTitle>
                   {t(locale, 'No local secret available', 'Ingen lokal hemlighet tillgänglig')}
@@ -1274,9 +1299,11 @@
     </CardContent>
   </Card>
 
-    <Card class="border-border/60 bg-card/80 backdrop-blur supports-[backdrop-filter]:bg-card/70">
-    <CardHeader class="flex flex-row items-start gap-3 border-b border-border/40 pb-4">
-      <div class="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
+  <Card class="border-border/60 bg-card/80 supports-backdrop-filter:bg-card/70 backdrop-blur">
+    <CardHeader class="border-border/40 flex flex-row items-start gap-3 border-b pb-4">
+      <div
+        class="bg-primary/10 text-primary flex h-10 w-10 items-center justify-center rounded-full"
+      >
         <Lock class="h-5 w-5" aria-hidden="true" />
       </div>
       <div>
@@ -1284,18 +1311,28 @@
           {t(locale, 'Master Password & Encryption', 'Huvudlösenord & kryptering')}
         </CardTitle>
         <CardDescription>
-          {t(locale, 'Manage the master password and key derivation policy.', 'Hantera huvudlösenordet och nyckelderiveringspolicyn.')}
+          {t(
+            locale,
+            'Manage the master password and key derivation policy.',
+            'Hantera huvudlösenordet och nyckelderiveringspolicyn.'
+          )}
         </CardDescription>
       </div>
     </CardHeader>
     <CardContent class="flex flex-col gap-5 pt-4">
-      <div class="flex flex-col gap-2 rounded-lg border border-border/60 bg-muted/20 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
+      <div
+        class="border-border/60 bg-muted/20 flex flex-col gap-2 rounded-lg border px-4 py-4 sm:flex-row sm:items-center sm:justify-between"
+      >
         <div>
-          <p class="text-sm font-semibold text-foreground">
+          <p class="text-foreground text-sm font-semibold">
             {t(locale, 'Master Password', 'Huvudlösenord')}
           </p>
-          <p class="text-sm text-muted-foreground">
-            {t(locale, 'Update the password used to unlock your vault.', 'Uppdatera lösenordet som används för att låsa upp ditt valv.')}
+          <p class="text-muted-foreground text-sm">
+            {t(
+              locale,
+              'Update the password used to unlock your vault.',
+              'Uppdatera lösenordet som används för att låsa upp ditt valv.'
+            )}
           </p>
         </div>
         <Button variant="outline" onclick={openPasswordModal}>
@@ -1303,14 +1340,20 @@
         </Button>
       </div>
 
-      <div class="flex flex-col gap-2 rounded-lg border border-border/60 bg-muted/20 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
+      <div
+        class="border-border/60 bg-muted/20 flex flex-col gap-2 rounded-lg border px-4 py-4 sm:flex-row sm:items-center sm:justify-between"
+      >
         <div>
-          <p class="text-sm font-semibold text-foreground">
+          <p class="text-foreground text-sm font-semibold">
             {t(locale, 'Key Derivation', 'Nyckelderivering')}
           </p>
-          <p class="text-sm text-muted-foreground">
+          <p class="text-muted-foreground text-sm">
             {argon2Loading
-              ? t(locale, 'Loading key derivation parameters…', 'Läser in parametrar för nyckelderivering…')
+              ? t(
+                  locale,
+                  'Loading key derivation parameters…',
+                  'Läser in parametrar för nyckelderivering…'
+                )
               : argon2Summary}
           </p>
         </div>
@@ -1321,9 +1364,11 @@
     </CardContent>
   </Card>
 
-    <Card class="border-border/60 bg-card/80 backdrop-blur supports-[backdrop-filter]:bg-card/70">
-    <CardHeader class="flex flex-row items-start gap-3 border-b border-border/40 pb-4">
-      <div class="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
+  <Card class="border-border/60 bg-card/80 supports-backdrop-filter:bg-card/70 backdrop-blur">
+    <CardHeader class="border-border/40 flex flex-row items-start gap-3 border-b pb-4">
+      <div
+        class="bg-primary/10 text-primary flex h-10 w-10 items-center justify-center rounded-full"
+      >
         <CalendarClock class="h-5 w-5" aria-hidden="true" />
       </div>
       <div>
@@ -1331,18 +1376,28 @@
           {t(locale, 'Auto-lock Controls', 'Kontroller för autolåsning')}
         </CardTitle>
         <CardDescription>
-          {t(locale, 'Define when the vault should automatically lock itself.', 'Definiera när valvet automatiskt ska låsa sig.')}
+          {t(
+            locale,
+            'Define when the vault should automatically lock itself.',
+            'Definiera när valvet automatiskt ska låsa sig.'
+          )}
         </CardDescription>
       </div>
     </CardHeader>
     <CardContent class="flex flex-col gap-4 pt-4">
-      <div class="flex items-start justify-between gap-4 rounded-lg border border-border/60 bg-muted/20 px-4 py-3">
+      <div
+        class="border-border/60 bg-muted/20 flex items-start justify-between gap-4 rounded-lg border px-4 py-3"
+      >
         <div>
-          <p class="text-sm font-semibold text-foreground">
+          <p class="text-foreground text-sm font-semibold">
             {t(locale, 'Lock on Suspend', 'Lås vid viloläge')}
           </p>
-          <p class="text-sm text-muted-foreground">
-            {t(locale, 'Lock whenever the system sleeps or hibernates.', 'Lås valvet när systemet går i vila eller viloläge.')}
+          <p class="text-muted-foreground text-sm">
+            {t(
+              locale,
+              'Lock whenever the system sleeps or hibernates.',
+              'Lås valvet när systemet går i vila eller viloläge.'
+            )}
           </p>
         </div>
         <Switch
@@ -1352,13 +1407,19 @@
         />
       </div>
 
-      <div class="flex items-start justify-between gap-4 rounded-lg border border-border/60 bg-muted/20 px-4 py-3">
+      <div
+        class="border-border/60 bg-muted/20 flex items-start justify-between gap-4 rounded-lg border px-4 py-3"
+      >
         <div>
-          <p class="text-sm font-semibold text-foreground">
+          <p class="text-foreground text-sm font-semibold">
             {t(locale, 'Lock on Minimise', 'Lås vid minimering')}
           </p>
-          <p class="text-sm text-muted-foreground">
-            {t(locale, 'Lock the vault when the window is minimised.', 'Lås valvet när fönstret minimeras.')}
+          <p class="text-muted-foreground text-sm">
+            {t(
+              locale,
+              'Lock the vault when the window is minimised.',
+              'Lås valvet när fönstret minimeras.'
+            )}
           </p>
         </div>
         <Switch
@@ -1368,24 +1429,32 @@
         />
       </div>
 
-      <div class="flex flex-col gap-2 rounded-lg border border-border/60 bg-muted/20 px-4 py-4">
-        <Label class="text-sm font-semibold text-foreground">
+      <div class="border-border/60 bg-muted/20 flex flex-col gap-2 rounded-lg border px-4 py-4">
+        <Label class="text-foreground text-sm font-semibold">
           {t(locale, 'Auto-lock After Inactivity', 'Autolåsning efter inaktivitet')}
         </Label>
-        <p class="text-sm text-muted-foreground">
-          {t(locale, 'Lock the vault automatically after the selected idle period.', 'Lås valvet automatiskt efter vald inaktivitetsperiod.')}
+        <p class="text-muted-foreground text-sm">
+          {t(
+            locale,
+            'Lock the vault automatically after the selected idle period.',
+            'Lås valvet automatiskt efter vald inaktivitetsperiod.'
+          )}
         </p>
-        <Select type="single" value={currentSettings.autoLockInactivity} onValueChange={updateAutoLock}>
+        <Select
+          type="single"
+          value={currentSettings.autoLockInactivity}
+          onValueChange={updateAutoLock}
+        >
           <SelectTrigger aria-label="Select auto-lock inactivity" class="w-full sm:w-56">
             <span data-slot="select-value" class="truncate text-sm">
-              {getAutoLockLabel(currentSettings.autoLockInactivity, locale) ||
+              {getAutoLockLabel(currentSettings.autoLockInactivity) ||
                 t(locale, 'Select duration', 'Välj tidslängd')}
             </span>
           </SelectTrigger>
           <SelectContent>
-            {#each autoLockOptions as option}
+            {#each autoLockOptions as option (option.value)}
               <SelectItem value={option.value}>
-                {getAutoLockLabel(option.value, locale)}
+                {getAutoLockLabel(option.value)}
               </SelectItem>
             {/each}
           </SelectContent>
@@ -1394,10 +1463,12 @@
     </CardContent>
   </Card>
 
-    <Card class="border-border/60 bg-card/80 backdrop-blur supports-[backdrop-filter]:bg-card/70">
-    <CardHeader class="flex flex-row items-start gap-3 border-b border-border/40 pb-4">
-      <div class="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
-        <Fingerprint class="h-5 w-5" aria-hidden="true" />
+  <Card class="border-border/60 bg-card/80 supports-backdrop-filter:bg-card/70 backdrop-blur">
+    <CardHeader class="border-border/40 flex flex-row items-start gap-3 border-b pb-4">
+      <div
+        class="bg-primary/10 text-primary flex h-10 w-10 items-center justify-center rounded-full"
+      >
+        <FingerprintPattern class="h-5 w-5" aria-hidden="true" />
       </div>
       <div>
         <CardTitle>
@@ -1413,12 +1484,14 @@
       </div>
     </CardHeader>
     <CardContent class="flex flex-col gap-4 pt-4">
-      <div class="flex items-start justify-between gap-4 rounded-lg border border-border/60 bg-muted/20 px-4 py-3">
+      <div
+        class="border-border/60 bg-muted/20 flex items-start justify-between gap-4 rounded-lg border px-4 py-3"
+      >
         <div>
-          <p class="text-sm font-semibold text-foreground">
+          <p class="text-foreground text-sm font-semibold">
             {t(locale, 'Biometric Unlock', 'Biometrisk upplåsning')}
           </p>
-          <p class="text-sm text-muted-foreground">
+          <p class="text-muted-foreground text-sm">
             {t(
               locale,
               'Allow fingerprint or face recognition to unlock the vault.',
@@ -1434,12 +1507,14 @@
         />
       </div>
 
-      <div class="flex items-start justify-between gap-4 rounded-lg border border-border/60 bg-muted/20 px-4 py-3">
+      <div
+        class="border-border/60 bg-muted/20 flex items-start justify-between gap-4 rounded-lg border px-4 py-3"
+      >
         <div>
-          <p class="text-sm font-semibold text-foreground">
+          <p class="text-foreground text-sm font-semibold">
             {t(locale, 'Session Persistence', 'Sessionsbeständighet')}
           </p>
-          <p class="text-sm text-muted-foreground">
+          <p class="text-muted-foreground text-sm">
             {t(
               locale,
               'Remember the unlocked session between restarts.',
@@ -1456,9 +1531,11 @@
     </CardContent>
   </Card>
 
-    <Card class="border-border/60 bg-card/80 backdrop-blur supports-[backdrop-filter]:bg-card/70">
-    <CardHeader class="flex flex-row items-start gap-3 border-b border-border/40 pb-4">
-      <div class="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
+  <Card class="border-border/60 bg-card/80 supports-backdrop-filter:bg-card/70 backdrop-blur">
+    <CardHeader class="border-border/40 flex flex-row items-start gap-3 border-b pb-4">
+      <div
+        class="bg-primary/10 text-primary flex h-10 w-10 items-center justify-center rounded-full"
+      >
         <MonitorSmartphone class="h-5 w-5" aria-hidden="true" />
       </div>
       <div class="flex w-full flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -1481,31 +1558,34 @@
     </CardHeader>
     <CardContent class="flex flex-col gap-4 pt-4">
       {#if devicesLoading}
-        <div class="flex items-center gap-2 text-sm text-muted-foreground">
-          <Loader2 class="h-4 w-4 animate-spin" aria-hidden="true" />
+        <div class="text-muted-foreground flex items-center gap-2 text-sm">
+          <Spinner class="h-4 w-4" aria-hidden="true" />
           <span>{t(locale, 'Loading devices…', 'Läser in enheter…')}</span>
         </div>
       {:else if devices.length === 0}
-        <p class="text-sm text-muted-foreground">
+        <p class="text-muted-foreground text-sm">
           {t(locale, 'No devices have been paired yet.', 'Inga enheter har parkopplats ännu.')}
         </p>
       {:else}
-        {#each devices as device}
+        {#each devices as device (device.id)}
+          {@const DeviceIcon = getDeviceIcon(device.kind)}
           <div
             class={cn(
-              'flex items-start justify-between gap-4 rounded-lg border border-border/60 bg-muted/20 px-4 py-4 sm:items-center',
+              'border-border/60 bg-muted/20 flex items-start justify-between gap-4 rounded-lg border px-4 py-4 sm:items-center',
               device.isCurrent ? 'border-primary/60 bg-primary/10' : ''
             )}
           >
             <div class="flex items-start gap-3">
-              <div class="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
-                <svelte:component this={getDeviceIcon(device.kind)} class="h-5 w-5" aria-hidden="true" />
+              <div
+                class="bg-primary/10 text-primary flex h-10 w-10 items-center justify-center rounded-full"
+              >
+                <DeviceIcon class="h-5 w-5" aria-hidden="true" />
               </div>
               <div>
-                <p class="text-sm font-semibold text-foreground">{device.name}</p>
-                <p class="text-xs text-muted-foreground">
-                  {(device.lastSeen ??
-                    (locale === 'sv' ? 'Ingen senaste aktivitet' : 'No recent activity'))}
+                <p class="text-foreground text-sm font-semibold">{device.name}</p>
+                <p class="text-muted-foreground text-xs">
+                  {device.lastSeen ??
+                    (locale === 'sv' ? 'Ingen senaste aktivitet' : 'No recent activity')}
                   {device.isCurrent
                     ? locale === 'sv'
                       ? ' • Aktuell enhet'
@@ -1524,7 +1604,7 @@
                 aria-label={`Remove ${device.name}`}
               >
                 {#if deviceActionPending[device.id]}
-                  <Loader2 class="h-4 w-4 animate-spin" aria-hidden="true" />
+                  <Spinner class="h-4 w-4" aria-hidden="true" />
                 {:else}
                   <Trash2 class="h-4 w-4" aria-hidden="true" />
                 {/if}
@@ -1541,7 +1621,7 @@
             disabled={isRevokingDevices || devices.length === 0}
           >
             {#if isRevokingDevices}
-              <Loader2 class="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
+              <Spinner class="mr-2 h-4 w-4" aria-hidden="true" />
             {/if}
             {t(locale, 'Revoke All Devices', 'Återkalla alla enheter')}
           </Button>
@@ -1550,9 +1630,11 @@
     </CardContent>
   </Card>
 
-    <Card class="border-border/60 bg-card/80 backdrop-blur supports-[backdrop-filter]:bg-card/70">
-    <CardHeader class="flex flex-row items-start gap-3 border-b border-border/40 pb-4">
-      <div class="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
+  <Card class="border-border/60 bg-card/80 supports-backdrop-filter:bg-card/70 backdrop-blur">
+    <CardHeader class="border-border/40 flex flex-row items-start gap-3 border-b pb-4">
+      <div
+        class="bg-primary/10 text-primary flex h-10 w-10 items-center justify-center rounded-full"
+      >
         <EyeOff class="h-5 w-5" aria-hidden="true" />
       </div>
       <div>
@@ -1560,23 +1642,29 @@
           {t(locale, 'Privacy Controls', 'Integritetskontroller')}
         </CardTitle>
         <CardDescription>
-          {t(locale, 'Fine-tune privacy and diagnostic data handling.', 'Finjustera integritet och hantering av diagnostikdata.')}
+          {t(
+            locale,
+            'Fine-tune privacy and diagnostic data handling.',
+            'Finjustera integritet och hantering av diagnostikdata.'
+          )}
         </CardDescription>
       </div>
     </CardHeader>
     <CardContent class="flex flex-col gap-5 pt-4">
       <div class="flex flex-col gap-3">
-        {#each privacyToggles as toggle}
-          <div class="flex items-start justify-between gap-4 rounded-lg border border-border/60 bg-muted/20 px-4 py-3">
+        {#each privacyToggles as toggle (toggle.key)}
+          <div
+            class="border-border/60 bg-muted/20 flex items-start justify-between gap-4 rounded-lg border px-4 py-3"
+          >
             <div>
-              <p class="text-sm font-semibold text-foreground">
+              <p class="text-foreground text-sm font-semibold">
                 {toggle.key === 'externalBreachCheck'
                   ? t(locale, 'External Breach Check', 'Extern intrångskontroll')
                   : toggle.key === 'localReuseDetection'
                     ? t(locale, 'Local Reuse Detection', 'Lokal återanvändningsdetektering')
                     : t(locale, 'Secure RAM Handling', 'Säkrare RAM-hantering')}
               </p>
-              <p class="text-sm text-muted-foreground">
+              <p class="text-muted-foreground text-sm">
                 {toggle.key === 'externalBreachCheck'
                   ? t(
                       locale,
@@ -1597,7 +1685,7 @@
               </p>
             </div>
             <Switch
-              checked={currentSettings[toggle.key]}
+              checked={currentSettings[toggle.key] as boolean}
               aria-label={`Toggle ${toggle.title}`}
               onclick={() => toggleSetting(toggle.key)}
             />
@@ -1616,9 +1704,9 @@
         </Button>
       </div>
 
-      <div class="rounded-lg border border-border/60 bg-muted/10 p-4">
-        <p class="text-sm font-semibold text-foreground">Data Retention Summary</p>
-        <ul class="mt-2 list-disc space-y-1 pl-5 text-sm text-muted-foreground">
+      <div class="border-border/60 bg-muted/10 rounded-lg border p-4">
+        <p class="text-foreground text-sm font-semibold">Data Retention Summary</p>
+        <ul class="text-muted-foreground mt-2 list-disc space-y-1 pl-5 text-sm">
           <li>Vault data remains encrypted locally and is never uploaded.</li>
           <li>Activity logs rotate every 30 days unless cleared sooner.</li>
           <li>Crash reports are anonymised and retained for up to 90 days.</li>
@@ -1627,45 +1715,51 @@
     </CardContent>
   </Card>
 
-    <Card class="border-border/60 bg-card/80 backdrop-blur supports-[backdrop-filter]:bg-card/70">
-    <CardHeader class="flex flex-row items-start gap-3 border-b border-border/40 pb-4">
-      <div class="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
-        <Shield class="h-5 w-5" aria-hidden="true" />
+  <Card class="border-border/60 bg-card/80 supports-backdrop-filter:bg-card/70 backdrop-blur">
+    <CardHeader class="border-border/40 flex flex-row items-start gap-3 border-b pb-4">
+      <div
+        class="bg-primary/10 text-primary flex h-10 w-10 items-center justify-center rounded-full"
+      >
+        <ShieldCheck class="h-5 w-5" aria-hidden="true" />
       </div>
       <div>
         <CardTitle>
           {t(locale, 'Security Actions', 'Säkerhetsåtgärder')}
         </CardTitle>
         <CardDescription>
-          {t(locale, 'Execute advanced maintenance and security tasks.', 'Utför avancerade underhålls- och säkerhetsåtgärder.')}
+          {t(
+            locale,
+            'Execute advanced maintenance and security tasks.',
+            'Utför avancerade underhålls- och säkerhetsåtgärder.'
+          )}
         </CardDescription>
       </div>
     </CardHeader>
     <CardContent class="pt-4">
       <div class="grid gap-3 md:grid-cols-3">
-        {#each securityActions as action}
+        {#each securityActions as action (action.id)}
           <Button
             type="button"
             variant="outline"
-            class="h-full w-full flex-col items-start gap-3 rounded-xl border-border/60 bg-muted/20 p-4 text-left transition-colors hover:border-primary/50 hover:text-primary"
+            class="border-border/60 bg-muted/20 hover:border-primary/50 hover:text-primary h-full w-full flex-col items-start gap-3 rounded-xl p-4 text-left transition-colors"
             onclick={() => handleSecurityAction(action.id)}
             disabled={action.id !== 'rekey' && securityActionPending[action.id]}
             aria-busy={action.id !== 'rekey' && securityActionPending[action.id]}
           >
             {#if action.id !== 'rekey' && securityActionPending[action.id]}
-              <Loader2 class="h-5 w-5 animate-spin text-primary" aria-hidden="true" />
+              <Spinner class="text-primary h-5 w-5" aria-hidden="true" />
             {:else}
-              <action.Icon class="h-5 w-5 text-primary" aria-hidden="true" />
+              <action.Icon class="text-primary h-5 w-5" aria-hidden="true" />
             {/if}
             <div class="space-y-1">
-              <p class="text-sm font-semibold text-foreground">
+              <p class="text-foreground text-sm font-semibold">
                 {action.id === 'rekey'
                   ? t(locale, 'Re-key Vault', 'Byt valvnyckel')
                   : action.id === 'wipe-memory'
                     ? t(locale, 'Clear Memory', 'Rensa minne')
                     : t(locale, 'Integrity Check', 'Integritetskontroll')}
               </p>
-              <p class="text-xs text-muted-foreground whitespace-normal break-words">
+              <p class="text-muted-foreground text-xs wrap-break-word whitespace-normal">
                 {action.id === 'rekey'
                   ? t(
                       locale,
@@ -1717,22 +1811,23 @@
             id="current-password"
             type={showCurrentPassword ? 'text' : 'password'}
             placeholder={t(locale, 'Enter current password', 'Ange nuvarande lösenord')}
-            bind:value={currentPassword}
+            bind:inputValue={currentPassword}
+            title="Current Password"
           />
           <Button
             type="button"
             variant="ghost"
             size="icon"
-            class="absolute right-1 top-1/2 -translate-y-1/2"
+            class="absolute top-1/2 right-1 -translate-y-1/2"
             aria-label={showCurrentPassword
               ? t(locale, 'Hide current password', 'Dölj nuvarande lösenord')
               : t(locale, 'Show current password', 'Visa nuvarande lösenord')}
             onclick={togglePasswordVisibility}
           >
             {#if showCurrentPassword}
-              <EyeOff class="h-4 w-4 text-primary" aria-hidden="true" />
+              <EyeOff class="text-primary h-4 w-4" aria-hidden="true" />
             {:else}
-              <Eye class="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+              <Eye class="text-muted-foreground h-4 w-4" aria-hidden="true" />
             {/if}
           </Button>
         </div>
@@ -1744,7 +1839,8 @@
           id="new-password"
           type="password"
           placeholder={t(locale, 'Enter new password', 'Ange nytt lösenord')}
-          bind:value={newPassword}
+          bind:inputValue={newPassword}
+          title="New Password"
         />
       </div>
 
@@ -1756,11 +1852,14 @@
           id="confirm-password"
           type="password"
           placeholder={t(locale, 'Confirm new password', 'Bekräfta nytt lösenord')}
-          bind:value={confirmPassword}
+          bind:inputValue={confirmPassword}
+          title="Confirm Password"
         />
       </div>
 
-      <div class="flex items-start gap-3 rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+      <div
+        class="border-destructive/40 bg-destructive/10 text-destructive flex items-start gap-3 rounded-lg border p-3 text-sm"
+      >
         <TriangleAlert class="mt-0.5 h-4 w-4" aria-hidden="true" />
         <p>
           {t(
@@ -1771,7 +1870,7 @@
         </p>
       </div>
       {#if changePasswordError}
-        <p class="text-sm text-destructive">{changePasswordError}</p>
+        <p class="text-destructive text-sm">{changePasswordError}</p>
       {/if}
     </div>
 
@@ -1787,7 +1886,7 @@
         aria-busy={isChangingPassword}
       >
         {#if isChangingPassword}
-          <Loader2 class="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
+          <Spinner class="mr-2 h-4 w-4" aria-hidden="true" />
         {/if}
         {t(locale, 'Change Password', 'Byt lösenord')}
       </Button>
@@ -1814,15 +1913,33 @@
       <div class="grid gap-3 sm:grid-cols-3">
         <div class="space-y-2">
           <Label for="kdf-memory">{t(locale, 'Memory (MiB)', 'Minne (MiB)')}</Label>
-          <Input id="kdf-memory" type="number" min="8" bind:value={kdfMemoryMb} />
+          <Input
+            id="kdf-memory"
+            type="number"
+            min="8"
+            bind:inputValue={kdfMemoryMb as any}
+            title="Memory"
+          />
         </div>
         <div class="space-y-2">
           <Label for="kdf-time">{t(locale, 'Time Cost', 'Tidskostnad')}</Label>
-          <Input id="kdf-time" type="number" min="1" bind:value={kdfTimeCost} />
+          <Input
+            id="kdf-time"
+            type="number"
+            min="1"
+            bind:inputValue={kdfTimeCost as any}
+            title="Time Cost"
+          />
         </div>
         <div class="space-y-2">
           <Label for="kdf-parallelism">{t(locale, 'Parallelism', 'Parallellism')}</Label>
-          <Input id="kdf-parallelism" type="number" min="1" bind:value={kdfParallelism} />
+          <Input
+            id="kdf-parallelism"
+            type="number"
+            min="1"
+            bind:inputValue={kdfParallelism as any}
+            title="Parallelism"
+          />
         </div>
       </div>
 
@@ -1833,29 +1950,32 @@
             id="kdf-password"
             type={showKdfPassword ? 'text' : 'password'}
             placeholder={t(locale, 'Enter current password', 'Ange nuvarande lösenord')}
-            bind:value={kdfCurrentPassword}
+            bind:inputValue={kdfCurrentPassword}
+            title="Password"
           />
           <Button
             type="button"
             variant="ghost"
             size="icon"
-            class="absolute right-1 top-1/2 -translate-y-1/2"
+            class="absolute top-1/2 right-1 -translate-y-1/2"
             aria-label={showKdfPassword
               ? t(locale, 'Hide current password', 'Dölj nuvarande lösenord')
               : t(locale, 'Show current password', 'Visa nuvarande lösenord')}
             onclick={toggleKdfPasswordVisibility}
           >
             {#if showKdfPassword}
-              <EyeOff class="h-4 w-4 text-primary" aria-hidden="true" />
+              <EyeOff class="text-primary h-4 w-4" aria-hidden="true" />
             {:else}
-              <Eye class="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+              <Eye class="text-muted-foreground h-4 w-4" aria-hidden="true" />
             {/if}
           </Button>
         </div>
       </div>
 
-      <div class="flex items-start gap-3 rounded-lg border border-border/60 bg-muted/20 p-3 text-sm text-muted-foreground">
-        <TriangleAlert class="mt-0.5 h-4 w-4 text-primary" aria-hidden="true" />
+      <div
+        class="border-border/60 bg-muted/20 text-muted-foreground flex items-start gap-3 rounded-lg border p-3 text-sm"
+      >
+        <TriangleAlert class="text-primary mt-0.5 h-4 w-4" aria-hidden="true" />
         <p>
           {t(
             locale,
@@ -1866,7 +1986,7 @@
       </div>
 
       {#if kdfError}
-        <p class="text-sm text-destructive">{kdfError}</p>
+        <p class="text-destructive text-sm">{kdfError}</p>
       {/if}
     </div>
 
@@ -1881,7 +2001,7 @@
         aria-busy={isUpdatingKdf}
       >
         {#if isUpdatingKdf}
-          <Loader2 class="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
+          <Spinner class="mr-2 h-4 w-4" aria-hidden="true" />
         {/if}
         {t(locale, 'Apply Changes', 'Verkställ ändringar')}
       </Button>
@@ -1905,17 +2025,18 @@
             id="bio-password"
             type={showBiometricPassword ? 'text' : 'password'}
             placeholder="Enter master password"
-            bind:value={biometricPassword}
-            onkeydown={(e) => e.key === 'Enter' && submitBiometricEnable()}
+            bind:inputValue={biometricPassword}
+            onkeydown={(e: KeyboardEvent) => e.key === 'Enter' && submitBiometricEnable()}
+            title="Password"
           />
           <Button
             type="button"
             variant="ghost"
             size="icon"
-            class="absolute right-1 top-1/2 -translate-y-1/2"
+            class="absolute top-1/2 right-1 -translate-y-1/2"
             onclick={toggleBiometricPasswordVisibility}
           >
-             {#if showBiometricPassword}
+            {#if showBiometricPassword}
               <EyeOff class="h-4 w-4" />
             {:else}
               <Eye class="h-4 w-4" />
@@ -1924,14 +2045,14 @@
         </div>
       </div>
       {#if biometricError}
-        <p class="text-sm text-destructive">{biometricError}</p>
+        <p class="text-destructive text-sm">{biometricError}</p>
       {/if}
     </div>
     <DialogFooter>
       <Button variant="outline" onclick={() => handleBiometricDialogChange(false)}>Cancel</Button>
       <Button onclick={submitBiometricEnable} disabled={isBiometricActionLoading}>
         {#if isBiometricActionLoading}
-          <Loader2 class="mr-2 h-4 w-4 animate-spin" />
+          <Spinner class="mr-2 h-4 w-4" />
         {/if}
         Enable
       </Button>

@@ -154,4 +154,3 @@ export function getFallback(item: PasswordItem, tagMap: Map<string, TagMeta>): T
   }
   return DEFAULT_FALLBACK;
 }
-

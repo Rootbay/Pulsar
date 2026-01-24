@@ -7,7 +7,7 @@
   import Popup from '$lib/components/ui/Popup.svelte';
   import { SidebarProvider } from '$lib/components/ui/sidebar';
   import Settings from '../settings/general/+page.svelte';
-  import { invoke } from '@tauri-apps/api/core';
+  import { callBackend } from '$lib/utils/backend';
   import type { PasswordItem } from '../+layout.ts';
   import { onMount, tick } from 'svelte';
   import { profileSettings } from '$lib/stores/profile';
@@ -19,21 +19,23 @@
     color: string;
   }
 
+  let { children } = $props();
+
   const SIDEBAR_WIDTH = '86px';
   const SIDEBAR_STYLE = '--sidebar-width: ' + SIDEBAR_WIDTH + ';';
 
-  let passwordItems: PasswordItem[] = [];
-  let selectedPasswordItem: PasswordItem | null = null;
-  let showCreatePasswordPopup = false;
-  let showPopup = false;
-  let popupMode: 'create' | 'edit' = 'create';
-  let popupTag: any = null;
-  let buttons: Button[] = [];
-  let displayColor = '#94a3b8';
-  let passwordListRef: InstanceType<typeof PasswordList> | null = null;
-  let passwordDetailRef: InstanceType<typeof PasswordDetail> | null = null;
+  let passwordItems = $state<PasswordItem[]>([]);
+  let selectedPasswordItem = $state<PasswordItem | null>(null);
+  let showCreatePasswordPopup = $state(false);
+  let showPopup = $state(false);
+  let popupMode = $state<'create' | 'edit'>('create');
+  let popupTag = $state<any>(null);
+  let buttons = $state<Button[]>([]);
+  let displayColor = $state('#94a3b8');
+  let passwordListRef = $state<any>(null);
+  let passwordDetailRef = $state<any>(null);
 
-  $: {
+  $effect(() => {
     if (selectedPasswordItem && selectedPasswordItem.tags) {
       const firstTag = selectedPasswordItem.tags.split(',')[0].trim();
       const button = buttons.find((b) => b.text === firstTag);
@@ -41,7 +43,7 @@
     } else {
       displayColor = '#94a3b8';
     }
-  }
+  });
 
   async function loadPasswordItems() {
     if ($isLocked) {
@@ -50,8 +52,8 @@
     }
 
     try {
-      passwordItems = await invoke('get_password_items');
-      buttons = await invoke('get_buttons');
+      passwordItems = await callBackend('get_password_items');
+      buttons = await callBackend('get_buttons');
     } catch (error) {
       console.error('Failed to load vault items:', error);
     }
@@ -73,14 +75,16 @@
     return undefined;
   });
 
-  $: if (!$isLocked) {
-    loadPasswordItems();
-    profileSettings.load();
-  }
+  $effect(() => {
+    if (!$isLocked) {
+      loadPasswordItems();
+      profileSettings.load();
+    }
+  });
 
   async function handleLock() {
     try {
-      await invoke('lock');
+      await callBackend('lock');
       isLocked.set(true);
       totpVerified.set(false);
       selectedPasswordItem = null;
@@ -91,9 +95,9 @@
     }
   }
 
-  function openPopup(event: CustomEvent) {
-    popupMode = event.detail.mode;
-    popupTag = event.detail.tag || null;
+  function openPopup(detail: { mode: 'create' | 'edit'; tag?: any }) {
+    popupMode = detail.mode;
+    popupTag = detail.tag || null;
     showPopup = true;
   }
 
@@ -101,27 +105,28 @@
     showPopup = false;
   }
 
-  async function handleSave(event: CustomEvent) {
-    const { mode, updatedTag } = event.detail;
+  async function handleSave(detail: { mode: 'create' | 'edit'; updatedTag?: any }) {
+    const { mode, updatedTag } = detail;
 
     if (mode === 'create') {
-      buttons = await invoke('get_buttons');
+      buttons = await callBackend('get_buttons');
     } else if (mode === 'edit') {
       const oldTag = popupTag;
       buttons = buttons.map((b) => (b.id === updatedTag.id ? updatedTag : b));
 
       if (oldTag && oldTag.text !== updatedTag.text) {
-        const itemsToUpdate = passwordItems.filter((item) =>
-          item.tags &&
-          item.tags
-            .split(',')
-            .map((t) => t.trim())
-            .includes(oldTag.text)
+        const itemsToUpdate = passwordItems.filter(
+          (item) =>
+            item.tags &&
+            item.tags
+              .split(',')
+              .map((t) => t.trim())
+              .includes(oldTag.text)
         );
 
         for (const item of itemsToUpdate) {
           try {
-            await invoke('update_password_tags', {
+            await callBackend('update_password_tags', {
               id: item.id,
               tags: item.tags
                 ?.split(',')
@@ -135,7 +140,7 @@
       }
     }
 
-    passwordItems = await invoke('get_password_items');
+    passwordItems = await callBackend('get_password_items');
 
     if (selectedPasswordItem) {
       const refreshedItem = passwordItems.find((item) => item.id === selectedPasswordItem?.id);
@@ -143,9 +148,8 @@
     }
   }
 
-  function handleTagDeleted(event: CustomEvent) {
-    const deletedTag = event.detail;
-    buttons = buttons.filter((b) => b.id !== deletedTag.id);
+  function handleTagDeleted(detail: { id: number; text: string }) {
+    buttons = buttons.filter((b) => b.id !== detail.id);
 
     passwordItems = passwordItems.map((item) => {
       if (!item.tags) return item;
@@ -153,7 +157,7 @@
       const filteredTags = item.tags
         .split(',')
         .map((tag) => tag.trim())
-        .filter((tag) => tag !== deletedTag.text);
+        .filter((tag) => tag !== detail.text);
 
       return { ...item, tags: filteredTags.join(', ') || null };
     });
@@ -165,7 +169,7 @@
 
   async function handlePasswordSaved() {
     showCreatePasswordPopup = false;
-    passwordItems = await invoke('get_password_items');
+    passwordItems = await callBackend('get_password_items');
 
     if (passwordItems.length) {
       let newest = passwordItems[0];
@@ -194,31 +198,29 @@
     loadPasswordItems();
   }
 
-  function handlePasswordSelected(event: CustomEvent) {
-    selectedPasswordItem = event.detail;
+  function handlePasswordSelected(item: PasswordItem) {
+    selectedPasswordItem = item;
   }
 
-  async function handlePasswordEditRequested(event: CustomEvent<PasswordItem>) {
-    if (!event.detail || $isLocked) {
+  async function handlePasswordEditRequested(item: PasswordItem) {
+    if (!item || $isLocked) {
       return;
     }
 
-    selectedPasswordItem = event.detail;
+    selectedPasswordItem = item;
     await tick();
 
-    await passwordListRef?.focusItem?.(event.detail.id ?? null);
+    await passwordListRef?.focusItem?.(item.id ?? null);
     passwordDetailRef?.enterEditMode?.();
   }
 
-  $: disableContextEdit = $isLocked || passwordItems.length === 0;
+  let disableContextEdit = $derived($isLocked || passwordItems.length === 0);
 
-  async function handleRemoveEntry(event: CustomEvent) {
-    const itemToRemove = event.detail;
-
+  async function handleRemoveEntry(itemToRemove: PasswordItem) {
     if (!itemToRemove) return;
 
     try {
-      await invoke('delete_password_item', { id: itemToRemove.id });
+      await callBackend('delete_password_item', { id: itemToRemove.id });
       passwordItems = passwordItems.filter((item) => item.id !== itemToRemove.id);
 
       if (selectedPasswordItem && selectedPasswordItem.id === itemToRemove.id) {
@@ -226,7 +228,6 @@
       }
     } catch (error) {
       console.error('Failed to remove password entry:', error);
-      alert(`Error: ${error}`);
     }
   }
 </script>
@@ -235,21 +236,16 @@
   <div class="main-app-view">
     <div class="layout" style={SIDEBAR_STYLE}>
       <SidebarProvider class="min-h-full w-auto" style={SIDEBAR_STYLE}>
-        <AppSidebar
-          {buttons}
-          on:openPopup={openPopup}
-          on:tagDeleted={handleTagDeleted}
-          on:lock={handleLock}
-        />
+        <AppSidebar {buttons} onopenPopup={openPopup} ontagDeleted={handleTagDeleted} />
       </SidebarProvider>
 
       <PasswordList
         items={passwordItems}
-        on:createEntry={handleCreateEntry}
-        on:select={handlePasswordSelected}
-        on:editEntry={handlePasswordEditRequested}
+        oncreateEntry={handleCreateEntry}
+        onselect={handlePasswordSelected}
+        oneditEntry={handlePasswordEditRequested}
         {buttons}
-        on:removeEntry={handleRemoveEntry}
+        onremoveEntry={handleRemoveEntry}
         selectedId={selectedPasswordItem?.id ?? null}
         disableEdit={disableContextEdit}
         bind:this={passwordListRef}
@@ -258,9 +254,9 @@
         bind:selectedPasswordItem
         {displayColor}
         {buttons}
-        on:removeEntry={handleRemoveEntry}
-        on:tagsSaved={(event) => {
-          const { id, tags } = event.detail;
+        onremoveEntry={handleRemoveEntry}
+        ontagsSaved={(detail) => {
+          const { id, tags } = detail;
           const idx = passwordItems.findIndex((item) => item.id === id);
           if (idx !== -1) {
             passwordItems[idx] = { ...passwordItems[idx], tags };
@@ -269,26 +265,25 @@
         }}
         bind:this={passwordDetailRef}
       >
-        <slot />
+        {@render children?.()}
       </PasswordDetail>
-      <!-- Resizer removed -->
     </div>
   </div>
 </div>
 
 {#if $showSettingsPopup}
-  <Settings on:close={() => showSettingsPopup.set(false)} />
+  <Settings onclose={() => showSettingsPopup.set(false)} />
 {/if}
 
 {#if showPopup}
-  <Popup on:close={closePopup} on:save={handleSave} mode={popupMode} tag={popupTag} />
+  <Popup onclose={closePopup} onsave={handleSave} mode={popupMode} tag={popupTag} />
 {/if}
 
 {#if showCreatePasswordPopup}
   <CreatePasswordPopup
-    on:passwordSaved={handlePasswordSaved}
-    on:close={handleCloseCreatePasswordPopup}
-    on:tagCreated={handleTagCreated}
+    onpasswordSaved={handlePasswordSaved}
+    onclose={handleCloseCreatePasswordPopup}
+    ontagCreated={handleTagCreated}
   />
 {/if}
 

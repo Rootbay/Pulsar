@@ -10,7 +10,7 @@
 
 - **Offline-first & Lightweight:** Built with Tauri, Pulsar runs efficiently across Windows, macOS, and Linux with minimal RAM usage.
 
-- **Secure Encryption:** 
+- **Secure Encryption:**
   - Vault key derived from the **master password** via **Argon2id** (memory-hard) with per-vault random 16+ byte salt.
   - Default encryption: **ChaCha20-Poly1305** (authenticated encryption).  
     If AES-NI is detected, automatically uses **AES-256-GCM** for faster encryption.
@@ -19,16 +19,16 @@
 
 - **Vault Management:** All passwords stored locally in a secure SQLite database.
 
-- **Intuitive Filtering & Search:** 
+- **Intuitive Filtering & Search:**
   - Filter passwords by categories/tags.
   - Quick search, “All” or “Recently Added” views.
 
-- **Password Creation & Strength Tools:** 
+- **Password Creation & Strength Tools:**
   - Generate strong passwords with customizable parameters.
   - Visual password strength indicators.
   - Leak check integration linking to trusted databases.
 
-- **Record Management:** 
+- **Record Management:**
   - Clickable list of passwords to view, edit, or copy credentials.
   - Tag management for organized storage.
   - Drag & drop for reordering or categorizing.
@@ -51,8 +51,8 @@ See [SECURITY.md](./docs/SECURITY.md) for full technical details, KDF parameters
 
 ## Tech Stack
 
-- **Frontend:** SvelteKit, Svelte 5, TypeScript 5, Vite 6, PNPM  
-- **Backend / Storage:** Rust with SQLite database  
+- **Frontend:** SvelteKit, Svelte 5, TypeScript 5, Vite 6, PNPM
+- **Backend / Storage:** Rust with SQLite database
 - **Security:** Argon2id, ChaCha20-Poly1305 / AES-256-GCM
 
 ---
@@ -66,6 +66,7 @@ pnpm tauri dev
 ```
 
 ### Build for Release
+
 ```bash
 pnpm tauri build
 ```

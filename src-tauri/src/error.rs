@@ -1,4 +1,4 @@
-use serde::{Serialize, Serializer};
+use serde::{Serialize, Serializer, ser::SerializeStruct};
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -37,12 +37,33 @@ pub enum Error {
     Serialization(#[from] serde_json::Error),
 }
 
+impl Error {
+    pub fn code(&self) -> &'static str {
+        match self {
+            Error::Database(_) => "Database",
+            Error::Io(_) => "Io",
+            Error::Encryption(_) => "Encryption",
+            Error::Decryption(_) => "Decryption",
+            Error::Validation(_) => "Validation",
+            Error::Internal(_) => "Internal",
+            Error::VaultLocked => "VaultLocked",
+            Error::VaultNotLoaded => "VaultNotLoaded",
+            Error::InvalidPassword => "InvalidPassword",
+            Error::Totp(_) => "Totp",
+            Error::Serialization(_) => "Serialization",
+        }
+    }
+}
+
 impl Serialize for Error {
     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
-        serializer.serialize_str(self.to_string().as_str())
+        let mut state = serializer.serialize_struct("Error", 2)?;
+        state.serialize_field("code", self.code())?;
+        state.serialize_field("message", &self.to_string())?;
+        state.end()
     }
 }
 

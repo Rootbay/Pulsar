@@ -1,20 +1,20 @@
 <script lang="ts">
-	import { ContextMenu as ContextMenuPrimitive } from "bits-ui";
-	import { cn, type WithoutChild } from "$lib/utils.js";
+  import { ContextMenu as ContextMenuPrimitive } from 'bits-ui';
+  import { cn, type WithoutChild } from '$lib/utils.js';
 
-	let {
-		ref = $bindable(null),
-		class: className,
-		children,
-		...restProps
-	}: WithoutChild<ContextMenuPrimitive.TriggerProps> = $props();
+  let {
+    ref = $bindable(null),
+    class: className,
+    children,
+    ...restProps
+  }: WithoutChild<ContextMenuPrimitive.TriggerProps> = $props();
 </script>
 
 <ContextMenuPrimitive.Trigger
-	bind:ref
-	data-slot="context-menu-trigger"
-	class={cn("contents", className)}
-	{...restProps}
+  bind:ref
+  data-slot="context-menu-trigger"
+  class={cn('contents', className)}
+  {...restProps}
 >
-	{@render children?.()}
+  {@render children?.()}
 </ContextMenuPrimitive.Trigger>

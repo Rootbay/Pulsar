@@ -220,70 +220,82 @@ async fn fetch_attachments_for_item(pool: &SqlitePool, key: &[u8], item_id: i64)
     Ok(attachments)
 }
 
+async fn decrypt_password_item_row(row: &sqlx::sqlite::SqliteRow, key: &[u8], db_pool: &SqlitePool) -> Result<PasswordItem> {
+    let id: i64 = row.get("id");
+    
+    let category_enc: String = row.get("category");
+    let category = decrypt(&category_enc, key).unwrap_or_else(|_| "login".to_string());
+
+    let title_enc: String = row.get("title");
+    let title = decrypt(&title_enc, key)?;
+
+    let description_enc: Option<String> = row.get("description");
+    let description = description_enc.map(|d| decrypt(d.as_str(), key)).transpose()?;
+
+    let img_enc: Option<String> = row.get("img");
+    let img = img_enc.map(|i| decrypt(i.as_str(), key)).transpose()?;
+
+    let tags_enc: Option<String> = row.get("tags");
+    let tags = tags_enc.map(|t| decrypt(t.as_str(), key)).transpose()?;
+
+    let username_enc: Option<String> = row.get("username");
+    let username = username_enc.map(|u| decrypt(u.as_str(), key)).transpose()?;
+
+    let url_enc: Option<String> = row.get("url");
+    let url = url_enc.map(|u| decrypt(u.as_str(), key)).transpose()?;
+
+    let notes_enc: Option<String> = row.get("notes");
+    let notes = notes_enc.map(|n| decrypt(n.as_str(), key)).transpose()?;
+
+    let password_enc: String = row.get("password");
+    let password = decrypt(&password_enc, key)?;
+
+    let totp_secret_enc: Option<String> = row.get("totp_secret");
+    let totp_secret = totp_secret_enc.map(|t| decrypt(t.as_str(), key)).transpose()?;
+
+    let custom_fields_enc: Option<String> = row.get("custom_fields");
+    let custom_fields = custom_fields_enc
+        .map(|cf| decrypt(cf.as_str(), key))
+        .transpose()?
+        .map(|cf| serde_json::from_str(&cf).unwrap_or_default())
+        .unwrap_or_default();
+
+    let field_order_enc: Option<String> = row.get("field_order");
+    let field_order = field_order_enc
+        .and_then(|fo_enc| decrypt(fo_enc.as_str(), key).ok())
+        .and_then(|fo_json| serde_json::from_str(&fo_json).ok());
+
+    let attachments = fetch_attachments_for_item(db_pool, key, id).await.ok();
+
+    Ok(PasswordItem {
+        id,
+        category,
+        title,
+        description,
+        img,
+        tags,
+        username,
+        url,
+        notes,
+        password,
+        created_at: row.get("created_at"),
+        updated_at: row.get("updated_at"),
+        color: row.get("color"),
+        totp_secret,
+        custom_fields,
+        field_order,
+        attachments,
+    })
+}
+
 pub async fn get_password_items_impl(db_pool: &SqlitePool, key: &[u8]) -> Result<Vec<PasswordItem>> {
     let rows = sqlx::query("SELECT id, category, title, description, img, tags, username, url, notes, password, created_at, updated_at, color, totp_secret, custom_fields, field_order FROM password_items")
         .fetch_all(db_pool)
         .await?;
 
-    let mut items = Vec::new();
+    let mut items = Vec::with_capacity(rows.len());
     for row in rows {
-        let category_enc: String = row.get("category");
-        let category = decrypt(&category_enc, key).unwrap_or_else(|_| "login".to_string());
-
-        let title_enc: String = row.get("title");
-        let title = decrypt(&title_enc, key)?;
-
-        let description_enc: Option<String> = row.get("description");
-        let description = description_enc.map(|d| decrypt(d.as_str(), key)).transpose()?;
-
-        let img_enc: Option<String> = row.get("img");
-        let img = img_enc.map(|i| decrypt(i.as_str(), key)).transpose()?;
-
-        let tags_enc: Option<String> = row.get("tags");
-        let tags = tags_enc.map(|t| decrypt(t.as_str(), key)).transpose()?;
-
-        let username_enc: Option<String> = row.get("username");
-        let username = username_enc.map(|u| decrypt(u.as_str(), key)).transpose()?;
-
-        let url_enc: Option<String> = row.get("url");
-        let url = url_enc.map(|u| decrypt(u.as_str(), key)).transpose()?;
-
-        let notes_enc: Option<String> = row.get("notes");
-        let notes = notes_enc.map(|n| decrypt(n.as_str(), key)).transpose()?;
-
-        let password_enc: String = row.get("password");
-        let password = decrypt(&password_enc, key)?;
-
-        let totp_secret_enc: Option<String> = row.get("totp_secret");
-        let totp_secret = totp_secret_enc.map(|t| decrypt(t.as_str(), key)).transpose()?;
-
-        let custom_fields_enc: Option<String> = row.get("custom_fields");
-        let custom_fields = custom_fields_enc.map(|cf| decrypt(cf.as_str(), key)).transpose()?.map(|cf| serde_json::from_str(&cf).unwrap_or_default()).unwrap_or_default();
-
-        let field_order_enc: Option<String> = row.get("field_order");
-        let field_order = field_order_enc.and_then(|fo_enc| decrypt(fo_enc.as_str(), key).ok()).and_then(|fo_json| serde_json::from_str(&fo_json).ok());
-
-        let attachments = fetch_attachments_for_item(db_pool, key, row.get("id")).await.ok();
-
-        items.push(PasswordItem {
-            id: row.get("id"),
-            category,
-            title,
-            description,
-            img,
-            tags,
-            username,
-            url,
-            notes,
-            password,
-            created_at: row.get("created_at"),
-            updated_at: row.get("updated_at"),
-            color: row.get("color"),
-            totp_secret,
-            custom_fields,
-            field_order,
-            attachments,
-        });
+        items.push(decrypt_password_item_row(&row, key, db_pool).await?);
     }
 
     Ok(items)
@@ -449,14 +461,8 @@ pub async fn wipe_vault_database(state: State<'_, AppState>) -> Result<()> {
     sqlx::query("DELETE FROM buttons").execute(&mut *tx).await?;
     sqlx::query("DELETE FROM recipient_keys").execute(&mut *tx).await?;
     sqlx::query("DELETE FROM attachments").execute(&mut *tx).await?;
-    
-    // We don't wipe 'configuration' fully because we might want to keep some basic setup,
-    // but the destructive UI usually means "everything". 
-    // However, if we wipe the master password salt, the user can't log in again.
-    // Let's just wipe data tables for now as a "Clear All Data" action.
-    
+
     if let Err(e) = sqlx::query("DELETE FROM sqlite_sequence WHERE name IN ('password_items', 'buttons', 'recipient_keys', 'attachments')").execute(&mut *tx).await {
-         // Ignore error if table doesn't exist
          let _ = e;
     }
 
@@ -485,63 +491,7 @@ pub async fn get_password_item_by_id(state: State<'_, AppState>, id: i64) -> Res
         .await?;
 
     if let Some(row) = row {
-        let category_enc: String = row.get("category");
-        let category = decrypt(&category_enc, key.as_slice()).unwrap_or_else(|_| "login".to_string());
-
-        let title_enc: String = row.get("title");
-        let title = decrypt(&title_enc, key.as_slice())?;
-
-        let description_enc: Option<String> = row.get("description");
-        let description = description_enc.map(|d| decrypt(d.as_str(), key.as_slice())).transpose()?;
-
-        let img_enc: Option<String> = row.get("img");
-        let img = img_enc.map(|i| decrypt(i.as_str(), key.as_slice())).transpose()?;
-
-        let tags_enc: Option<String> = row.get("tags");
-        let tags = tags_enc.map(|t| decrypt(t.as_str(), key.as_slice())).transpose()?;
-
-        let username_enc: Option<String> = row.get("username");
-        let username = username_enc.map(|u| decrypt(u.as_str(), key.as_slice())).transpose()?;
-
-        let url_enc: Option<String> = row.get("url");
-        let url = url_enc.map(|u| decrypt(u.as_str(), key.as_slice())).transpose()?;
-
-        let notes_enc: Option<String> = row.get("notes");
-        let notes = notes_enc.map(|n| decrypt(n.as_str(), key.as_slice())).transpose()?;
-
-        let password_enc: String = row.get("password");
-        let password = decrypt(&password_enc, key.as_slice())?;
-
-        let totp_secret_enc: Option<String> = row.get("totp_secret");
-        let totp_secret = totp_secret_enc.map(|t| decrypt(t.as_str(), key.as_slice())).transpose()?;
-
-        let custom_fields_enc: Option<String> = row.get("custom_fields");
-        let custom_fields = custom_fields_enc.map(|cf| decrypt(cf.as_str(), key.as_slice())).transpose()?.map(|cf| serde_json::from_str(&cf).unwrap_or_default()).unwrap_or_default();
-
-        let field_order_enc: Option<String> = row.get("field_order");
-        let field_order = field_order_enc.and_then(|fo_enc| decrypt(fo_enc.as_str(), key.as_slice()).ok()).and_then(|fo_json| serde_json::from_str(&fo_json).ok());
-
-        let attachments = fetch_attachments_for_item(&db_pool, key.as_slice(), row.get("id")).await.ok();
-
-        Ok(Some(PasswordItem {
-            id: row.get("id"),
-            category,
-            title,
-            description,
-            img,
-            tags,
-            username,
-            url,
-            notes,
-            password,
-            created_at: row.get("created_at"),
-            updated_at: row.get("updated_at"),
-            color: row.get("color"),
-            totp_secret,
-            custom_fields,
-            field_order,
-            attachments,
-        }))
+        Ok(Some(decrypt_password_item_row(&row, key.as_slice(), &db_pool).await?))
     } else {
         Ok(None)
     }
@@ -632,12 +582,10 @@ pub async fn add_attachment(
     let file_data = fs::read(path)?;
     let file_size = file_data.len() as i64;
     
-    // Simple mime inference (optional, can be improved or passed from frontend)
     let mime_type = mime_guess::from_path(path).first_or_octet_stream().to_string();
 
     let encrypted_data = encrypt_bytes(&file_data, key.as_slice())?;
     
-    // Encrypt metadata
     let name_enc = encrypt(&file_name, key.as_slice())?;
     let mime_enc = encrypt(&mime_type, key.as_slice())?;
     let now = Utc::now().to_rfc3339();
@@ -647,7 +595,7 @@ pub async fn add_attachment(
         .bind(name_enc)
         .bind(file_size)
         .bind(mime_enc)
-        .bind(encrypted_data) // Store raw encrypted bytes as BLOB
+        .bind(encrypted_data)
         .bind(&now)
         .execute(&db_pool)
         .await?

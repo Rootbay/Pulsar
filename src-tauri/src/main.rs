@@ -97,7 +97,6 @@ fn main() {
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
-        // .plugin(tauri_plugin_biometric::init())
         .plugin(tauri_plugin_store::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
             is_database_loaded,
@@ -119,7 +118,6 @@ fn main() {
             auth::disable_biometrics,
             auth::is_biometrics_enabled,
             auth::unlock_with_biometrics,
-            // DB commands
             db_commands::save_button,
             db_commands::get_buttons,
             db_commands::update_button,
@@ -212,8 +210,11 @@ async fn get_all_settings(app_handle: tauri::AppHandle) -> Result<Option<String>
         return Ok(Some(decrypted));
     }
 
-    // Fallback for old plaintext settings
-    Ok(store.get("settings").map(|v| v.to_string()))
+    Ok(store.get("settings").and_then(|v| {
+        v.as_str()
+            .map(|s| s.to_string())
+            .or_else(|| Some(v.to_string()))
+    }))
 }
 
 #[tauri::command]

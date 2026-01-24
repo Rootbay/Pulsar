@@ -12,19 +12,11 @@
   import { Input } from '$lib/components/ui/input';
   import { Label } from '$lib/components/ui/label';
   import { Switch } from '$lib/components/ui/switch';
-  import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger
-  } from '$lib/components/ui/select';
+  import { Select, SelectContent, SelectItem, SelectTrigger } from '$lib/components/ui/select';
   import { Badge } from '$lib/components/ui/badge';
   import { Separator } from '$lib/components/ui/separator';
-  import {
-    Alert,
-    AlertDescription,
-    AlertTitle
-  } from '$lib/components/ui/alert';
+  import { Alert, AlertDescription, AlertTitle } from '$lib/components/ui/alert';
+  import { Spinner } from '$lib/components/ui/spinner/index.js';
   import { cn } from '$lib/utils';
   import {
     Archive,
@@ -38,16 +30,11 @@
     CloudUpload,
     Zap,
     ShieldCheck,
-    Shield,
-    Loader2
+    Shield
   } from '@lucide/svelte';
   import { fade, slide } from 'svelte/transition';
   import { quintOut } from 'svelte/easing';
-  import {
-    exportVaultBackup,
-    importVaultBackup,
-    notifyVaultRefresh
-  } from '$lib/utils/backup';
+  import { exportVaultBackup, importVaultBackup, notifyVaultRefresh } from '$lib/utils/backup';
   import type { ImportVaultProgressStage } from '$lib/utils/backup';
   import { currentLocale } from '$lib/i18n';
 
@@ -265,7 +252,9 @@
     const value = Number((event.target as HTMLInputElement).value);
     backupSettings.update((current) => ({
       ...current,
-      retentionCount: Number.isNaN(value) ? current.retentionCount : Math.min(Math.max(value, 1), 100)
+      retentionCount: Number.isNaN(value)
+        ? current.retentionCount
+        : Math.min(Math.max(value, 1), 100)
     }));
   }
 
@@ -287,11 +276,11 @@
   }
 </script>
 
-<div class="flex-1 min-h-0 space-y-6 px-6 py-8">
+<div class="min-h-0 flex-1 space-y-6 px-6 py-8">
   {#if feedback}
     <Alert
       variant={feedback.type === 'error' ? 'destructive' : 'default'}
-      class="border-border/60 bg-card/80 backdrop-blur supports-[backdrop-filter]:bg-card/70"
+      class="border-border/60 bg-card/80 supports-backdrop-filter:bg-card/70 backdrop-blur"
     >
       <AlertTitle>
         {feedback.type === 'error'
@@ -302,32 +291,42 @@
     </Alert>
   {/if}
 
-  <Card class="border-border/60 bg-card/80 backdrop-blur supports-[backdrop-filter]:bg-card/70">
+  <Card class="border-border/60 bg-card/80 supports-backdrop-filter:bg-card/70 backdrop-blur">
     <CardHeader class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
       <div class="flex items-center gap-3">
-        <div class="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
+        <div
+          class="bg-primary/10 text-primary flex h-10 w-10 items-center justify-center rounded-full"
+        >
           <Archive class="size-5" aria-hidden="true" />
         </div>
         <div>
           <CardTitle>{t(locale, 'Backups', 'Säkerhetskopior')}</CardTitle>
           <CardDescription>
-            {t(locale, 'Manage automated and on-demand backups for your vault.', 'Hantera automatiska och manuella säkerhetskopior av ditt valv.')}
+            {t(
+              locale,
+              'Manage automated and on-demand backups for your vault.',
+              'Hantera automatiska och manuella säkerhetskopior av ditt valv.'
+            )}
           </CardDescription>
         </div>
       </div>
       <Badge variant="secondary" class="w-fit">
-        {t(locale, 'Retaining', 'Behåller')} {$state.retentionCount} {t(locale, 'copies', 'kopior')}
+        {t(locale, 'Retaining', 'Behåller')}
+        {$state.retentionCount}
+        {t(locale, 'copies', 'kopior')}
       </Badge>
     </CardHeader>
 
     <CardContent class="space-y-6">
       <div class="space-y-4">
-        <div class="flex items-center justify-between gap-3 rounded-xl border border-border/60 bg-muted/10 px-4 py-3">
+        <div
+          class="border-border/60 bg-muted/10 flex items-center justify-between gap-3 rounded-xl border px-4 py-3"
+        >
           <div>
-            <p class="text-sm font-medium text-foreground">
+            <p class="text-foreground text-sm font-medium">
               {t(locale, 'Automatic backups', 'Automatiska säkerhetskopior')}
             </p>
-            <p class="text-xs text-muted-foreground">
+            <p class="text-muted-foreground text-xs">
               {t(
                 locale,
                 'Create backups at regular intervals based on your chosen schedule.',
@@ -344,7 +343,7 @@
 
         <div class="grid gap-4 md:grid-cols-2">
           <div class="space-y-2">
-            <Label class="text-sm font-medium text-foreground">
+            <Label class="text-foreground text-sm font-medium">
               {t(locale, 'Backup frequency', 'Frekvens för säkerhetskopior')}
             </Label>
             {#key locale}
@@ -357,7 +356,9 @@
                 </SelectTrigger>
                 <SelectContent>
                   {#each frequencies as option}
-                    <SelectItem value={option.value}>{getFrequencyLabel(option.value, locale)}</SelectItem>
+                    <SelectItem value={option.value}
+                      >{getFrequencyLabel(option.value, locale)}</SelectItem
+                    >
                   {/each}
                 </SelectContent>
               </Select>
@@ -365,7 +366,7 @@
           </div>
 
           <div class="space-y-2">
-            <Label for="retention-count" class="text-sm font-medium text-foreground">
+            <Label for="retention-count" class="text-foreground text-sm font-medium">
               {t(locale, 'Retention count', 'Antal kopior')}
             </Label>
             <Input
@@ -376,8 +377,12 @@
               value={$state.retentionCount}
               oninput={updateRetention}
             />
-            <p class="text-xs text-muted-foreground">
-              {t(locale, 'Number of backup versions to keep on disk.', 'Antal säkerhetskopior som ska sparas på disk.')}
+            <p class="text-muted-foreground text-xs">
+              {t(
+                locale,
+                'Number of backup versions to keep on disk.',
+                'Antal säkerhetskopior som ska sparas på disk.'
+              )}
             </p>
           </div>
         </div>
@@ -396,25 +401,31 @@
     </CardContent>
   </Card>
 
-  <Card class="border-border/60 bg-card/80 backdrop-blur supports-[backdrop-filter]:bg-card/70">
+  <Card class="border-border/60 bg-card/80 supports-backdrop-filter:bg-card/70 backdrop-blur">
     <CardHeader class="flex items-start gap-3">
-      <div class="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
+      <div
+        class="bg-primary/10 text-primary flex h-10 w-10 items-center justify-center rounded-full"
+      >
         <Archive class="size-5" aria-hidden="true" />
       </div>
       <div>
         <CardTitle>{t(locale, 'Export options', 'Exportalternativ')}</CardTitle>
         <CardDescription>
-          {t(locale, 'Generate encrypted or plaintext exports of your vault.', 'Skapa krypterade eller okrypterade exporter av ditt valv.')}
+          {t(
+            locale,
+            'Generate encrypted or plaintext exports of your vault.',
+            'Skapa krypterade eller okrypterade exporter av ditt valv.'
+          )}
         </CardDescription>
       </div>
     </CardHeader>
     <CardContent class="space-y-4">
       <div class="grid gap-4 md:grid-cols-2">
-        <div class="space-y-2 rounded-xl border border-border/60 bg-muted/10 p-4">
-          <p class="text-sm font-semibold text-foreground">
+        <div class="border-border/60 bg-muted/10 space-y-2 rounded-xl border p-4">
+          <p class="text-foreground text-sm font-semibold">
             {t(locale, 'Encrypted export', 'Krypterad export')}
           </p>
-          <p class="text-xs text-muted-foreground">
+          <p class="text-muted-foreground text-xs">
             {t(locale, 'Secured with your export passphrase.', 'Skyddad med din exportlösenfras.')}
           </p>
           <Button type="button" class="gap-2" onclick={handleExportEncrypted}>
@@ -423,15 +434,19 @@
           </Button>
         </div>
 
-        <div class="space-y-2 rounded-xl border border-border/60 bg-muted/10 p-4">
+        <div class="border-border/60 bg-muted/10 space-y-2 rounded-xl border p-4">
           <div class="flex items-center gap-2">
-            <ShieldAlert class="size-4 text-destructive" aria-hidden="true" />
-            <p class="text-sm font-semibold text-foreground">
+            <ShieldAlert class="text-destructive size-4" aria-hidden="true" />
+            <p class="text-foreground text-sm font-semibold">
               {t(locale, 'Plaintext export', 'Oskyddad export')}
             </p>
           </div>
-          <p class="text-xs text-muted-foreground">
-            {t(locale, 'Only use on trusted devices. Sensitive data remains unprotected.', 'Använd endast på betrodda enheter. Känslig data förblir oskyddad.')}
+          <p class="text-muted-foreground text-xs">
+            {t(
+              locale,
+              'Only use on trusted devices. Sensitive data remains unprotected.',
+              'Använd endast på betrodda enheter. Känslig data förblir oskyddad.'
+            )}
           </p>
           <div class="flex items-center justify-between gap-2">
             <Switch
@@ -442,7 +457,7 @@
             <Button
               type="button"
               variant="outline"
-              class="gap-2 text-destructive"
+              class="text-destructive gap-2"
               onclick={handleExportPlaintext}
               disabled={!$state.enablePlaintextExport}
             >
@@ -455,15 +470,21 @@
     </CardContent>
   </Card>
 
-  <Card class="border-border/60 bg-card/80 backdrop-blur supports-[backdrop-filter]:bg-card/70">
+  <Card class="border-border/60 bg-card/80 supports-backdrop-filter:bg-card/70 backdrop-blur">
     <CardHeader class="flex items-start gap-3">
-      <div class="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
+      <div
+        class="bg-primary/10 text-primary flex h-10 w-10 items-center justify-center rounded-full"
+      >
         <Cloud class="size-5" aria-hidden="true" />
       </div>
       <div>
         <CardTitle>{t(locale, 'Sync', 'Synkronisering')}</CardTitle>
         <CardDescription>
-          {t(locale, 'Configure cloud providers to replicate backups across devices.', 'Konfigurera molnleverantörer för att replikera säkerhetskopior mellan enheter.')}
+          {t(
+            locale,
+            'Configure cloud providers to replicate backups across devices.',
+            'Konfigurera molnleverantörer för att replikera säkerhetskopior mellan enheter.'
+          )}
         </CardDescription>
       </div>
     </CardHeader>
@@ -473,7 +494,7 @@
           <button
             type="button"
             class={cn(
-              'flex h-full flex-col items-start gap-3 rounded-xl border border-border/60 bg-background/70 p-4 text-left transition',
+              'border-border/60 bg-background/70 flex h-full flex-col items-start gap-3 rounded-xl border p-4 text-left transition',
               $state.syncMode === mode.id
                 ? 'border-primary/60 bg-primary/10 text-primary shadow-sm'
                 : 'hover:border-primary/40 hover:bg-muted/40'
@@ -483,19 +504,27 @@
           >
             <mode.icon class="size-5" aria-hidden="true" />
             <div>
-              <p class="text-sm font-semibold text-foreground">
+              <p class="text-foreground text-sm font-semibold">
                 {mode.id === 'off'
                   ? t(locale, 'Turned off', 'Avstängd')
                   : mode.id === 'manual'
                     ? t(locale, 'Manual sync', 'Manuell synkronisering')
                     : t(locale, 'Automatic sync', 'Automatisk synkronisering')}
               </p>
-              <p class="text-xs text-muted-foreground">
+              <p class="text-muted-foreground text-xs">
                 {mode.id === 'off'
-                  ? t(locale, 'Backups stay local to this device.', 'Säkerhetskopior stannar lokalt på denna enhet.')
+                  ? t(
+                      locale,
+                      'Backups stay local to this device.',
+                      'Säkerhetskopior stannar lokalt på denna enhet.'
+                    )
                   : mode.id === 'manual'
                     ? t(locale, 'Trigger cloud sync on demand.', 'Starta molnsynk vid behov.')
-                    : t(locale, 'Keep cloud copy in sync automatically.', 'Håll molnkopian synkroniserad automatiskt.')}
+                    : t(
+                        locale,
+                        'Keep cloud copy in sync automatically.',
+                        'Håll molnkopian synkroniserad automatiskt.'
+                      )}
               </p>
             </div>
           </button>
@@ -509,7 +538,7 @@
           <button
             type="button"
             class={cn(
-              'flex h-full flex-col items-start gap-3 rounded-xl border border-border/60 bg-background/70 p-4 text-left transition',
+              'border-border/60 bg-background/70 flex h-full flex-col items-start gap-3 rounded-xl border p-4 text-left transition',
               $state.selectedProvider === provider.id
                 ? 'border-primary/60 bg-primary/10 text-primary shadow-sm'
                 : 'hover:border-primary/40 hover:bg-muted/40'
@@ -519,15 +548,23 @@
           >
             <provider.icon class="size-5" aria-hidden="true" />
             <div>
-              <p class="text-sm font-semibold text-foreground">{provider.name}</p>
-              <p class="text-xs text-muted-foreground">
+              <p class="text-foreground text-sm font-semibold">{provider.name}</p>
+              <p class="text-muted-foreground text-xs">
                 {provider.id === 'webdav'
                   ? t(locale, provider.description, 'Anslut till valfri WebDAV-kompatibel lagring.')
                   : provider.id === 'dropbox'
                     ? t(locale, provider.description, 'Använd Dropbox som mål för säkerhetskopior.')
                     : provider.id === 's3'
-                      ? t(locale, provider.description, 'Synkronisera säkerhetskopior till din S3-bucket.')
-                      : t(locale, provider.description, 'Ange egna inloggningsuppgifter för en annan leverantör.')}
+                      ? t(
+                          locale,
+                          provider.description,
+                          'Synkronisera säkerhetskopior till din S3-bucket.'
+                        )
+                      : t(
+                          locale,
+                          provider.description,
+                          'Ange egna inloggningsuppgifter för en annan leverantör.'
+                        )}
               </p>
             </div>
           </button>
@@ -539,24 +576,27 @@
 
 {#if showModal}
   <div
-    class="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur"
+    class="bg-background/80 fixed inset-0 z-50 flex items-center justify-center backdrop-blur"
     transition:fade
   >
     <div
-      class="w-full max-w-lg rounded-xl border border-border/60 bg-card p-6 shadow-xl"
+      class="border-border/60 bg-card w-full max-w-lg rounded-xl border p-6 shadow-xl"
       transition:slide={{ axis: 'y', duration: 200, easing: quintOut }}
     >
       <div class="flex items-center gap-3">
-        <Zap class={cn('size-5', modalDanger ? 'text-destructive' : 'text-primary')} aria-hidden="true" />
+        <Zap
+          class={cn('size-5', modalDanger ? 'text-destructive' : 'text-primary')}
+          aria-hidden="true"
+        />
         <div>
-          <h3 class="text-lg font-semibold text-foreground">{modalTitle}</h3>
-          <p class="text-xs text-muted-foreground">{modalDescription}</p>
+          <h3 class="text-foreground text-lg font-semibold">{modalTitle}</h3>
+          <p class="text-muted-foreground text-xs">{modalDescription}</p>
         </div>
       </div>
 
       {#if modalRequiresPassphrase}
         <div class="mt-6 space-y-2">
-          <Label for="backup-passphrase" class="text-sm font-medium text-foreground">
+          <Label for="backup-passphrase" class="text-foreground text-sm font-medium">
             {t(locale, 'Backup passphrase', 'Lösenfras för säkerhetskopia')}
           </Label>
           <Input
@@ -569,7 +609,7 @@
               modalError = null;
             }}
           />
-          <p class="text-xs text-muted-foreground">
+          <p class="text-muted-foreground text-xs">
             {t(
               locale,
               'This passphrase encrypts or decrypts your vault backup. Use the same passphrase you will remember later.',
@@ -580,12 +620,12 @@
       {/if}
 
       {#if modalError}
-        <p class="mt-4 text-sm text-destructive">{modalError}</p>
+        <p class="text-destructive mt-4 text-sm">{modalError}</p>
       {/if}
 
       {#if modalStatus}
-        <p class="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
-          <Loader2 class="size-4 animate-spin" aria-hidden="true" />
+        <p class="text-muted-foreground mt-4 flex items-center gap-2 text-sm">
+          <Spinner class="size-4" aria-hidden="true" />
           <span>{modalStatus}</span>
         </p>
       {/if}
@@ -598,9 +638,7 @@
           type="button"
           variant={modalDanger ? 'destructive' : 'default'}
           class="gap-2"
-          disabled={
-            modalBusy || (modalRequiresPassphrase && modalPassphrase.trim().length === 0)
-          }
+          disabled={modalBusy || (modalRequiresPassphrase && modalPassphrase.trim().length === 0)}
           onclick={async () => {
             if (!modalOnConfirm) {
               closeModal();
@@ -635,7 +673,7 @@
           }}
         >
           {#if modalBusy}
-            <Loader2 class="size-4 animate-spin" aria-hidden="true" />
+            <Spinner class="size-4" aria-hidden="true" />
           {/if}
           {modalConfirmLabel}
         </Button>

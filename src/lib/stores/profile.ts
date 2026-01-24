@@ -15,7 +15,7 @@ export const defaultProfileSettings: ProfileSettings = {
   country: 'Italy',
   timezone: 'Europe/Rome',
   about: "Hey, I'm a dev",
-  phone: '+39 555 0100',
+  phone: '+39 555 0100'
 };
 
 export const profileSettings = createDatabaseStore<ProfileSettings>(
@@ -24,4 +24,3 @@ export const profileSettings = createDatabaseStore<ProfileSettings>(
   'get_profile_settings',
   'save_profile_settings'
 );
-

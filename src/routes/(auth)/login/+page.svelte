@@ -1,19 +1,11 @@
-﻿<svelte:head>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
-  <link
-    href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap"
-    rel="stylesheet"
-  />
-</svelte:head>
-
-<script lang="ts">
+﻿<script lang="ts">
   import { browser } from '$app/environment';
   import { goto } from '$app/navigation';
-  import { invoke } from '@tauri-apps/api/core';
+  import { callBackend } from '$lib/utils/backend';
   import { Button } from '$lib/components/ui/button';
   import { Input } from '$lib/components/ui/input';
   import { Label } from '$lib/components/ui/label';
+  import { Spinner } from '$lib/components/ui/spinner/index.js';
   import {
     Card,
     CardContent,
@@ -22,20 +14,26 @@
     CardHeader,
     CardTitle
   } from '$lib/components/ui/card';
-  import { isDatabaseLoaded, isLocked, needsPasswordSetup, totpVerified, totpRequired } from '$lib/stores';
+  import {
+    isDatabaseLoaded,
+    isLocked,
+    needsPasswordSetup,
+    totpVerified,
+    totpRequired
+  } from '$lib/stores';
   import { currentLocale } from '$lib/i18n';
-  import { Lock, Loader2, Eye, EyeOff, ArrowLeft, Fingerprint } from '@lucide/svelte';
+  import { Lock, Eye, EyeOff, ArrowLeft, FingerprintPattern } from '@lucide/svelte';
   import { onMount } from 'svelte';
 
   const t = (locale: 'en' | 'sv', en: string, sv: string) => (locale === 'sv' ? sv : en);
-  $: locale = $currentLocale as 'en' | 'sv';
+  let locale = $derived($currentLocale as 'en' | 'sv');
 
-  let password = '';
-  let loginError: string | null = null;
-  let isUnlocking = false;
-  let showPassword = false;
-  let isBiometricsAvailable = false;
-  let isBiometricUnlocking = false;
+  let password = $state('');
+  let loginError = $state<string | null>(null);
+  let isUnlocking = $state(false);
+  let showPassword = $state(false);
+  let isBiometricsAvailable = $state(false);
+  let isBiometricUnlocking = $state(false);
 
   onMount(() => {
     checkBiometrics();
@@ -43,11 +41,7 @@
 
   async function checkBiometrics() {
     try {
-      isBiometricsAvailable = await invoke<boolean>('is_biometrics_enabled');
-      if (isBiometricsAvailable) {
-        // Optional: Auto-prompt on load?
-        // handleBiometricUnlock(); 
-      }
+      isBiometricsAvailable = await callBackend<boolean>('is_biometrics_enabled');
     } catch (err) {
       console.error('Biometric check failed:', err);
     }
@@ -59,54 +53,11 @@
     loginError = null;
 
     try {
-       const { authenticate } = await import('@tauri-apps/plugin-biometric');
-       await authenticate('Unlock your vault');
-       
-       // If successful (didn't throw), get key from backend
-       const result = await invoke<{ totp_required: boolean }>('unlock_with_biometrics');
-       
-       if (result?.totp_required) {
-          totpRequired.set(true);
-          totpVerified.set(false);
-          isLocked.set(false);
-          await goto('/totp', { replaceState: true });
-        } else {
-          totpRequired.set(false);
-          totpVerified.set(true);
-          isLocked.set(false);
-          await goto('/', { replaceState: true });
-        }
-    } catch (error) {
-        console.error('Biometric unlock failed:', error);
-        // Don't show generic error for cancellation
-        const msg = typeof error === 'string' ? error : (error as Error).message;
-        if (!msg.toLowerCase().includes('cancel') && !msg.toLowerCase().includes('user canceled')) {
-             loginError = t(locale, 'Biometric unlock failed.', 'Biometrisk upplåsning misslyckades.');
-        }
-    } finally {
-        isBiometricUnlocking = false;
-    }
-  }
+      const { authenticate } = await import('@tauri-apps/plugin-biometric');
+      await authenticate('Unlock your vault');
 
-  $: if (browser) {
-    if (!$isDatabaseLoaded) {
-      goto('/select-vault', { replaceState: true });
-    } else if ($needsPasswordSetup) {
-      goto('/setup', { replaceState: true });
-    } else if (!$isLocked) {
-      goto('/', { replaceState: true });
-    }
-  }
+      const result = await callBackend<{ totp_required: boolean }>('unlock_with_biometrics');
 
-  const handleUnlock = async () => {
-    const trimmedPassword = password.trim();
-    if (isUnlocking || !trimmedPassword) return;
-
-    isUnlocking = true;
-    loginError = null;
-
-    try {
-      const result = await invoke<{ totp_required: boolean }>('unlock', { password: trimmedPassword });
       if (result?.totp_required) {
         totpRequired.set(true);
         totpVerified.set(false);
@@ -118,21 +69,64 @@
         isLocked.set(false);
         await goto('/', { replaceState: true });
       }
-    } catch (error) {
+    } catch (error: any) {
+      console.error('Biometric unlock failed:', error);
+      const msg = error.message || error.toString();
+      if (!msg.toLowerCase().includes('cancel') && !msg.toLowerCase().includes('user canceled')) {
+        loginError = t(locale, 'Biometric unlock failed.', 'Biometrisk upplåsning misslyckades.');
+      }
+    } finally {
+      isBiometricUnlocking = false;
+    }
+  }
+
+  $effect(() => {
+    if (browser) {
+      if (!$isDatabaseLoaded) {
+        goto('/select-vault', { replaceState: true });
+      } else if ($needsPasswordSetup) {
+        goto('/setup', { replaceState: true });
+      } else if (!$isLocked) {
+        goto('/', { replaceState: true });
+      }
+    }
+  });
+
+  const handleUnlock = async () => {
+    const trimmedPassword = password.trim();
+    if (isUnlocking || !trimmedPassword) return;
+
+    isUnlocking = true;
+    loginError = null;
+
+    try {
+      const result = await callBackend<{ totp_required: boolean }>('unlock', {
+        password: trimmedPassword
+      });
+      if (result?.totp_required) {
+        totpRequired.set(true);
+        totpVerified.set(false);
+        isLocked.set(false);
+        await goto('/totp', { replaceState: true });
+      } else {
+        totpRequired.set(false);
+        totpVerified.set(true);
+        isLocked.set(false);
+        await goto('/', { replaceState: true });
+      }
+    } catch (error: any) {
       console.error('Unlock failed:', error);
       totpRequired.set(false);
       totpVerified.set(false);
       loginError =
-        typeof error === 'string'
-          ? error
-          : t(locale, 'An unknown error occurred.', 'Ett okänt fel inträffade.');
+        error.message || t(locale, 'An unknown error occurred.', 'Ett okänt fel inträffade.');
     } finally {
       isUnlocking = false;
     }
   };
 
   const handleChangeDatabase = async () => {
-    await invoke('lock');
+    await callBackend('lock');
     isDatabaseLoaded.set(false);
     isLocked.set(true);
     totpRequired.set(false);
@@ -149,36 +143,56 @@
     void handleUnlock();
   };
 
-  $: canSubmit = password.trim().length > 0 && !isUnlocking;
-
+  const canSubmit = $derived(password.trim().length > 0 && !isUnlocking);
 </script>
 
-<div class="relative min-h-screen bg-linear-to-b from-background to-background/80">
-    <button
-      type="button"
-      class="absolute left-4 top-4 z-10 flex items-center gap-1 rounded-md px-2 py-1 text-sm text-muted-foreground transition hover:text-foreground"
-      onclick={goBack}
-    >
-      <ArrowLeft class="h-4 w-4" />
-      {t(locale, 'Back', 'Tillbaka')}
-    </button>
-    <div class="pointer-events-none absolute inset-0 -z-10">
-      <div class="absolute left-[10%] top-[10%] size-112 rounded-full bg-primary/10 blur-3xl blob-a"></div>
-      <div class="absolute right-[10%] bottom-[12%] size-88 rounded-full bg-muted/40 blur-2xl blob-b"></div>
-    </div>
+<svelte:head>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap"
+    rel="stylesheet"
+  />
+</svelte:head>
+
+<div class="from-background to-background/80 relative min-h-screen bg-linear-to-b">
+  <button
+    type="button"
+    class="text-muted-foreground hover:text-foreground absolute top-4 left-4 z-10 flex items-center gap-1 rounded-md px-2 py-1 text-sm transition"
+    onclick={goBack}
+  >
+    <ArrowLeft class="h-4 w-4" />
+    {t(locale, 'Back', 'Tillbaka')}
+  </button>
+  <div class="pointer-events-none absolute inset-0 -z-10">
+    <div
+      class="bg-primary/10 blob-a absolute top-[10%] left-[10%] size-112 rounded-full blur-3xl"
+    ></div>
+    <div
+      class="bg-muted/40 blob-b absolute right-[10%] bottom-[12%] size-88 rounded-full blur-2xl"
+    ></div>
+  </div>
 
   <div class="mx-auto grid min-h-screen w-full place-items-center px-4">
-    <Card class="w-full max-w-md border-border/60 bg-card/80 backdrop-blur supports-backdrop-filter:bg-card/70">
+    <Card
+      class="border-border/60 bg-card/80 supports-backdrop-filter:bg-card/70 w-full max-w-md backdrop-blur"
+    >
       <form class="flex flex-col" onsubmit={handleSubmit}>
         <CardHeader class="space-y-0 text-center">
-          <div class="mx-auto mb-2 flex size-12 items-center justify-center rounded-xl bg-primary/10 text-primary">
+          <div
+            class="bg-primary/10 text-primary mx-auto mb-2 flex size-12 items-center justify-center rounded-xl"
+          >
             <Lock class="size-6" />
           </div>
           <CardTitle class="text-2xl font-semibold tracking-tight">
             {t(locale, 'Welcome back', 'Välkommen tillbaka')}
           </CardTitle>
           <CardDescription class="mt-0">
-            {t(locale, 'Unlock your vault with your master password', 'Lås upp ditt valv med ditt huvudlösenord')}
+            {t(
+              locale,
+              'Unlock your vault with your master password',
+              'Lås upp ditt valv med ditt huvudlösenord'
+            )}
           </CardDescription>
         </CardHeader>
 
@@ -199,13 +213,11 @@
               />
               <button
                 type="button"
-                class="absolute inset-y-0 right-0 flex items-center px-3 text-muted-foreground hover:text-foreground"
+                class="text-muted-foreground hover:text-foreground absolute inset-y-0 right-0 flex items-center px-3"
                 onclick={() => (showPassword = !showPassword)}
-                aria-label={
-                  showPassword
-                    ? t(locale, 'Hide password', 'Dölj lösenord')
-                    : t(locale, 'Show password', 'Visa lösenord')
-                }
+                aria-label={showPassword
+                  ? t(locale, 'Hide password', 'Dölj lösenord')
+                  : t(locale, 'Show password', 'Visa lösenord')}
                 tabindex="-1"
               >
                 {#if showPassword}
@@ -218,33 +230,33 @@
           </div>
 
           {#if loginError}
-            <p class="text-sm font-medium text-destructive">{loginError}</p>
+            <p class="text-destructive text-sm font-medium">{loginError}</p>
           {/if}
         </CardContent>
 
         <CardFooter class="mt-6 flex flex-col gap-2">
           <Button type="submit" class="w-full" disabled={!canSubmit}>
             {#if isUnlocking}
-              <Loader2 class="mr-2 size-4 animate-spin" /> {t(locale, 'Unlocking…', 'Låser upp…')}
+              <Spinner class="mr-2 size-4" /> {t(locale, 'Unlocking…', 'Låser upp…')}
             {:else}
               {t(locale, 'Unlock', 'Lås upp')}
             {/if}
           </Button>
-          
+
           {#if isBiometricsAvailable}
-            <Button 
-                type="button" 
-                variant="outline" 
-                class="w-full gap-2" 
-                onclick={handleBiometricUnlock}
-                disabled={isBiometricUnlocking || isUnlocking}
+            <Button
+              type="button"
+              variant="outline"
+              class="w-full gap-2"
+              onclick={handleBiometricUnlock}
+              disabled={isBiometricUnlocking || isUnlocking}
             >
-                {#if isBiometricUnlocking}
-                    <Loader2 class="size-4 animate-spin" />
-                {:else}
-                    <Fingerprint class="size-4" />
-                {/if}
-                {t(locale, 'Unlock with Biometrics', 'Lås upp med biometrik')}
+              {#if isBiometricUnlocking}
+                <Spinner class="size-4" />
+              {:else}
+                <FingerprintPattern class="size-4" />
+              {/if}
+              {t(locale, 'Unlock with Biometrics', 'Lås upp med biometrik')}
             </Button>
           {/if}
 
@@ -257,7 +269,11 @@
 
     <div class="mt-6 text-center text-xs">
       <span class="crypto-tagline text-muted-foreground">
-        {t(locale, 'Secure by Argon2id + XChaCha20-Poly1305', 'Säker med Argon2id + XChaCha20-Poly1305')}
+        {t(
+          locale,
+          'Secure by Argon2id + XChaCha20-Poly1305',
+          'Säker med Argon2id + XChaCha20-Poly1305'
+        )}
       </span>
     </div>
   </div>
@@ -272,17 +288,22 @@
     cursor: default;
     color: hsl(var(--muted-foreground));
     text-rendering: optimizeLegibility;
-    transition: color 200ms ease, transform 200ms ease, filter 300ms ease;
+    transition:
+      color 200ms ease,
+      transform 200ms ease,
+      filter 300ms ease;
   }
   .crypto-tagline::before {
     content: '';
     position: absolute;
     inset: -0.1rem -0.25rem;
-    border-radius: .5rem;
-    background: radial-gradient(60% 60% at 50% 60%,
+    border-radius: 0.5rem;
+    background: radial-gradient(
+      60% 60% at 50% 60%,
       color-mix(in oklab, hsl(var(--primary)) 40%, transparent) 0%,
       color-mix(in oklab, hsl(var(--primary)) 12%, transparent) 60%,
-      transparent 100%);
+      transparent 100%
+    );
     filter: blur(12px);
     opacity: 0;
     pointer-events: none;
@@ -296,17 +317,26 @@
     width: 0;
     height: 2px;
     background: linear-gradient(90deg, transparent, hsl(var(--primary)), transparent);
-    opacity: .6;
+    opacity: 0.6;
     transform-origin: center;
-    transition: width 260ms ease, left 260ms ease, opacity 260ms ease;
+    transition:
+      width 260ms ease,
+      left 260ms ease,
+      opacity 260ms ease;
   }
   .crypto-tagline:hover {
     color: hsl(var(--foreground));
     transform: translateY(-1px);
     filter: drop-shadow(0 0 0.35rem color-mix(in oklab, hsl(var(--primary)) 45%, transparent));
   }
-  .crypto-tagline:hover::before { opacity: .85; }
-  .crypto-tagline:hover::after { width: 100%; left: 0; opacity: 1; }
+  .crypto-tagline:hover::before {
+    opacity: 0.85;
+  }
+  .crypto-tagline:hover::after {
+    width: 100%;
+    left: 0;
+    opacity: 1;
+  }
 
   .blob-a {
     animation: blobPulseA 18s ease-in-out infinite both;
@@ -322,20 +352,31 @@
     position: relative;
   }
   @keyframes blobPulseA {
-    0% { transform: scale(0.96); opacity: 0.55; }
-    50% { transform: scale(1.08); opacity: 0.9; }
-    100% { transform: scale(0.96); opacity: 0.55; }
+    0% {
+      transform: scale(0.96);
+      opacity: 0.55;
+    }
+    50% {
+      transform: scale(1.08);
+      opacity: 0.9;
+    }
+    100% {
+      transform: scale(0.96);
+      opacity: 0.55;
+    }
   }
   @keyframes blobPulseB {
-    0% { transform: scale(1.04); opacity: 0.35; }
-    50% { transform: scale(0.92); opacity: 0.7; }
-    100% { transform: scale(1.04); opacity: 0.35; }
+    0% {
+      transform: scale(1.04);
+      opacity: 0.35;
+    }
+    50% {
+      transform: scale(0.92);
+      opacity: 0.7;
+    }
+    100% {
+      transform: scale(1.04);
+      opacity: 0.35;
+    }
   }
 </style>
-
-
-
-
-
-
-

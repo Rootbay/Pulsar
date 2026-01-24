@@ -1,7 +1,9 @@
 <svelte:options runes />
+
 <script lang="ts">
+  import { tick } from 'svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
-  
+
   interface Props {
     url?: string;
     fallbackIcon: string;
@@ -34,12 +36,11 @@
 
   let faviconCache: Map<string, string>;
   if (typeof window !== 'undefined' && !(window as any).faviconCache) {
-      (window as any).faviconCache = new Map<string, string>();
+    (window as any).faviconCache = new Map<string, string>();
   }
   if (typeof window !== 'undefined') {
     faviconCache = (window as any).faviconCache;
   }
-
 
   function getDomain(fullUrl: string): string | null {
     try {
@@ -101,12 +102,18 @@
       }
     }
   });
-
 </script>
 
-<div class="itemImgContainer {variant === 'list' ? 'list-variant' : ''}" style="--favicon-size: {size}px;">
+<div
+  class="itemImgContainer {variant === 'list' ? 'list-variant' : ''}"
+  style="--favicon-size: {size}px;"
+>
   {#if hasError || !iconSrc}
-    <div class="tag-icon-container" class:color-pulse={pulseActive} style="--tag-color: {fallbackColor};">
+    <div
+      class="tag-icon-container"
+      class:color-pulse={pulseActive}
+      style="--tag-color: {fallbackColor};"
+    >
       <div class="tag-icon-bg"></div>
       <div class="tag-icon-plate {variant === 'list' ? 'list' : 'default'}">
         <div class="tag-icon-content">
@@ -124,7 +131,13 @@
       </div>
     </div>
   {:else}
-    <img src={iconSrc} alt={title} class="itemImg raster" draggable="false" onerror={() => hasError = true} />
+    <img
+      src={iconSrc}
+      alt={title}
+      class="itemImg raster"
+      draggable="false"
+      onerror={() => (hasError = true)}
+    />
   {/if}
 </div>
 
@@ -247,8 +260,17 @@
     animation: colorPulse 280ms ease-out;
   }
   @keyframes colorPulse {
-    0%   { transform: scale(0.92); opacity: 0.85; }
-    60%  { transform: scale(1.04); opacity: 1; }
-    100% { transform: scale(1); opacity: 1; }
+    0% {
+      transform: scale(0.92);
+      opacity: 0.85;
+    }
+    60% {
+      transform: scale(1.04);
+      opacity: 1;
+    }
+    100% {
+      transform: scale(1);
+      opacity: 1;
+    }
   }
 </style>

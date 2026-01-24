@@ -4,4 +4,3 @@ import { redirect } from '@sveltejs/kit';
 export const load: PageLoad = () => {
   throw redirect(307, '/settings/general');
 };
-

@@ -1,20 +1,12 @@
-<svelte:head>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
-  <link
-    href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap"
-    rel="stylesheet"
-  />
-</svelte:head>
-
 <script lang="ts">
   import { browser } from '$app/environment';
   import { goto } from '$app/navigation';
   import { onDestroy, onMount } from 'svelte';
-  import { invoke } from '@tauri-apps/api/core';
+  import { callBackend } from '$lib/utils/backend';
   import { writeText } from '@tauri-apps/plugin-clipboard-manager';
   import { Button } from '$lib/components/ui/button';
   import { Badge } from '$lib/components/ui/badge';
+  import { Spinner } from '$lib/components/ui/spinner/index.js';
   import {
     Card,
     CardContent,
@@ -23,7 +15,7 @@
     CardHeader,
     CardTitle
   } from '$lib/components/ui/card';
-  import { Copy, Loader2, RefreshCw } from '@lucide/svelte';
+  import { Copy, RefreshCw } from '@lucide/svelte';
   import {
     isDatabaseLoaded,
     isLocked,
@@ -36,45 +28,45 @@
   import { ArrowLeft } from '@lucide/svelte';
 
   const t = (locale: 'en' | 'sv', en: string, sv: string) => (locale === 'sv' ? sv : en);
-  $: locale = $currentLocale as 'en' | 'sv';
+  let locale = $derived($currentLocale as 'en' | 'sv');
 
   const CODE_LENGTH = 6;
   const TOKEN_PERIOD = 30;
 
-  let hiddenInput: HTMLInputElement | null = null;
-  let code = '';
-  let verificationError: string | null = null;
-  let isVerifying = false;
+  let hiddenInput = $state<HTMLInputElement | null>(null);
+  let code = $state('');
+  let verificationError = $state<string | null>(null);
+  let isVerifying = $state(false);
 
-  let activeSecret: string | null = null;
-  let currentToken: string | null = null;
-  let displayedToken = '------';
-  let tokenError: string | null = null;
-  let isFetchingToken = false;
-  let timeRemaining = 0;
+  let activeSecret = $state<string | null>(null);
+  let currentToken = $state<string | null>(null);
+  let tokenError = $state<string | null>(null);
+  let isFetchingToken = $state(false);
+  let timeRemaining = $state(0);
 
   type FeedbackVariant = 'success' | 'error';
-  let copyFeedback: { message: string; variant: FeedbackVariant } | null = null;
+  let copyFeedback = $state<{ message: string; variant: FeedbackVariant } | null>(null);
   let copyFeedbackTimeout: ReturnType<typeof setTimeout> | null = null;
 
   let countdownInterval: ReturnType<typeof setInterval> | null = null;
   let unsubscribeSecret: (() => void) | null = null;
 
-  $: {
+  $effect(() => {
     if (
       browser &&
-      (!($totpRequired && !$totpVerified && $isDatabaseLoaded && !$isLocked && !$needsPasswordSetup))
+      !($totpRequired && !$totpVerified && $isDatabaseLoaded && !$isLocked && !$needsPasswordSetup)
     ) {
       goto('/', { replaceState: true });
     }
-  }
+  });
 
-  $: displayedToken =
+  const displayedToken = $derived(
     currentToken && currentToken.length
       ? currentToken.replace(/(.{3})/g, '$1 ').trim()
       : isFetchingToken && activeSecret
         ? '······'
-        : '------';
+        : '------'
+  );
 
   const focusHiddenInput = () => {
     hiddenInput?.focus();
@@ -101,6 +93,7 @@
   const toErrorMessage = (error: unknown): string => {
     if (typeof error === 'string') return error;
     if (error instanceof Error) return error.message;
+    if (error && typeof error === 'object' && 'message' in error) return (error as any).message;
     return 'An unexpected error occurred. Please try again.';
   };
 
@@ -130,7 +123,7 @@
     tokenError = null;
 
     try {
-      const token = await invoke<string>('generate_totp', { secret_b32: activeSecret });
+      const token = await callBackend<string>('generate_totp', { secret_b32: activeSecret });
       currentToken = token;
       updateTimeRemaining();
     } catch (error) {
@@ -198,7 +191,7 @@
     verificationError = null;
 
     try {
-      await invoke('verify_login_totp', { token: code });
+      await callBackend('verify_login_totp', { token: code });
       isLocked.set(false);
       totpVerified.set(true);
       totpRequired.set(false);
@@ -245,7 +238,7 @@
 
   async function goBack() {
     try {
-      await invoke('lock');
+      await callBackend('lock');
     } catch (error) {
       console.error('Failed to lock while leaving TOTP screen:', error);
     }
@@ -256,29 +249,42 @@
   }
 </script>
 
-<div class="relative flex min-h-screen items-start justify-center bg-background px-4 pb-16 pt-20">
+<svelte:head>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap"
+    rel="stylesheet"
+  />
+</svelte:head>
+
+<div class="bg-background relative flex min-h-screen items-start justify-center px-4 pt-20 pb-16">
   <button
     type="button"
-    class="absolute left-4 top-4 flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+    class="text-muted-foreground hover:text-foreground absolute top-4 left-4 flex items-center gap-1 text-sm"
     onclick={goBack}
   >
     <ArrowLeft class="h-4 w-4" />
     {t(locale, 'Back', 'Tillbaka')}
   </button>
   <div
-    class="pointer-events-none absolute left-1/2 top-1/2 h-[min(90vw,32rem)] w-[min(90vw,32rem)] -translate-x-1/2 -translate-y-1/2 rounded-full blur-3xl bg-primary-glow"
+    class="bg-primary-glow pointer-events-none absolute top-1/2 left-1/2 h-[min(90vw,32rem)] w-[min(90vw,32rem)] -translate-x-1/2 -translate-y-1/2 rounded-full blur-3xl"
     aria-hidden="true"
   ></div>
 
-  <Card class="relative z-10 w-full max-w-md border-border/60 bg-card/80 backdrop-blur supports-[backdrop-filter]:bg-card/70">
+  <Card
+    class="border-border/60 bg-card/80 supports-backdrop-filter:bg-card/70 relative z-10 w-full max-w-md backdrop-blur"
+  >
     <CardHeader class="space-y-2 text-center">
       <CardTitle class="text-2xl font-semibold">Unlock Pulsar Pass</CardTitle>
-      <CardDescription>Enter the 6-digit code from your authenticator to finish unlocking.</CardDescription>
+      <CardDescription
+        >Enter the 6-digit code from your authenticator to finish unlocking.</CardDescription
+      >
     </CardHeader>
 
     <CardContent class="space-y-6">
       <div
-        class="relative flex gap-3 rounded-2xl border border-border/60 bg-muted/20 p-4 shadow-sm transition hover:border-border"
+        class="border-border/60 bg-muted/20 hover:border-border relative flex gap-3 rounded-2xl border p-4 shadow-sm transition"
         role="button"
         tabindex="0"
         aria-label="Enter TOTP code"
@@ -287,7 +293,7 @@
       >
         {#each Array.from({ length: 6 }) as _, i (i)}
           <div
-            class="flex h-16 w-14 items-center justify-center rounded-xl border border-border/50 bg-background text-2xl font-semibold tracking-widest text-foreground shadow-sm sm:h-20 sm:w-16 sm:text-3xl"
+            class="border-border/50 bg-background text-foreground flex h-16 w-14 items-center justify-center rounded-xl border text-2xl font-semibold tracking-widest shadow-sm sm:h-20 sm:w-16 sm:text-3xl"
             aria-label={`Digit ${i + 1}`}
           >
             {code[i] ?? ''}
@@ -307,11 +313,11 @@
         />
       </div>
 
-      <section class="rounded-2xl border border-border/60 bg-muted/10 p-5">
+      <section class="border-border/60 bg-muted/10 rounded-2xl border p-5">
         <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p class="text-sm font-semibold text-foreground">Authenticator code</p>
-            <p class="text-sm text-muted-foreground">Automatically refreshes every 30 seconds.</p>
+            <p class="text-foreground text-sm font-semibold">Authenticator code</p>
+            <p class="text-muted-foreground text-sm">Automatically refreshes every 30 seconds.</p>
           </div>
           <Badge variant={activeSecret ? 'default' : 'secondary'}>
             {activeSecret ? 'Local secret stored' : 'Secret unavailable'}
@@ -319,23 +325,29 @@
         </div>
 
         <div class="mt-4 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-          <div class="font-mono text-3xl tracking-[0.4rem] text-foreground sm:text-4xl">
+          <div class="text-foreground font-mono text-3xl tracking-[0.4rem] sm:text-4xl">
             {displayedToken}
           </div>
-          <div class="flex items-center gap-2 text-sm text-muted-foreground">
+          <div class="text-muted-foreground flex items-center gap-2 text-sm">
             {#if isFetchingToken}
-              <Loader2 class="h-4 w-4 animate-spin" aria-hidden="true" />
+              <Spinner class="h-4 w-4" aria-hidden="true" />
             {/if}
             <span>Refreshes in {timeRemaining > 0 ? `${timeRemaining}s` : '—'}</span>
           </div>
         </div>
 
         {#if tokenError}
-          <p class="mt-3 text-sm text-destructive" aria-live="polite">{tokenError}</p>
+          <p class="text-destructive mt-3 text-sm" aria-live="polite">{tokenError}</p>
         {/if}
 
         <div class="mt-4 flex flex-wrap gap-2">
-          <Button type="button" variant="outline" class="gap-2" onclick={copyToken} disabled={!currentToken}>
+          <Button
+            type="button"
+            variant="outline"
+            class="gap-2"
+            onclick={copyToken}
+            disabled={!currentToken}
+          >
             <Copy class="h-4 w-4" aria-hidden="true" />
             Copy code
           </Button>
@@ -346,7 +358,10 @@
             onclick={handleRegenerateToken}
             disabled={!activeSecret || isFetchingToken}
           >
-            <RefreshCw class={`h-4 w-4 ${isFetchingToken ? 'animate-spin' : ''}`} aria-hidden="true" />
+            <RefreshCw
+              class={`h-4 w-4 ${isFetchingToken ? 'animate-spin' : ''}`}
+              aria-hidden="true"
+            />
             Refresh
           </Button>
         </div>
@@ -360,16 +375,18 @@
           </p>
         {/if}
 
-        <p class="mt-3 text-xs text-muted-foreground">
-          Keep a backup of your authenticator secret. If this device loses the stored secret, you will still need your
-          authenticator app to access the vault.
+        <p class="text-muted-foreground mt-3 text-xs">
+          Keep a backup of your authenticator secret. If this device loses the stored secret, you
+          will still need your authenticator app to access the vault.
         </p>
       </section>
     </CardContent>
 
     <CardFooter class="flex flex-col gap-3">
       {#if verificationError}
-        <p class="text-sm font-medium text-destructive" aria-live="assertive">{verificationError}</p>
+        <p class="text-destructive text-sm font-medium" aria-live="assertive">
+          {verificationError}
+        </p>
       {/if}
       <Button
         type="button"

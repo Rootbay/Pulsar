@@ -1,11 +1,11 @@
 ﻿<svelte:options runes />
 
 <script lang="ts">
-  import { createEventDispatcher, onDestroy, tick } from 'svelte';
-  import TagIcon from "../ui/TagIcon.svelte";
-  import Favicon from "../ui/Favicon.svelte";
-  import { iconPaths } from "$lib/icons";
-  import { invoke } from '@tauri-apps/api/core';
+  import { onDestroy, tick } from 'svelte';
+  import TagIcon from '../ui/TagIcon.svelte';
+  import Favicon from '../ui/Favicon.svelte';
+  import { iconPaths } from '$lib/icons';
+  import { callBackend } from '$lib/utils/backend';
   import { selectedTag, filterCategory } from '$lib/stores';
   import type { FilterCategory } from '$lib/stores';
   import type { PasswordItem } from '$lib/types/password';
@@ -46,21 +46,22 @@
     buttons: TagButton[];
     selectedId: number | null;
     disableEdit?: boolean;
+    onselect?: (item: PasswordItem) => void;
+    oncreateEntry?: () => void;
+    oneditEntry?: (item: PasswordItem) => void;
+    onremoveEntry?: (item: PasswordItem) => void;
   }
 
   let {
     items = $bindable<PasswordItem[]>([]),
     buttons,
     selectedId = null,
-    disableEdit = false
+    disableEdit = false,
+    onselect,
+    oncreateEntry,
+    oneditEntry,
+    onremoveEntry
   }: Props = $props();
-
-  const dispatch = createEventDispatcher<{
-    select: PasswordItem;
-    createEntry: void;
-    editEntry: PasswordItem;
-    removeEntry: PasswordItem;
-  }>();
 
   const defaultFallback: TagMeta = {
     icon: iconPaths.default,
@@ -83,13 +84,14 @@
 
   const itemsCount = $derived(items.length);
 
-  const tagMap = $derived.by(() =>
-    new Map<string, TagMeta>(
-      buttons.map((button) => [
-        button.text,
-        { color: button.color, icon: button.icon || iconPaths.default }
-      ])
-    )
+  const tagMap = $derived.by(
+    () =>
+      new Map<string, TagMeta>(
+        buttons.map((button) => [
+          button.text,
+          { color: button.color, icon: button.icon || iconPaths.default }
+        ])
+      )
   );
 
   const filteredItems = $derived.by(() => {
@@ -139,7 +141,7 @@
       if (desiredId != null && lastDispatchedId !== desiredId) {
         const item = filteredItems.find((i) => i.id === desiredId);
         if (item) {
-          dispatch('select', item);
+          onselect?.(item);
           lastDispatchedId = desiredId;
         }
       }
@@ -355,7 +357,7 @@
     const updatedTags = nextTags.join(',');
 
     try {
-      await invoke('update_password_item_tags', { id, tags: updatedTags });
+      await callBackend('update_password_item_tags', { id, tags: updatedTags });
       const itemIndex = items.findIndex((candidate) => candidate.id === id);
       if (itemIndex !== -1) {
         items = [
@@ -376,11 +378,11 @@
 
   function selectItem(item: PasswordItem) {
     selectedItemId = item.id;
-    dispatch('select', item);
+    onselect?.(item);
   }
 
   function handleCreateEntry() {
-    dispatch('createEntry');
+    oncreateEntry?.();
   }
 
   function handleEditEntry(item: PasswordItem) {
@@ -388,14 +390,13 @@
       return;
     }
 
-    dispatch('editEntry', item);
+    oneditEntry?.(item);
   }
 
   function handleRemoveEntry(item: PasswordItem) {
-    dispatch('removeEntry', item);
+    onremoveEntry?.(item);
   }
 </script>
-
 
 <nav class="passwordList">
   <ContextMenu>
@@ -412,13 +413,13 @@
           <div class="searchContainer">
             <Button
               type="button"
-              class="searchBtn h-8 w-8 shrink-0 text-muted-foreground hover:text-foreground"
+              class="searchBtn text-muted-foreground hover:text-foreground h-8 w-8 shrink-0"
               variant="ghost"
               size="icon"
               aria-label="Search"
               title="Search"
             >
-              <Search class="w-5 h-5" />
+              <Search class="h-5 w-5" />
             </Button>
             <Input
               type="text"
@@ -431,11 +432,11 @@
                 type="button"
                 variant="ghost"
                 size="icon"
-                class="clearSearchBtn h-8 w-8 shrink-0 text-muted-foreground hover:text-foreground"
+                class="clearSearchBtn text-muted-foreground hover:text-foreground h-8 w-8 shrink-0"
                 onclick={clearSearch}
                 aria-label="Clear search"
               >
-                <X class="w-4 h-4" />
+                <X class="h-4 w-4" />
               </Button>
             {/if}
           </div>
@@ -485,13 +486,23 @@
                   <ul class="itemList" role="list">
                     {#if showSkeleton}
                       {#each skeletonPlaceholders(section.items.length) as placeholderIndex (placeholderIndex)}
-                        <li class="item" aria-hidden="true" data-placeholder-index={placeholderIndex}>
+                        <li
+                          class="item"
+                          aria-hidden="true"
+                          data-placeholder-index={placeholderIndex}
+                        >
                           <div class="itemLink" role="presentation">
                             <div class="itemLeft">
                               <Skeleton class="h-7 w-7 rounded-md opacity-70" aria-hidden="true" />
                               <div class="itemTexts">
-                                <Skeleton class="h-3 w-36 rounded-md opacity-80" aria-hidden="true" />
-                                <Skeleton class="mt-2 h-3 w-24 rounded-md opacity-60" aria-hidden="true" />
+                                <Skeleton
+                                  class="h-3 w-36 rounded-md opacity-80"
+                                  aria-hidden="true"
+                                />
+                                <Skeleton
+                                  class="mt-2 h-3 w-24 rounded-md opacity-60"
+                                  aria-hidden="true"
+                                />
                               </div>
                             </div>
                           </div>
@@ -511,7 +522,10 @@
                               <a
                                 href={item.url ?? '#'}
                                 class="itemLink"
-                                onclick={(event: MouseEvent) => { event.preventDefault(); selectItem(item); }}
+                                onclick={(event: MouseEvent) => {
+                                  event.preventDefault();
+                                  selectItem(item);
+                                }}
                                 draggable="false"
                               >
                                 <div class="itemLeft">
@@ -530,14 +544,18 @@
                                 </div>
                                 <div class="itemTags">
                                   <TagIcon
-                                    tagNames={item.tags ? item.tags.split(',').map((tag: string) => tag.trim()) : []}
+                                    tagNames={item.tags
+                                      ? item.tags.split(',').map((tag: string) => tag.trim())
+                                      : []}
                                     {tagMap}
                                   />
                                 </div>
                               </a>
                             </ContextMenuTrigger>
                             <ContextMenuContent class="w-48">
-                              <ContextMenuItem onSelect={() => handlePinToggle(item)}>{isPinned(item) ? 'Unpin' : 'Pin'}</ContextMenuItem>
+                              <ContextMenuItem onSelect={() => handlePinToggle(item)}
+                                >{isPinned(item) ? 'Unpin' : 'Pin'}</ContextMenuItem
+                              >
                               <ContextMenuSeparator />
                               <ContextMenuItem
                                 disabled={disableEdit}
@@ -580,8 +598,16 @@
     --passwordlist-subtle-text: color-mix(in oklch, var(--sidebar-foreground) 35%, transparent);
     --passwordlist-border: var(--sidebar-border);
     --passwordlist-scroll-thumb: color-mix(in oklch, var(--sidebar-border) 75%, var(--sidebar) 25%);
-    --passwordlist-skeleton-base: color-mix(in oklch, var(--passwordlist-elevated) 88%, var(--background) 12%);
-    --passwordlist-skeleton-highlight: color-mix(in oklch, var(--passwordlist-elevated) 70%, var(--background) 30%);
+    --passwordlist-skeleton-base: color-mix(
+      in oklch,
+      var(--passwordlist-elevated) 88%,
+      var(--background) 12%
+    );
+    --passwordlist-skeleton-highlight: color-mix(
+      in oklch,
+      var(--passwordlist-elevated) 70%,
+      var(--background) 30%
+    );
     width: var(--passwordList-width);
     min-width: 150px;
     position: relative;
@@ -678,7 +704,11 @@
   }
 
   .itemList::-webkit-scrollbar-thumb:hover {
-    background-color: color-mix(in oklch, var(--passwordlist-scroll-thumb) 85%, var(--passwordlist-hover) 15%);
+    background-color: color-mix(
+      in oklch,
+      var(--passwordlist-scroll-thumb) 85%,
+      var(--passwordlist-hover) 15%
+    );
   }
 
   .itemList::-webkit-scrollbar-button {
@@ -755,7 +785,7 @@
     align-items: center;
   }
 
-  .navInner[aria-busy="true"] {
+  .navInner[aria-busy='true'] {
     pointer-events: none;
   }
 
@@ -766,5 +796,3 @@
     font-style: italic;
   }
 </style>
-
-

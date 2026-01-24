@@ -1,40 +1,25 @@
-\# Project Overview
-
-
+# Project Overview
 
 This repository represent:
 
-A \*\*desktop application\*\* built with \*\*Tauri v2\*\*, \*\*Svelte 5 runes mode\*\*, \*\*TypeScript\*\*, \*\*TailwindCSS v4\*\*, \*\*shadcn-svelte\*\*, and \*\*lucide\*\* for icons.
+A **desktop application** built with **Tauri v2**, **Svelte 5 runes mode**, **TypeScript**, **TailwindCSS v4**, **shadcn-svelte**, and **lucide** for icons.
 
-\*\*Bun\*\* is used as the runtime, package manager, and task runner across all projects.
+**Bun** is used as the runtime, package manager, and task runner across all projects.
 
-
-
-\# Setup / Build \& Run
-
-
+# Setup / Build & Run
 
 Install dependencies:
-
 ```bash
-
 bun install
-
 ```
-
-
 
 Development:
 
-\*\*Desktop App (Tauri v2)\*\*: `bun tauri dev`
-
-
+**Desktop App (Tauri v2)**: `bun tauri dev`
 
 Production Build:
 
-\*\*Desktop App (Tauri v2)\*\*: `bun tauri build`
-
-
+**Desktop App (Tauri v2)**: `bun tauri build`
 
 Type-check the project:
 
@@ -44,11 +29,7 @@ bun tsc --noEmit
 
 ```
 
-
-
-\# File-scoped Checks
-
-
+# File-scoped Checks
 
 Type-check a single file:
 
@@ -58,8 +39,6 @@ bun tsc --noEmit <file>
 
 ```
 
-
-
 Run ESLint on a single file:
 
 ```bash
@@ -67,8 +46,6 @@ Run ESLint on a single file:
 bun eslint --fix <file>
 
 ```
-
-
 
 Format a file with Prettier:
 
@@ -78,8 +55,6 @@ bun prettier --write <file>
 
 ```
 
-
-
 Run a specific test file:
 
 ```bash
@@ -88,39 +63,31 @@ bun test <path/to/file.test.ts>
 
 ```
 
+# Code Style & Conventions
 
+**Language**: TypeScript in strict mode.
 
-\# Code Style \& Conventions
+**Svelte**: use `<script lang="ts">` in components.
 
+**TailwindCSS v4**: prefer utility-first classes over custom CSS.
 
+**shadcn-svelte**: use provided UI primitives/components consistently.
 
-\*\*Language\*\*: TypeScript in strict mode.
+**Icons**: use **lucide** icons.
 
-\*\*Svelte\*\*: use `<script lang="ts">` in components.
+**Formatting**: run `bun prettier --write .` before commits.
 
-\*\*TailwindCSS v4\*\*: prefer utility-first classes over custom CSS.
-
-\*\*shadcn-svelte\*\*: use provided UI primitives/components consistently.
-
-\*\*Icons\*\*: use \*\*lucide\*\* icons.
-
-\*\*Formatting\*\*: run `bun prettier --write .` before commits.
-
-\*\*Imports\*\*:
+**Imports**:
 
 Prefer absolute imports from `src/` over long relative paths.
 
-\*\*Naming\*\*:
+**Naming**:
 
 Components: PascalCase (e.g. `MyButton.svelte`).
 
 Utilities, stores: camelCase or kebab-case as appropriate.
 
-
-
-\# Project Structure
-
-
+# Project Structure
 
 `src/` – main application code (Svelte + TypeScript).
 
@@ -134,19 +101,11 @@ Utilities, stores: camelCase or kebab-case as appropriate.
 
 `tests/` – unit/integration tests.
 
+# Testing Guidelines
 
-
-\# Testing Guidelines
-
-
-
-Use \*\*Vitest\*\* (or compatible runner with Bun).
-
-
+Use **Vitest** (or compatible runner with Bun).
 
 Add unit tests for new logic.
-
-
 
 Run tests before committing:
 
@@ -168,59 +127,44 @@ Run tests before committing:
 
   ```
 
+# Do’s & Don’ts
 
+## Do:
 
-\# Do’s \& Don’ts
+- Use TailwindCSS utilities instead of custom CSS.
 
+- Use shadcn-svelte components for UI consistency.
 
+- Keep components small and modular.
 
-\## Do:
+- Use lucide icons consistently.
 
-\- Use TailwindCSS utilities instead of custom CSS.
+## Don’t:
 
-\- Use shadcn-svelte components for UI consistency.
+- Don’t use `any` unless unavoidable (add `TODO` if used).
 
-\- Keep components small and modular.
+- Don’t hardcode secrets; use environment variables or config files.
 
-\- Use lucide icons consistently.
+- Don’t add dependencies without reviewing size and compatibility.
 
+# Security
 
+- Exclude `.env` and secrets from version control.
 
-\## Don’t:
+- For desktop apps, keep secrets in the **Tauri (Rust) backend**, not the frontend.
 
-\- Don’t use `any` unless unavoidable (add `TODO` if used).
+- Never expose private APIs or keys in client-side code.
 
-\- Don’t hardcode secrets; use environment variables or config files.
-
-\- Don’t add dependencies without reviewing size and compatibility.
-
-
-
-\# Security
-
-
-
-\- Exclude `.env` and secrets from version control.
-
-\- For desktop apps, keep secrets in the \*\*Tauri (Rust) backend\*\*, not the frontend.
-
-\- Never expose private APIs or keys in client-side code.
-
-
-
-\# External References
-
-
+# External References
 
 General project docs: see `README.md` and/or `docs`.
 
-Tauri v2 docs: \[https://tauri.app](https://tauri.app)
+Tauri v2 docs: [https://tauri.app](https://tauri.app)
 
-Svelte 5 docs: \[https://svelte.dev](https://svelte.dev)
+Svelte 5 docs: [https://svelte.dev](https://svelte.dev)
 
-TailwindCSS v4 docs: \[https://tailwindcss.com/docs/v4](https://tailwindcss.com/docs/v4)
+TailwindCSS v4 docs: [https://tailwindcss.com/docs/v4](https://tailwindcss.com/docs/v4)
 
-shadcn-svelte docs: \[https://shadcn-svelte.com](https://shadcn-svelte.com)
+shadcn-svelte docs: [https://shadcn-svelte.com](https://shadcn-svelte.com)
 
-lucide icons: \[https://lucide.dev](https://lucide.dev)
-
+lucide icons: [https://lucide.dev](https://lucide.dev)

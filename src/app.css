@@ -1,6 +1,6 @@
-﻿@import "tailwindcss";
+﻿@import 'tailwindcss';
 
-@import "tw-animate-css";
+@import 'tw-animate-css';
 
 @custom-variant dark (&:is(.dark *));
 
@@ -50,7 +50,7 @@
   --background: oklch(0.145 0 0);
   --foreground: oklch(0.985 0 0);
   /* Main content background */
-  --card: #0F0F0F;
+  --card: #0f0f0f;
   --card-foreground: oklch(0.985 0 0);
   --popover: oklch(0.205 0 0);
   --popover-foreground: oklch(0.985 0 0);
@@ -86,7 +86,7 @@
   /* Second sidebar (password list) explicit colors */
   --passwordlist-base: #111111;
   --passwordlist-item: #151516;
-  --passwordlist-hover-bg: #17171B;
+  --passwordlist-hover-bg: #17171b;
 }
 
 @theme inline {

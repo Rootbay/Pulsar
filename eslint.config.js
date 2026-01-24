@@ -1,11 +1,19 @@
-import globals from "globals";
-import pluginJs from "@eslint/js";
-import tseslint from "typescript-eslint";
-import svelte from "eslint-plugin-svelte";
+import globals from 'globals';
+import pluginJs from '@eslint/js';
+import tseslint from 'typescript-eslint';
+import svelte from 'eslint-plugin-svelte';
 
 export default [
   {
-    ignores: ["build/", ".svelte-kit/", "node_modules/", "dist/", "src-tauri/", "src/lib/components/ui"],
+    ignores: [
+      'build/',
+      '.svelte-kit/',
+      'node_modules/',
+      'dist/',
+      'src-tauri/',
+      'src/lib/components/ui',
+      'src/lib/hooks/is-mobile.svelte.ts'
+    ]
   },
   pluginJs.configs.recommended,
   ...tseslint.configs.recommended,
@@ -13,38 +21,38 @@ export default [
     languageOptions: {
       globals: {
         ...globals.browser,
-        ...globals.node,
-      },
-    },
+        ...globals.node
+      }
+    }
   },
   {
-    files: ["**/*.ts"],
+    files: ['**/*.ts'],
     languageOptions: {
       parser: tseslint.parser,
       parserOptions: {
         ecmaVersion: 2020,
-        sourceType: "module",
+        sourceType: 'module',
         tsconfigRootDir: import.meta.dirname,
-        project: ["./tsconfig.json"],
-      },
-    },
+        project: ['./tsconfig.json']
+      }
+    }
   },
-  ...svelte.configs["flat/recommended"],
+  ...svelte.configs['flat/recommended'],
   {
-    files: ["**/*.svelte"],
+    files: ['**/*.svelte'],
     languageOptions: {
       parser: svelte.parser,
       parserOptions: {
-        parser: tseslint.parser,
-      },
-    },
+        parser: tseslint.parser
+      }
+    }
   },
   {
-    files: ["vite.config.js"],
+    files: ['vite.config.js'],
     languageOptions: {
       globals: {
-        ...globals.node,
-      },
-    },
-  },
+        ...globals.node
+      }
+    }
+  }
 ];

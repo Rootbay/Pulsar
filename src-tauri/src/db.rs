@@ -17,7 +17,6 @@ pub async fn init_db(db_path: &Path, password: Option<&[u8]>) -> Result<SqlitePo
             .join(db_path)
     };
 
-    // Ensure parent directory exists
     if let Some(parent) = db_path_abs.parent() {
         fs::create_dir_all(parent)
             .await
@@ -40,7 +39,6 @@ pub async fn init_db(db_path: &Path, password: Option<&[u8]>) -> Result<SqlitePo
             let kb = maybe_key_bytes.clone();
             Box::pin(async move {
                 if let Some(key_bytes) = kb {
-                    // Try to unlock the database
                     let param_try = sqlx::query("PRAGMA key = ?;")
                         .bind(key_bytes.as_slice())
                         .execute(&mut *conn)
@@ -48,7 +46,6 @@ pub async fn init_db(db_path: &Path, password: Option<&[u8]>) -> Result<SqlitePo
 
                     if let Err(e) = param_try {
                         let msg = e.to_string();
-                        // SQLx/sqlcipher fallback for certain environments where bind parameters in PRAGMA fail
                         if msg.contains("syntax error") {
                             let hex_key: String = key_bytes.iter().map(|b| format!("{:02x}", b)).collect();
                             let pragma_unquoted = format!("PRAGMA key = x'{}';", hex_key);
@@ -61,7 +58,6 @@ pub async fn init_db(db_path: &Path, password: Option<&[u8]>) -> Result<SqlitePo
                         }
                     }
 
-                    // Verify unlock success with a simple query
                     let res = sqlx::query("PRAGMA integrity_check;").execute(&mut *conn).await;
                     if let Err(e) = res {
                         let msg = e.to_string();
@@ -86,7 +82,6 @@ pub async fn init_db(db_path: &Path, password: Option<&[u8]>) -> Result<SqlitePo
             "Failed to connect to the database. Ensure the file is not locked by another process.".to_string()
         })?;
 
-    // Run migrations
     println!("Running database migrations...");
     sqlx::migrate!()
         .run(&pool)

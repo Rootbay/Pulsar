@@ -6,6 +6,7 @@
   import { dndzone } from 'svelte-dnd-action';
   import { flip } from 'svelte/animate';
   import { Plus } from '@lucide/svelte';
+  import Icon from '$lib/components/ui/Icon.svelte';
 
   interface Props {
     selectedPasswordItem: PasswordItem | null;
@@ -42,11 +43,12 @@
   let workingTags = $state<string[]>([]);
 
   $effect(() => {
-    const base = pendingReorder !== null
-      ? pendingReorder
-      : (dndTags.length
+    const base =
+      pendingReorder !== null
+        ? pendingReorder
+        : dndTags.length
           ? dndTags.map((t) => t.text).join(',')
-          : (selectedPasswordItem?.tags ?? ''));
+          : (selectedPasswordItem?.tags ?? '');
 
     workingTags = base
       .split(',')
@@ -58,14 +60,13 @@
     if (suppressSync || pendingReorder !== null) {
       return;
     }
-    const list = selectedPasswordItem?.tags
-      ?.split(',')
-      .map((t: string) => t.trim())
-      .filter((value: string) => value.length > 0) ?? [];
+    const list =
+      selectedPasswordItem?.tags
+        ?.split(',')
+        .map((t: string) => t.trim())
+        .filter((value: string) => value.length > 0) ?? [];
 
-    const needsSync =
-      dndTags.length !== list.length ||
-      dndTags.some((t, i) => t.text !== list[i]);
+    const needsSync = dndTags.length !== list.length || dndTags.some((t, i) => t.text !== list[i]);
 
     if (needsSync) {
       dndTags = list.map((t: string) => ({ id: t, text: t }));
@@ -149,7 +150,7 @@
     dndTags = e.detail.items;
     justDragged = true;
     setTimeout(() => (justDragged = false), 50);
-    const newOrder = dndTags.map(t => t.text).join(',');
+    const newOrder = dndTags.map((t) => t.text).join(',');
     pendingReorder = newOrder;
     onReorderPending?.({ tags: newOrder });
     suppressSync = false;
@@ -217,7 +218,7 @@
                 style="--tag-color: {tag.color};"
                 onclick={() => addExistingTag(tag.text)}
               >
-                <img source={tag.icon} size="14" alt="tag icon" />
+                <Icon path={tag.icon} size="14" color="currentColor" />
                 <span>{tag.text}</span>
               </button>
             {/each}
@@ -229,193 +230,267 @@
 {/if}
 
 <style>
-    .tags-container {
-        display: flex;
-        gap: 12px;
-        margin-top: 5px;
-        justify-content: space-between;
-        align-items: center;
-        outline: none;
-        -webkit-tap-highlight-color: transparent;
-    }
-    .tags-container:focus,
-    .tags-container:focus-visible,
-    .tags-container:focus-within { outline: none !important; box-shadow: none !important; border: none !important; }
+  .tags-container {
+    display: flex;
+    gap: 12px;
+    margin-top: 5px;
+    justify-content: space-between;
+    align-items: center;
+    outline: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .tags-container:focus,
+  .tags-container:focus-visible,
+  .tags-container:focus-within {
+    outline: none !important;
+    box-shadow: none !important;
+    border: none !important;
+  }
 
-    .selected-tags {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 12px;
-        outline: none !important;
-    }
+  .selected-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    outline: none !important;
+  }
 
-    .selected-tags.dragging {
-        flex-wrap: nowrap;
-        overflow-x: auto;
-        overscroll-behavior: contain;
-        scrollbar-width: none;
-    }
-    .selected-tags.dragging::-webkit-scrollbar { display: none; }
+  .selected-tags.dragging {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: none;
+  }
+  .selected-tags.dragging::-webkit-scrollbar {
+    display: none;
+  }
 
-    .tag-item {
-        position: relative;
-        display: flex;
-        align-items: center;
-        border-radius: 9px;
-        padding: 2px 6px;
-        color: var(--tag-color);
-        font-size: 12px;
-        font-weight: 500;
-        overflow: hidden;
-        transition: outline-color 120ms ease, transform 120ms ease, box-shadow 120ms ease;
-        touch-action: none;
-        -webkit-tap-highlight-color: transparent;
-        transform-origin: center;
-        will-change: transform, box-shadow;
-    }
+  .tag-item {
+    position: relative;
+    display: flex;
+    align-items: center;
+    border-radius: 9px;
+    padding: 2px 6px;
+    color: var(--tag-color);
+    font-size: 12px;
+    font-weight: 500;
+    overflow: hidden;
+    transition:
+      outline-color 120ms ease,
+      transform 120ms ease,
+      box-shadow 120ms ease;
+    touch-action: none;
+    -webkit-tap-highlight-color: transparent;
+    transform-origin: center;
+    will-change: transform, box-shadow;
+  }
 
-    .tag-bg {
-        position: absolute;
-        inset: 0;
-        border-radius: 9px;
-        background: var(--tag-color);
-        opacity: 0.3;
-    }
+  .tag-bg {
+    position: absolute;
+    inset: 0;
+    border-radius: 9px;
+    background: var(--tag-color);
+    opacity: 0.3;
+  }
 
-    .tag-content {
-        position: relative;
-        z-index: 2;
-        display: flex;
-        align-items: center;
-        gap: 6px;
-    }
+  .tag-content {
+    position: relative;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
 
-    .tag-item :global(svg) {
-        width: 16px;
-        height: 16px;
-        fill: currentColor;
-    }
+  .tag-item :global(svg) {
+    width: 16px;
+    height: 16px;
+    fill: currentColor;
+  }
 
-    .tag-item { user-select: none; }
-    .tag-item.editing { cursor: pointer; }
+  .tag-item {
+    user-select: none;
+  }
+  .tag-item.editing {
+    cursor: pointer;
+  }
 
-    .tag-item.editing:hover {
-        outline: 1px solid #ef4444;
-        box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.15) inset;
-    }
+  .tag-item.editing:hover {
+    outline: 1px solid #ef4444;
+    box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.15) inset;
+  }
 
-    .selected-tags.dragging .tag-item.editing:hover {
-        animation: none;
-        box-shadow: none;
-        outline: none;
-    }
-    .selected-tags.dragging .tag-item.editing:hover::after { display: none; }
-    .selected-tags.dragging .tag-item { transition: none; }
-    .selected-tags:focus, .selected-tags:focus-visible, .selected-tags:focus-within { outline: none !important; box-shadow: none !important; }
-    .tag-item.removing { animation: tagRemoveSlide 140ms ease-in-out forwards; pointer-events: none; }
-    .tag-item.removing::before {
-        content: '';
-        position: absolute;
-        top: 50%; left: 50%;
-        width: 16px; height: 16px;
-        border-radius: 999px;
-        background: rgba(239,68,68,0.20);
-        border: 1px solid #ef4444;
-        transform: translate(-50%, -50%) scale(0.2);
-        z-index: 1;
-        animation: tagRemoveCircle 140ms ease-out forwards;
-        pointer-events: none;
-    }
-    .tag-item.added { animation: tagAddSlide 140ms ease-out; }
-    .tag-item.editing:hover::after {
-        content: '';
-        position: absolute;
-        inset: 0;
-        background: rgba(239, 68, 68, 0.08);
-        pointer-events: none;
-    }
+  .selected-tags.dragging .tag-item.editing:hover {
+    animation: none;
+    box-shadow: none;
+    outline: none;
+  }
+  .selected-tags.dragging .tag-item.editing:hover::after {
+    display: none;
+  }
+  .selected-tags.dragging .tag-item {
+    transition: none;
+  }
+  .selected-tags:focus,
+  .selected-tags:focus-visible,
+  .selected-tags:focus-within {
+    outline: none !important;
+    box-shadow: none !important;
+  }
+  .tag-item.removing {
+    animation: tagRemoveSlide 140ms ease-in-out forwards;
+    pointer-events: none;
+  }
+  .tag-item.removing::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 16px;
+    height: 16px;
+    border-radius: 999px;
+    background: rgba(239, 68, 68, 0.2);
+    border: 1px solid #ef4444;
+    transform: translate(-50%, -50%) scale(0.2);
+    z-index: 1;
+    animation: tagRemoveCircle 140ms ease-out forwards;
+    pointer-events: none;
+  }
+  .tag-item.added {
+    animation: tagAddSlide 140ms ease-out;
+  }
+  .tag-item.editing:hover::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: rgba(239, 68, 68, 0.08);
+    pointer-events: none;
+  }
 
-    .tag-item.editing:active { outline: none !important; box-shadow: none !important; }
-    .tag-item:focus,
-    .tag-item:focus-visible { outline: none !important; box-shadow: none !important; }
-    .selected-tags.dragging .tag-item,
-    .selected-tags.dragging .tag-item:hover,
-    .selected-tags.dragging .tag-item:active,
-    .selected-tags.dragging .tag-item:focus { outline: none !important; box-shadow: none !important; }
+  .tag-item.editing:active {
+    outline: none !important;
+    box-shadow: none !important;
+  }
+  .tag-item:focus,
+  .tag-item:focus-visible {
+    outline: none !important;
+    box-shadow: none !important;
+  }
+  .selected-tags.dragging .tag-item,
+  .selected-tags.dragging .tag-item:hover,
+  .selected-tags.dragging .tag-item:active,
+  .selected-tags.dragging .tag-item:focus {
+    outline: none !important;
+    box-shadow: none !important;
+  }
 
-    :global(.svelte-dnd-action-ghost),
-    :global(.svelte-dnd-action-dragged),
-    :global(.svelte-dnd-action-placeholder),
-    :global(.svelte-dnd-action-dropzone),
-    :global(.dnd-shadow) {
-        outline: none !important;
-        box-shadow: none !important;
-        border: none !important;
-    }
+  :global(.svelte-dnd-action-ghost),
+  :global(.svelte-dnd-action-dragged),
+  :global(.svelte-dnd-action-placeholder),
+  :global(.svelte-dnd-action-dropzone),
+  :global(.dnd-shadow) {
+    outline: none !important;
+    box-shadow: none !important;
+    border: none !important;
+  }
 
-    .add-toggle-btn {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        padding: 4px 8px;
-        border-radius: 10px;
-        border: 1px solid var(--btn-nav-border);
-        background: var(--near-black);
-        color: #c9ceda;
-        cursor: pointer;
-        font-size: 12px;
-    }
+  .add-toggle-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 8px;
+    border-radius: 10px;
+    border: 1px solid var(--btn-nav-border);
+    background: var(--near-black);
+    color: #c9ceda;
+    cursor: pointer;
+    font-size: 12px;
+  }
 
-    .add-toggle-btn:hover { filter: brightness(1.1); }
+  .add-toggle-btn:hover {
+    filter: brightness(1.1);
+  }
 
-    .available-tags {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        flex-wrap: wrap;
-        margin-left: 4px;
-    }
+  .available-tags {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-left: 4px;
+  }
 
-    .chips { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-    .chooserChip {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        padding: 4px 8px;
-        border-radius: 10px;
-        border: 1px solid var(--btn-nav-border);
-        background: var(--near-black);
-        color: var(--tag-color);
-        cursor: pointer;
-        user-select: none;
-        transition: outline-color 120ms ease, transform 120ms ease, box-shadow 120ms ease;
-        font-size: 12px;
-    }
+  .chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+  }
+  .chooserChip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 8px;
+    border-radius: 10px;
+    border: 1px solid var(--btn-nav-border);
+    background: var(--near-black);
+    color: var(--tag-color);
+    cursor: pointer;
+    user-select: none;
+    transition:
+      outline-color 120ms ease,
+      transform 120ms ease,
+      box-shadow 120ms ease;
+    font-size: 12px;
+  }
 
-    .chooserChip:hover {
-        filter: brightness(1.05);
-        outline: 1px solid #22c55e;
-        box-shadow: 0 0 0 1px rgba(34,197,94,0.15) inset;
-        animation: chipHoverSlide 260ms ease-in-out 1;
+  .chooserChip:hover {
+    filter: brightness(1.05);
+    outline: 1px solid #22c55e;
+    box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.15) inset;
+    animation: chipHoverSlide 260ms ease-in-out 1;
+  }
+  @keyframes chipHoverSlide {
+    0% {
+      transform: translateX(0);
     }
-    @keyframes chipHoverSlide {
-        0% { transform: translateX(0); }
-        50% { transform: translateX(3px); }
-        100% { transform: translateX(0); }
+    50% {
+      transform: translateX(3px);
     }
-    @keyframes tagRemoveSlide {
-        0% { transform: translateX(0); opacity: 1; }
-        100% { transform: translateX(6px); opacity: 0; }
+    100% {
+      transform: translateX(0);
     }
-    @keyframes tagRemoveCircle {
-        0% { transform: translate(-50%, -50%) scale(0.2); opacity: 0.8; }
-        100% { transform: translate(-50%, -50%) scale(1.05); opacity: 0; }
+  }
+  @keyframes tagRemoveSlide {
+    0% {
+      transform: translateX(0);
+      opacity: 1;
     }
-    @keyframes tagAddSlide {
-        0% { transform: translateX(6px); opacity: 0; }
-        100% { transform: translateX(0); opacity: 1; }
+    100% {
+      transform: translateX(6px);
+      opacity: 0;
     }
-    .chooserChip :global(svg) { width: 14px; height: 14px; display: block; }
-    
+  }
+  @keyframes tagRemoveCircle {
+    0% {
+      transform: translate(-50%, -50%) scale(0.2);
+      opacity: 0.8;
+    }
+    100% {
+      transform: translate(-50%, -50%) scale(1.05);
+      opacity: 0;
+    }
+  }
+  @keyframes tagAddSlide {
+    0% {
+      transform: translateX(6px);
+      opacity: 0;
+    }
+    100% {
+      transform: translateX(0);
+      opacity: 1;
+    }
+  }
+  .chooserChip :global(svg) {
+    width: 14px;
+    height: 14px;
+    display: block;
+  }
 </style>
-

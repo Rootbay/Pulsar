@@ -1,7 +1,5 @@
 <script lang="ts">
-  import { createEventDispatcher } from 'svelte';
   import { keybinds } from '../stores/keybinds';
-  import { writable, type Writable } from 'svelte/store';
   import type { Keybind } from '../config/keybinds';
   import {
     Dialog,
@@ -17,15 +15,19 @@
   import { cn } from '$lib/utils';
   import { X } from '@lucide/svelte';
 
-  const dispatch = createEventDispatcher();
+  interface Props {
+    onclose?: () => void;
+  }
 
-  let dialogOpen = true;
-  const duplicateKeybinds: Writable<Record<string, boolean>> = writable({});
-  const shakeInput: Writable<Record<string, boolean>> = writable({});
+  let { onclose }: Props = $props();
+
+  let dialogOpen = $state(true);
+  let duplicateKeybinds = $state<Record<string, boolean>>({});
+  let shakeInput = $state<Record<string, boolean>>({});
 
   function close() {
     dialogOpen = false;
-    dispatch('close');
+    onclose?.();
   }
 
   function validateKeybinds() {
@@ -54,7 +56,7 @@
       }
     });
 
-    duplicateKeybinds.set(newDuplicateState);
+    duplicateKeybinds = newDuplicateState;
     return !hasDuplicates;
   }
 
@@ -88,15 +90,15 @@
     }
 
     const shakeState: Record<string, boolean> = {};
-    for (const [name, hasDuplicate] of Object.entries($duplicateKeybinds)) {
+    for (const [name, hasDuplicate] of Object.entries(duplicateKeybinds)) {
       if (hasDuplicate) {
         shakeState[name] = true;
       }
     }
-    shakeInput.set(shakeState);
+    shakeInput = shakeState;
 
     setTimeout(() => {
-      shakeInput.set({});
+      shakeInput = {};
     }, 500);
   }
 
@@ -115,7 +117,7 @@
   <DialogContent class="sm:max-w-3xl">
     <button
       type="button"
-      class="absolute right-4 top-4 inline-flex size-8 items-center justify-center rounded-md text-muted-foreground transition hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      class="text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-ring absolute top-4 right-4 inline-flex size-8 items-center justify-center rounded-md transition focus-visible:ring-2 focus-visible:outline-none"
       onclick={close}
       aria-label="Close keyboard shortcuts popup"
     >
@@ -132,20 +134,23 @@
     <ScrollArea class="max-h-[60vh] pr-2">
       <div class="flex flex-col gap-4 pr-2">
         {#each $keybinds as keybind (keybind.name)}
-          <div class="flex flex-col gap-4 rounded-lg border border-border/40 bg-muted/30 p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div
+            class="border-border/40 bg-muted/30 flex flex-col gap-4 rounded-lg border p-4 sm:flex-row sm:items-center sm:justify-between"
+          >
             <div class="flex flex-col gap-1">
-              <span class="text-sm font-medium text-foreground">{keybind.name}</span>
-              <span class="text-xs text-muted-foreground">{keybind.description}</span>
+              <span class="text-foreground text-sm font-medium">{keybind.name}</span>
+              <span class="text-muted-foreground text-xs">{keybind.description}</span>
             </div>
             <Input
               bind:value={keybind.key}
               class={cn(
-                'h-10 w-44 shrink-0 font-mono text-sm shadow-none focus-visible:ring-2 focus-visible:ring-ring/50',
-                $duplicateKeybinds[keybind.name] && 'border-destructive ring-1 ring-destructive/40 focus-visible:ring-destructive/50',
-                $shakeInput[keybind.name] && 'animate-shake'
+                'focus-visible:ring-ring/50 h-10 w-44 shrink-0 font-mono text-sm shadow-none focus-visible:ring-2',
+                duplicateKeybinds[keybind.name] &&
+                  'border-destructive ring-destructive/40 focus-visible:ring-destructive/50 ring-1',
+                shakeInput[keybind.name] && 'animate-shake'
               )}
               readonly
-              aria-invalid={$duplicateKeybinds[keybind.name] ?? false}
+              aria-invalid={duplicateKeybinds[keybind.name] ?? false}
               onkeydown={(event) => handleKeydown(event, keybind.name)}
             />
           </div>
@@ -158,12 +163,8 @@
         Reset to defaults
       </Button>
       <div class="flex items-center gap-2">
-        <Button type="button" variant="outline" onclick={close}>
-          Cancel
-        </Button>
-        <Button type="button" onclick={handleSave}>
-          Save changes
-        </Button>
+        <Button type="button" variant="outline" onclick={close}>Cancel</Button>
+        <Button type="button" onclick={handleSave}>Save changes</Button>
       </div>
     </DialogFooter>
   </DialogContent>
@@ -171,26 +172,31 @@
 
 <style>
   :global(.animate-shake) {
-    animation: shake 0.5s cubic-bezier(.36, .07, .19, .97) both;
+    animation: shake 0.5s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
     transform: translate3d(0, 0, 0);
     backface-visibility: hidden;
     perspective: 1000px;
   }
 
   @keyframes shake {
-    10%, 90% {
+    10%,
+    90% {
       transform: translate3d(-1px, 0, 0);
     }
 
-    20%, 80% {
+    20%,
+    80% {
       transform: translate3d(2px, 0, 0);
     }
 
-    30%, 50%, 70% {
+    30%,
+    50%,
+    70% {
       transform: translate3d(-4px, 0, 0);
     }
 
-    40%, 60% {
+    40%,
+    60% {
       transform: translate3d(4px, 0, 0);
     }
   }

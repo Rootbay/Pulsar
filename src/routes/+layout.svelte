@@ -14,6 +14,8 @@
   import { appearanceSettings } from '$lib/stores/appearance';
   import { initClipboardService } from '$lib/utils/clipboardService';
 
+  let { children } = $props();
+
   const AUTH_ROUTES = new Set(['/select-vault', '/setup', '/login', '/totp']);
 
   onMount(() => {
@@ -22,28 +24,27 @@
     });
   });
 
-  $: if (browser) {
-    const htmlElement = document.documentElement;
-    const currentTheme = $appearanceSettings.theme;
+  $effect(() => {
+    if (browser) {
+      const htmlElement = document.documentElement;
+      const currentTheme = $appearanceSettings.theme;
 
-    htmlElement.classList.remove('theme-light', 'theme-dark', 'theme-system');
+      htmlElement.classList.remove('theme-light', 'theme-dark', 'theme-system');
 
-    if (currentTheme === 'system') {
-      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-      htmlElement.classList.add(prefersDark ? 'theme-dark' : 'theme-light');
-    } else {
-      htmlElement.classList.add(`theme-${currentTheme}`);
+      if (currentTheme === 'system') {
+        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        htmlElement.classList.add(prefersDark ? 'theme-dark' : 'theme-light');
+      } else {
+        htmlElement.classList.add(`theme-${currentTheme}`);
+      }
     }
-  }
+  });
 
-  $: needsTotp =
-    $totpRequired &&
-    !$totpVerified &&
-    $isDatabaseLoaded &&
-    !$isLocked &&
-    !$needsPasswordSetup;
+  const needsTotp = $derived(
+    $totpRequired && !$totpVerified && $isDatabaseLoaded && !$isLocked && !$needsPasswordSetup
+  );
 
-  $: requiredAuthRoute =
+  const requiredAuthRoute = $derived(
     !$isDatabaseLoaded
       ? '/select-vault'
       : $needsPasswordSetup
@@ -52,19 +53,22 @@
           ? '/login'
           : needsTotp
             ? '/totp'
-            : null;
+            : null
+  );
 
-  $: if (browser) {
-    const currentPath = $page.url.pathname;
+  $effect(() => {
+    if (browser) {
+      const currentPath = $page.url.pathname;
 
-    if (requiredAuthRoute) {
-      if (currentPath !== requiredAuthRoute) {
-        goto(requiredAuthRoute, { replaceState: true });
+      if (requiredAuthRoute) {
+        if (currentPath !== requiredAuthRoute) {
+          goto(requiredAuthRoute, { replaceState: true });
+        }
+      } else if (AUTH_ROUTES.has(currentPath)) {
+        goto('/', { replaceState: true });
       }
-    } else if (AUTH_ROUTES.has(currentPath)) {
-      goto('/', { replaceState: true });
     }
-  }
+  });
 </script>
 
-<slot />
+{@render children()}

@@ -48,7 +48,6 @@ pub async fn export_vault_backend(
         return Err(Error::Validation("A passphrase is required to export the vault.".to_string()));
     }
 
-    // 1. Fetch data from DB
     let key = get_key(&state).await?;
     let db_pool = get_db_pool(&state).await?;
 
@@ -66,7 +65,6 @@ pub async fn export_vault_backend(
 
     let vault_data = serde_json::to_string(&snapshot)?;
 
-    // 2. Determine destination path
     let file_extension = if is_plaintext { "json" } else { "pulsar" };
     let default_file_name = format!("vault_backup.{}", file_extension);
 
@@ -90,7 +88,6 @@ pub async fn export_vault_backend(
         }
     };
 
-    // 3. Write to file (Plaintext or Encrypted)
     if is_plaintext {
         let pretty_bytes = serde_json::to_vec_pretty(&snapshot)?;
         fs::write(&path, pretty_bytes)?;

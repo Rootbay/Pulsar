@@ -10,7 +10,7 @@ interface SettingsModule<T> extends Writable<T> {
     hasUnsavedChanges: Readable<boolean>;
 }
 
-function createSecureStore<T>(key: string, startValue: T): SettingsModule<T> {
+function createLocalStorageStore<T>(key: string, startValue: T): SettingsModule<T> {
     const initialValue = writable<T>(startValue);
     const settings = writable<T>(startValue);
 
@@ -66,6 +66,6 @@ function createSecureStore<T>(key: string, startValue: T): SettingsModule<T> {
     };
 }
 
-export const secureStorage = {
-    createStore: createSecureStore,
+export const localStorageAdapter = {
+    createStore: createLocalStorageStore,
 };

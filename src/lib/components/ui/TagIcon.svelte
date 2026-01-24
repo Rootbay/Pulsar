@@ -1,5 +1,8 @@
 <script lang="ts">
-  import Icon from "../ui/Icon.svelte";
+    import Icon from "$lib/components/ui/Icon.svelte";
+    
+    export let tagName: string;
+    export let buttons: any[] = [];
   import { flip } from 'svelte/animate';
   import { fade, scale } from 'svelte/transition';
   import { tick } from 'svelte';

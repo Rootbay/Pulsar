@@ -1,8 +1,7 @@
 <svelte:options runes />
 <script lang="ts">
-  import { tick } from 'svelte';
-  import Icon from '../ui/Icon.svelte';
-
+  import Icon from '$lib/components/ui/Icon.svelte';
+  
   interface Props {
     url?: string;
     fallbackIcon: string;
@@ -31,7 +30,6 @@
   let iconSrc = $state<string | null>(null);
   let hasError = $state(false);
   let pulseActive = $state(false);
-  // Fallback SVG size: fixed 18px for list; fixed 17px for default (main)
   const innerIconSize = $derived(() => (variant === 'list' ? 18 : 17));
 
   let faviconCache: Map<string, string>;
@@ -56,12 +54,10 @@
     }
   }
   $effect(() => {
-    // Always reset state when URL changes
     iconSrc = null;
     hasError = false;
 
     if (!url) {
-      // No URL provided -> use fallback immediately
       hasError = true;
       return;
     }
@@ -72,7 +68,6 @@
         iconSrc = faviconCache.get(domain)!;
         tick();
       } else {
-        // Prefer real site favicon over generic letter tiles
         const faviconUrl = `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=128`;
         const img = new Image();
         img.src = faviconUrl;
@@ -93,7 +88,6 @@
     }
   });
 
-  // Trigger a micro pulse when fallbackColor changes (used when favicon missing)
   $effect(() => {
     if (hasError || !iconSrc) {
       if (prevColor === null) {

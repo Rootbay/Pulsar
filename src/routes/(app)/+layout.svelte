@@ -10,6 +10,7 @@
   import { invoke } from '@tauri-apps/api/core';
   import type { PasswordItem } from '../+layout.ts';
   import { onMount, tick } from 'svelte';
+  import { profileSettings } from '$lib/stores/profile';
 
   interface Button {
     id: number;
@@ -74,6 +75,7 @@
 
   $: if (!$isLocked) {
     loadPasswordItems();
+    profileSettings.load();
   }
 
   async function handleLock() {

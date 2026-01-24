@@ -24,7 +24,8 @@
   } from '$lib/components/ui/card';
   import { isDatabaseLoaded, isLocked, needsPasswordSetup, totpVerified, totpRequired } from '$lib/stores';
   import { currentLocale } from '$lib/i18n';
-  import { Lock, Loader2, Eye, EyeOff, ArrowLeft } from '@lucide/svelte';
+  import { Lock, Loader2, Eye, EyeOff, ArrowLeft, Fingerprint } from '@lucide/svelte';
+  import { onMount } from 'svelte';
 
   const t = (locale: 'en' | 'sv', en: string, sv: string) => (locale === 'sv' ? sv : en);
   $: locale = $currentLocale as 'en' | 'sv';
@@ -33,6 +34,59 @@
   let loginError: string | null = null;
   let isUnlocking = false;
   let showPassword = false;
+  let isBiometricsAvailable = false;
+  let isBiometricUnlocking = false;
+
+  onMount(() => {
+    checkBiometrics();
+  });
+
+  async function checkBiometrics() {
+    try {
+      isBiometricsAvailable = await invoke<boolean>('is_biometrics_enabled');
+      if (isBiometricsAvailable) {
+        // Optional: Auto-prompt on load?
+        // handleBiometricUnlock(); 
+      }
+    } catch (err) {
+      console.error('Biometric check failed:', err);
+    }
+  }
+
+  async function handleBiometricUnlock() {
+    if (isBiometricUnlocking || isUnlocking) return;
+    isBiometricUnlocking = true;
+    loginError = null;
+
+    try {
+       const { authenticate } = await import('@tauri-apps/plugin-biometric');
+       await authenticate('Unlock your vault');
+       
+       // If successful (didn't throw), get key from backend
+       const result = await invoke<{ totp_required: boolean }>('unlock_with_biometrics');
+       
+       if (result?.totp_required) {
+          totpRequired.set(true);
+          totpVerified.set(false);
+          isLocked.set(false);
+          await goto('/totp', { replaceState: true });
+        } else {
+          totpRequired.set(false);
+          totpVerified.set(true);
+          isLocked.set(false);
+          await goto('/', { replaceState: true });
+        }
+    } catch (error) {
+        console.error('Biometric unlock failed:', error);
+        // Don't show generic error for cancellation
+        const msg = typeof error === 'string' ? error : (error as Error).message;
+        if (!msg.toLowerCase().includes('cancel') && !msg.toLowerCase().includes('user canceled')) {
+             loginError = t(locale, 'Biometric unlock failed.', 'Biometrisk upplåsning misslyckades.');
+        }
+    } finally {
+        isBiometricUnlocking = false;
+    }
+  }
 
   $: if (browser) {
     if (!$isDatabaseLoaded) {
@@ -97,11 +151,9 @@
 
   $: canSubmit = password.trim().length > 0 && !isUnlocking;
 
-  // Background blobs: keep only slow pulse (no mouse tracking)
 </script>
 
-<!-- Background -->
-<div class="relative min-h-screen bg-gradient-to-b from-background to-background/80">
+<div class="relative min-h-screen bg-linear-to-b from-background to-background/80">
     <button
       type="button"
       class="absolute left-4 top-4 z-10 flex items-center gap-1 rounded-md px-2 py-1 text-sm text-muted-foreground transition hover:text-foreground"
@@ -111,13 +163,12 @@
       {t(locale, 'Back', 'Tillbaka')}
     </button>
     <div class="pointer-events-none absolute inset-0 -z-10">
-      <div class="absolute left-[10%] top-[10%] size-[28rem] rounded-full bg-primary/10 blur-3xl blob-a"></div>
-      <div class="absolute right-[10%] bottom-[12%] size-[22rem] rounded-full bg-muted/40 blur-2xl blob-b"></div>
+      <div class="absolute left-[10%] top-[10%] size-112 rounded-full bg-primary/10 blur-3xl blob-a"></div>
+      <div class="absolute right-[10%] bottom-[12%] size-88 rounded-full bg-muted/40 blur-2xl blob-b"></div>
     </div>
 
-  <!-- Centered card -->
   <div class="mx-auto grid min-h-screen w-full place-items-center px-4">
-    <Card class="w-full max-w-md border-border/60 bg-card/80 backdrop-blur supports-[backdrop-filter]:bg-card/70">
+    <Card class="w-full max-w-md border-border/60 bg-card/80 backdrop-blur supports-backdrop-filter:bg-card/70">
       <form class="flex flex-col" onsubmit={handleSubmit}>
         <CardHeader class="space-y-0 text-center">
           <div class="mx-auto mb-2 flex size-12 items-center justify-center rounded-xl bg-primary/10 text-primary">
@@ -179,6 +230,24 @@
               {t(locale, 'Unlock', 'Lås upp')}
             {/if}
           </Button>
+          
+          {#if isBiometricsAvailable}
+            <Button 
+                type="button" 
+                variant="outline" 
+                class="w-full gap-2" 
+                onclick={handleBiometricUnlock}
+                disabled={isBiometricUnlocking || isUnlocking}
+            >
+                {#if isBiometricUnlocking}
+                    <Loader2 class="size-4 animate-spin" />
+                {:else}
+                    <Fingerprint class="size-4" />
+                {/if}
+                {t(locale, 'Unlock with Biometrics', 'Lås upp med biometrik')}
+            </Button>
+          {/if}
+
           <Button type="button" variant="ghost" class="w-full" onclick={handleChangeDatabase}>
             {t(locale, 'Open another vault', 'Öppna ett annat valv')}
           </Button>
@@ -198,18 +267,17 @@
   .crypto-tagline {
     position: relative;
     display: inline-block;
-    padding: 0.4rem 0.75rem; /* larger hover hit-area */
+    padding: 0.4rem 0.75rem;
     border-radius: 0.5rem;
     cursor: default;
     color: hsl(var(--muted-foreground));
     text-rendering: optimizeLegibility;
     transition: color 200ms ease, transform 200ms ease, filter 300ms ease;
   }
-  /* subtle glow container */
   .crypto-tagline::before {
     content: '';
     position: absolute;
-    inset: -0.1rem -0.25rem; /* extend glow slightly beyond padded area */
+    inset: -0.1rem -0.25rem;
     border-radius: .5rem;
     background: radial-gradient(60% 60% at 50% 60%,
       color-mix(in oklab, hsl(var(--primary)) 40%, transparent) 0%,
@@ -220,7 +288,6 @@
     pointer-events: none;
     transition: opacity 250ms ease;
   }
-  /* animated underline */
   .crypto-tagline::after {
     content: '';
     position: absolute;
@@ -241,7 +308,6 @@
   .crypto-tagline:hover::before { opacity: .85; }
   .crypto-tagline:hover::after { width: 100%; left: 0; opacity: 1; }
 
-  /* slow, subtle background pulses */
   .blob-a {
     animation: blobPulseA 18s ease-in-out infinite both;
     transform-origin: center;
@@ -265,8 +331,6 @@
     50% { transform: scale(0.92); opacity: 0.7; }
     100% { transform: scale(1.04); opacity: 0.35; }
   }
-
-  /* (no mouse-responsive overlay; keep gentle pulses only) */
 </style>
 
 

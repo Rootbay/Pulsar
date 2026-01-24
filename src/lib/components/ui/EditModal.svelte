@@ -3,9 +3,10 @@
     import Switch from './Switch.svelte';
     import { createEventDispatcher } from 'svelte';
     import { currentLocale } from '$lib/i18n';
+    import { X } from '@lucide/svelte';
 
     export let show: boolean;
-    export let item: any; // This will be either a preset or a rule
+    export let item: any;
     export let type: 'preset' | 'rule';
     
     const dispatch = createEventDispatcher();
@@ -36,10 +37,7 @@
 <div class="overlay" role="presentation" on:pointerdown|self={handleCancel}>
   <div class="dialog">
     <button class="close-button" on:click={close} aria-label="Close edit modal">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="m18 6-12 12"/>
-            <path d="m6 6 12 12"/>
-        </svg>
+        <X class="size-4" />
     </button>
     <div class="dialog-header">
         <h2 class="dialog-title">

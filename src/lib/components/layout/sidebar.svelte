@@ -4,7 +4,7 @@
   import { iconPaths } from '$lib/icons';
   import { filterCategory, selectedTag } from '$lib/stores';
   import { goto } from '$app/navigation';
-  import Icon from '../ui/Icon.svelte';
+  import Icon from '$lib/components/ui/Icon.svelte';
   import { Globe, Plus, Settings } from '@lucide/svelte';
   import {
     ContextMenu,

@@ -7,6 +7,7 @@ mod crypto;
 mod db;
 mod db_commands;
 mod encryption;
+mod error;
 mod file_dialog;
 mod security;
 mod state;
@@ -19,22 +20,23 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 
 use crate::state::AppState;
+use crate::error::{Error, Result};
 use tauri::State;
 use tauri_plugin_store::StoreBuilder;
 
 #[tauri::command]
-async fn is_database_loaded(app_state: State<'_, AppState>) -> Result<bool, String> {
+async fn is_database_loaded(app_state: State<'_, AppState>) -> Result<bool> {
     Ok(app_state.db.lock().await.is_some())
 }
 
 #[tauri::command]
-async fn get_active_db_path(app_state: State<'_, AppState>) -> Result<Option<String>, String> {
+async fn get_active_db_path(app_state: State<'_, AppState>) -> Result<Option<String>> {
     let guard = app_state.db_path.lock().await;
     Ok(guard.as_ref().map(|p| p.to_string_lossy().to_string()))
 }
 
 #[tauri::command]
-async fn switch_database(db_path: PathBuf, app_state: State<'_, AppState>) -> Result<(), String> {
+async fn switch_database(db_path: PathBuf, app_state: State<'_, AppState>) -> Result<()> {
     let key_opt = {
         let guard = app_state.key.lock().await;
         guard.clone()
@@ -50,12 +52,15 @@ async fn switch_database(db_path: PathBuf, app_state: State<'_, AppState>) -> Re
                 db_path.display(),
                 e
             );
-            return Err(e);
+            return Err(Error::Internal(e));
         }
     };
 
     {
         let mut guard = app_state.db.lock().await;
+        if let Some(old_pool) = guard.take() {
+            old_pool.close().await;
+        }
         *guard = Some(new_pool);
     }
 
@@ -78,6 +83,7 @@ async fn switch_database(db_path: PathBuf, app_state: State<'_, AppState>) -> Re
 }
 
 fn main() {
+
     let context = tauri::generate_context!();
     tauri::Builder::default()
         .manage(AppState {
@@ -91,12 +97,12 @@ fn main() {
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        // .plugin(tauri_plugin_biometric::init())
         .plugin(tauri_plugin_store::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
             is_database_loaded,
             get_active_db_path,
             switch_database,
-            // Auth commands
             auth::set_master_password,
             auth::unlock,
             auth::verify_login_totp,
@@ -109,6 +115,10 @@ fn main() {
             auth::lock,
             auth::is_locked,
             auth::is_master_password_configured,
+            auth::enable_biometrics,
+            auth::disable_biometrics,
+            auth::is_biometrics_enabled,
+            auth::unlock_with_biometrics,
             // DB commands
             db_commands::save_button,
             db_commands::get_buttons,
@@ -120,34 +130,38 @@ fn main() {
             db_commands::update_password_item_tags,
             db_commands::update_password_item_totp_secret,
             db_commands::delete_password_item,
+            db_commands::wipe_vault_database,
             db_commands::add_custom_field,
+            db_commands::add_attachment,
+            db_commands::delete_attachment,
+            db_commands::save_attachment_to_disk,
             db_commands::save_recipient_key,
             db_commands::get_recipient_keys,
             db_commands::delete_recipient_key,
-            // Crypto / export commands
+            db_commands::save_profile_settings,
+            db_commands::get_profile_settings,
             crypto::export_password_entry,
             crypto::generate_x25519_keypair,
             crypto::export_password_entry_to_public_key,
             crypto::import_password_entry_with_private_key,
-            // TOTP commands for vault items
             totp::generate_totp_secret,
             totp::generate_totp,
             totp::verify_totp,
-            // File Dialog commands
             file_dialog::pick_open_file,
             file_dialog::pick_save_file,
             file_dialog::elevated_copy,
             file_dialog::check_file_exists,
-            // Backup commands
             backup_commands::export_vault,
+            backup_commands::export_vault_backend,
             backup_commands::import_vault,
+            backup_commands::restore_vault_backend,
             backup_commands::restore_vault_snapshot,
             vault_commands::list_vaults,
-            // Security commands
             security::list_devices,
             security::remove_device,
             security::revoke_all_devices,
             security::wipe_memory,
+            security::get_security_report,
             security::run_integrity_check,
             get_all_settings,
             set_all_settings,
@@ -159,29 +173,65 @@ fn main() {
         .expect("error while running tauri application");
 }
 
+use keyring::Entry;
+use crate::encryption::{encrypt, decrypt};
+use base64::{engine::general_purpose, Engine as _};
+use rand::{rngs::OsRng, RngCore};
+
+const SETTINGS_KEYRING_SERVICE: &str = "pulsar-settings";
+const SETTINGS_KEYRING_USER: &str = "encryption-key";
+
+fn get_or_create_settings_key() -> Result<Vec<u8>> {
+    let entry = Entry::new(SETTINGS_KEYRING_SERVICE, SETTINGS_KEYRING_USER).map_err(|e| Error::Internal(e.to_string()))?;
+    match entry.get_password() {
+        Ok(key_b64) => {
+            general_purpose::STANDARD.decode(&key_b64).map_err(|e| Error::Internal(e.to_string()))
+        }
+        Err(keyring::Error::NoEntry) => {
+            let mut key = [0u8; 32];
+            OsRng.fill_bytes(&mut key);
+            let key_b64 = general_purpose::STANDARD.encode(key);
+            entry.set_password(&key_b64).map_err(|e| Error::Internal(e.to_string()))?;
+            Ok(key.to_vec())
+        }
+        Err(e) => Err(Error::Internal(e.to_string())),
+    }
+}
+
 #[tauri::command]
-async fn get_all_settings(app_handle: tauri::AppHandle) -> Result<Option<String>, String> {
+async fn get_all_settings(app_handle: tauri::AppHandle) -> Result<Option<String>> {
     let store = StoreBuilder::new(&app_handle, ".settings.dat".parse::<PathBuf>().unwrap())
         .build()
-        .map_err(|e| e.to_string())?;
-    store.reload().map_err(|e| e.to_string())?; // Changed load() to reload()
+        .map_err(|e| Error::Internal(e.to_string()))?;
+    store.reload().map_err(|e| Error::Internal(e.to_string()))?;
+
+    if let Some(encrypted_val) = store.get("settings_encrypted") {
+        let encrypted_str = encrypted_val.as_str().ok_or_else(|| Error::Internal("Invalid encrypted settings format".to_string()))?;
+        let key = get_or_create_settings_key()?;
+        let decrypted = decrypt(encrypted_str, &key)?;
+        return Ok(Some(decrypted));
+    }
+
+    // Fallback for old plaintext settings
     Ok(store.get("settings").map(|v| v.to_string()))
 }
 
 #[tauri::command]
-async fn set_all_settings(app_handle: tauri::AppHandle, settings: String) -> Result<(), String> {
+async fn set_all_settings(app_handle: tauri::AppHandle, settings: String) -> Result<()> {
     let store = StoreBuilder::new(&app_handle, ".settings.dat".parse::<PathBuf>().unwrap())
         .build()
-        .map_err(|e| e.to_string())?;
-    store.reload().map_err(|e| e.to_string())?;
+        .map_err(|e| Error::Internal(e.to_string()))?;
+    store.reload().map_err(|e| Error::Internal(e.to_string()))?;
 
-    // Persist as structured JSON rather than a plain string
-    let value: serde_json::Value = serde_json::from_str(&settings).map_err(|e| e.to_string())?;
-    (*store).set("settings".to_string(), value);
+    let key = get_or_create_settings_key()?;
+    let encrypted = encrypt(&settings, &key)?;
+
+    (*store).set("settings_encrypted".to_string(), serde_json::Value::String(encrypted));
 
     match (*store).save() {
         Ok(()) => {}
-        Err(e) => return Err(e.to_string()),
+        Err(e) => return Err(Error::Internal(e.to_string())),
     }
     Ok(())
 }
+

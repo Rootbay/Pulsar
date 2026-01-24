@@ -42,6 +42,7 @@ function createVaultSettingsStore() {
             }
 
             appSettings.update((settings) => {
+                if (!activeVaultId) return settings;
                 const existing = settings.vaultSettingsById[activeVaultId];
                 settings.vaultSettingsById = {
                     ...settings.vaultSettingsById,
@@ -53,6 +54,7 @@ function createVaultSettingsStore() {
                 return settings;
             });
         },
+
         clear: (vaultId: string) => {
             appSettings.update((settings) => {
                 if (!(vaultId in settings.vaultSettingsById)) {

@@ -27,39 +27,82 @@ export function buildDisplayFields(
 		return [];
 	}
 
-	const staticFields: DisplayField[] = [
-		{
-			id: 'username',
-			name: 'Username',
-			value: item.username ?? null,
-			type: 'text',
-			icon: icons.user
-		},
-		{
-			id: 'password',
-			name: 'Password',
-			value: item.password ?? null,
-			type: 'password',
-			icon: icons.key
-		},
-		...(item.totp_secret
-			? [createTotpField(item.totp_secret, icons.security)]
-			: []),
-		{
-			id: 'url',
-			name: 'URL',
-			value: item.url ?? null,
-			type: 'text',
-			icon: icons.link
-		},
-		{
-			id: 'notes',
-			name: 'Notes',
-			value: item.notes ?? null,
-			type: 'multiline',
-			icon: icons.notes
-		}
-	];
+	let staticFields: DisplayField[] = [];
+
+	const category = item.category || 'login';
+
+	if (category === 'login') {
+		staticFields = [
+			{
+				id: 'username',
+				name: 'Username',
+				value: item.username ?? null,
+				type: 'text',
+				icon: icons.user
+			},
+			{
+				id: 'password',
+				name: 'Password',
+				value: item.password ?? null,
+				type: 'password',
+				icon: icons.key
+			},
+			...(item.totp_secret
+				? [createTotpField(item.totp_secret, icons.security)]
+				: []),
+			{
+				id: 'url',
+				name: 'URL',
+				value: item.url ?? null,
+				type: 'text',
+				icon: icons.link
+			}
+		];
+	} else if (category === 'card') {
+		staticFields = [
+			{
+				id: 'username',
+				name: 'Cardholder Name',
+				value: item.username ?? null,
+				type: 'text',
+				icon: icons.user
+			},
+			{
+				id: 'password',
+				name: 'Card Number',
+				value: item.password ?? null,
+				type: 'password',
+				icon: icons.key
+			}
+		];
+	} else if (category === 'identity') {
+		staticFields = [
+			{
+				id: 'password',
+				name: 'Full Name',
+				value: item.password ?? null,
+				type: 'text',
+				icon: icons.user
+			},
+			{
+				id: 'username',
+				name: 'Email',
+				value: item.username ?? null,
+				type: 'text',
+				icon: icons.user
+			}
+		];
+	}
+
+	// Always add notes if it has content or if we are in a generic view
+	// For 'note' category, notes is the primary field
+	staticFields.push({
+		id: 'notes',
+		name: category === 'note' ? 'Secure Note' : 'Notes',
+		value: item.notes ?? null,
+		type: 'multiline',
+		icon: icons.notes
+	});
 
 	const customFields: DisplayField[] = (item.custom_fields ?? []).map((field) => ({
 		id: field.name,

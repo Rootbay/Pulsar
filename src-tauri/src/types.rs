@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use validator::Validate;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Button {
     pub id: i64,
     pub text: String,
@@ -9,10 +9,29 @@ pub struct Button {
     pub color: String,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct CustomField {
+    pub name: String,
+    pub value: String,
+    pub field_type: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct Attachment {
+    pub id: i64,
+    pub item_id: i64,
+    pub file_name: String,
+    pub file_size: i64,
+    pub mime_type: String,
+    pub created_at: String,
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone, Validate)]
 #[validate(schema(function = "crate::db_commands::validate_password_item_fields"))]
 pub struct PasswordItem {
     pub id: i64,
+    pub category: String,
     pub title: String,
     pub description: Option<String>,
     pub img: Option<String>,
@@ -27,16 +46,10 @@ pub struct PasswordItem {
     pub totp_secret: Option<String>,
     pub custom_fields: Vec<CustomField>,
     pub field_order: Option<Vec<String>>,
+    pub attachments: Option<Vec<Attachment>>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct CustomField {
-    pub name: String,
-    pub value: String,
-    pub field_type: String,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
 pub struct RecipientKey {
     pub id: i64,
     pub name: String,
@@ -44,7 +57,7 @@ pub struct RecipientKey {
     pub private_key: String,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct VaultBackupSnapshot {
     pub version: u32,
@@ -65,9 +78,9 @@ pub struct ExportPayload {
 #[derive(Serialize, Deserialize)]
 pub struct PubKeyExportPayload {
     pub version: u8,
-    pub scheme: String,          // "x25519-ephemeral-static"
-    pub kdf: String,             // "hkdf-sha256"
-    pub enc: String,             // "xchacha20poly1305"
+    pub scheme: String,
+    pub kdf: String,
+    pub enc: String,
     pub recipient_pub_b64: String,
     pub eph_pub_b64: String,
     pub salt_b64: String,

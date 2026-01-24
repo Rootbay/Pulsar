@@ -2,6 +2,8 @@
 <script lang="ts">
   import { get } from 'svelte/store';
   import { onDestroy } from 'svelte';
+  import { invoke } from '@tauri-apps/api/core';
+  import { toast } from 'svelte-sonner';
   import { advancedSettings } from '$lib/stores/advanced';
   import type { AdvancedSettings } from '$lib/config/settings';
   import { Button } from '$lib/components/ui/button';
@@ -99,6 +101,18 @@
   function handleWipeInput(event: Event) {
     const value = (event.target as HTMLInputElement).value;
     applyChanges({ wipeConfirmationText: value });
+  }
+
+  async function handleWipeVault() {
+    if (!canWipeVault) return;
+    
+    try {
+      await invoke('wipe_vault_database');
+      toast.success(t(locale, 'Vault database wiped successfully.', 'Valvdatabasen har raderats.'));
+      applyChanges({ wipeConfirmationText: '' });
+    } catch (error) {
+      toast.error(`${t(locale, 'Failed to wipe vault', 'Misslyckades med att radera valvet')}: ${error}`);
+    }
   }
 
   $: canWipeVault = wipeConfirmationText.trim() === WIPE_CONFIRMATION_TOKEN;
@@ -306,7 +320,7 @@
               : ''
           )}
         />
-        <Button type="button" variant="destructive" class="w-full" disabled={!canWipeVault} onclick={() => {}}>
+        <Button type="button" variant="destructive" class="w-full" disabled={!canWipeVault} onclick={handleWipeVault}>
           {t(locale, 'Wipe Vault Database', 'Radera valvdatabas')}
         </Button>
       </div>

@@ -2,7 +2,7 @@
   import { createEventDispatcher, onMount } from "svelte";
   import { invoke } from "@tauri-apps/api/core";
   import Input from "./Input.svelte";
-  import Icon from "../ui/Icon.svelte";
+  import Icon from "$lib/components/ui/Icon.svelte";
   import { iconPaths } from "$lib/icons";
 
   export let mode: 'create' | 'edit' = 'create';

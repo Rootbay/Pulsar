@@ -10,7 +10,7 @@ function createAppearanceSettingsStore() {
         const unsubscribe = appSettings.subscribe(($appSettings) => {
             const currentSettings = $appSettings.appearance;
             if (!initialSettings) {
-                initialSettings = currentSettings; // Capture initial state
+                initialSettings = currentSettings;
             }
             setReadable(JSON.stringify(currentSettings) !== JSON.stringify(initialSettings));
         });
@@ -32,12 +32,6 @@ function createAppearanceSettingsStore() {
             });
         },
         save: () => {
-            // Since appSettings automatically saves on update, we just need to ensure
-            // appSettings has the latest appearance settings. The `set` and `update`
-            // methods already do this.
-            // If there were external changes to appearanceSettings not via set/update,
-            // we might need a dummy update to appSettings to trigger its save mechanism.
-            // For now, assuming all changes go through set/update.
             appSettings.update(s => s); // Dummy update to trigger appSettings save
         },
         reset: () => {

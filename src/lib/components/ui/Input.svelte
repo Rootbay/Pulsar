@@ -1,5 +1,6 @@
 <script lang="ts">
-  import Icon from "../ui/Icon.svelte";
+    import Icon from "$lib/components/ui/Icon.svelte";
+    
   import { onMount, tick } from "svelte";
   import type { Snippet } from "svelte";
 
@@ -49,7 +50,6 @@
     }
   });
 
-  // Treat empty or literal "N/A" values in read-only mode as placeholders
   const isPlaceholderValue = $derived(() => readOnly && (!inputValue || inputValue === 'N/A'));
 
   function resizeTextarea() {

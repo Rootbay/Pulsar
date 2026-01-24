@@ -3,11 +3,10 @@
 <script lang="ts">
   import type { PasswordItem } from '$lib/types/password';
   import TagList from './TagList.svelte';
-  import Icon from '../ui/Icon.svelte';
+  import { Ellipsis } from '@lucide/svelte';
   import { iconPaths } from '$lib/icons';
   import Favicon from '../ui/Favicon.svelte';
 
-  // Derive the chosen tag's icon (if any) to use as fallback
   const primaryTagName = $derived(() => {
     const raw = selectedPasswordItem?.tags ?? '';
     const first = raw
@@ -116,7 +115,7 @@
           class="more-button"
           onclick={() => (showMoreDropdown = !showMoreDropdown)}
         >
-          <Icon path={iconPaths.more} size="24" color="currentColor" />
+          <Ellipsis class="size-6" />
         </button>
         {#if showMoreDropdown}
           <div class="more-dropdown-menu">

@@ -14,9 +14,10 @@
   import { Label } from '$lib/components/ui/label';
   import { Badge } from '$lib/components/ui/badge';
   import { ScrollArea } from '$lib/components/ui/scroll-area';
-  import { Check, X } from '@lucide/svelte';
-  import Icon from './ui/Icon.svelte';
+  import { Check, X, Key, CreditCard, User, StickyNote } from '@lucide/svelte';
+  import Icon from '$lib/components/ui/Icon.svelte';
   import { cn } from '$lib/utils';
+  import { ChartColumnStacked } from '@lucide/svelte';
 
   interface TagOption {
     id: number;
@@ -29,7 +30,17 @@
 
   const dispatch = createEventDispatcher();
 
+  const categories = [
+    { id: 'login', label: 'Login', icon: Key },
+    { id: 'card', label: 'Credit Card', icon: CreditCard },
+    { id: 'identity', label: 'Identity', icon: User },
+    { id: 'note', label: 'Secure Note', icon: StickyNote }
+  ] as const;
+
+  type CategoryId = (typeof categories)[number]['id'];
+
   let title = '';
+  let selectedCategory: CategoryId = 'login';
   let tags: string[] = [];
   let availableTags: TagOption[] = [];
   let dialogOpen = true;
@@ -80,6 +91,7 @@
       await invoke('save_password_item', {
         item: {
           id: 0,
+          category: selectedCategory,
           title: trimmedTitle,
           username: null,
           url: null,
@@ -119,6 +131,30 @@
       class="grid gap-6"
       onsubmit={savePassword}
     >
+      <div class="grid gap-3">
+        <Label>Category</Label>
+        <div class="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {#each categories as category}
+            <Button
+              type="button"
+              variant={selectedCategory === category.id ? 'secondary' : 'outline'}
+              class={cn(
+                'h-auto flex-col items-center justify-center gap-2 py-3 transition-all',
+                selectedCategory === category.id 
+                  ? 'border-primary/50 bg-primary/10 ring-1 ring-primary/30' 
+                  : 'hover:border-primary/30 hover:bg-primary/5'
+              )}
+              onclick={() => selectedCategory = category.id}
+            >
+              <div class="flex size-8 items-center justify-center rounded-lg bg-background shadow-xs">
+                 <ChartColumnStacked class="size-4.5 text-current" />
+              </div>
+              <span class="text-[10px] font-bold uppercase tracking-wider">{category.label}</span>
+            </Button>
+          {/each}
+        </div>
+      </div>
+
       <div class="grid gap-2">
         <Label for="title">Title</Label>
         <Input
@@ -159,7 +195,7 @@
               <span>{tag}</span>
               <button
                 type="button"
-                class="rounded-full p-[2px] text-xs text-muted-foreground transition hover:bg-foreground/10 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+                class="rounded-full p-0.5 text-xs text-muted-foreground transition hover:bg-foreground/10 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
                 onclick={() => removeTag(tag)}
                 aria-label={`Remove ${tag}`}
               >

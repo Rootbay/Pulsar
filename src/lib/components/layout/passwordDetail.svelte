@@ -1,7 +1,7 @@
 <svelte:options runes />
 
 <script lang="ts">
-        import type { PasswordItem } from '$lib/types/password';
+        import type { PasswordItem, Attachment } from '$lib/types/password';
         import type { DisplayField, TotpDisplayField } from '$lib/types/password-fields';
         import { isTotpDisplayField } from '$lib/types/password-fields';
         import { iconPaths } from '$lib/icons';
@@ -17,9 +17,10 @@
         import PasswordMetadata from './password-detail/PasswordMetadata.svelte';
         import { selectedTag, filterCategory } from '$lib/stores';
         import { quintOut } from 'svelte/easing';
-        import { Copy, Plus, RefreshCw, ShieldCheck, Trash2 } from '@lucide/svelte';
+        import { Copy, Plus, RefreshCw, ShieldCheck, Trash2, FileText, Download, Paperclip } from '@lucide/svelte';
         import { buildDisplayFields } from '$lib/utils/passwordFields';
         import { copyText } from '$lib/utils/copyHelper';
+        import { toast } from 'svelte-sonner';
 
 	function modernFade(node: Element, { duration = 400 } = {}) {
 		const reduce =
@@ -127,6 +128,93 @@
         let totpTokenRefreshing = false;
         let lastSelectedItemId: number | null = null;
 
+        let attachments = $state<Attachment[]>([]);
+        let isAttachmentLoading = $state(false);
+
+        function formatFileSize(bytes: number): string {
+            if (bytes === 0) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+        }
+
+        async function loadAttachments() {
+            if (!selectedPasswordItem?.id) return;
+            // Use the attachments already populated in selectedPasswordItem if available, 
+            // otherwise we might need a dedicated fetch if the list command was light.
+            // Since we updated `get_password_items` to include them, they should be here.
+            // But `selectedPasswordItem` is bound from the parent list.
+            if (selectedPasswordItem.attachments) {
+                attachments = selectedPasswordItem.attachments;
+            } else {
+                // Fallback or refresh
+                attachments = [];
+            }
+        }
+
+        async function handleAddAttachment() {
+            if (!selectedPasswordItem) return;
+            try {
+                const path = await invoke<string | null>('pick_open_file');
+                if (!path) return;
+
+                isAttachmentLoading = true;
+                const newAttachment = await invoke<Attachment>('add_attachment', { 
+                    itemId: selectedPasswordItem.id, 
+                    filePath: path 
+                });
+                
+                attachments = [...attachments, newAttachment];
+                
+                // Update parent object to keep sync
+                selectedPasswordItem = {
+                    ...selectedPasswordItem,
+                    attachments: attachments
+                };
+                toast.success('File attached successfully.');
+            } catch (error) {
+                toast.error(`Failed to attach file: ${toErrorMessage(error)}`);
+            } finally {
+                isAttachmentLoading = false;
+            }
+        }
+
+        async function handleDownloadAttachment(attachment: Attachment) {
+            try {
+                const savePath = await invoke<string | null>('pick_save_file', { 
+                    defaultName: attachment.file_name 
+                });
+                if (!savePath) return;
+
+                await invoke('save_attachment_to_disk', { 
+                    attachmentId: attachment.id, 
+                    savePath 
+                });
+                toast.success('File downloaded successfully.');
+            } catch (error) {
+                toast.error(`Failed to download file: ${toErrorMessage(error)}`);
+            }
+        }
+
+        async function handleDeleteAttachment(attachment: Attachment) {
+            if (!confirm(`Are you sure you want to delete "${attachment.file_name}"?`)) return;
+            
+            try {
+                await invoke('delete_attachment', { id: attachment.id });
+                attachments = attachments.filter(a => a.id !== attachment.id);
+                if (selectedPasswordItem) {
+                    selectedPasswordItem = {
+                        ...selectedPasswordItem,
+                        attachments: attachments
+                    };
+                }
+                toast.success('Attachment deleted.');
+            } catch (error) {
+                toast.error(`Failed to delete attachment: ${toErrorMessage(error)}`);
+            }
+        }
+
 	function handleTagsSaved(detail: { id: number; tags: string }) {
 		dispatch('tagsSaved', detail);
 	}
@@ -187,6 +275,7 @@
                         totpVerificationCode = '';
                         totpVerificationError = null;
                         totpCodeError = null;
+                        loadAttachments();
                 }
         });
 
@@ -970,6 +1059,77 @@
                         {#if totpSuccessMessage}
                                 <p class="mt-3 text-sm text-emerald-400">{totpSuccessMessage}</p>
                         {/if}
+                </section>
+
+                <section class="mt-4 rounded-xl border border-border/60 bg-[color:var(--passworddetail-elevated)] p-4 shadow-sm">
+                    <div class="flex items-center justify-between gap-3 mb-4">
+                        <div class="flex flex-col gap-1">
+                            <h2 class="text-sm font-semibold text-[color:var(--passworddetail-strong-text)]">
+                                Attachments
+                            </h2>
+                            <p class="text-xs text-[color:var(--passworddetail-muted-text)]">
+                                Securely store files encrypted within your vault.
+                            </p>
+                        </div>
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            class="gap-1"
+                            disabled={isAttachmentLoading}
+                            onclick={handleAddAttachment}
+                        >
+                            <Paperclip class="h-4 w-4" />
+                            Add File
+                        </Button>
+                    </div>
+
+                    {#if attachments.length === 0}
+                        <div class="flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border/60 p-6 text-center">
+                            <FileText class="h-8 w-8 text-[color:var(--passworddetail-subtle-text)]" />
+                            <p class="text-sm text-[color:var(--passworddetail-muted-text)]">No files attached</p>
+                        </div>
+                    {:else}
+                        <div class="grid gap-2 sm:grid-cols-2">
+                            {#each attachments as file (file.id)}
+                                <div class="group relative flex items-start gap-3 rounded-lg border border-border/60 bg-[color:var(--passworddetail-secondary-surface)] p-3 transition-colors hover:bg-[color:var(--passworddetail-secondary-hover)]">
+                                    <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-background/50">
+                                        <FileText class="h-5 w-5 text-primary" />
+                                    </div>
+                                    <div class="flex min-w-0 flex-1 flex-col">
+                                        <p class="truncate text-sm font-medium text-[color:var(--passworddetail-strong-text)]" title={file.file_name}>
+                                            {file.file_name}
+                                        </p>
+                                        <p class="text-xs text-[color:var(--passworddetail-muted-text)]">
+                                            {formatFileSize(file.file_size)}
+                                        </p>
+                                    </div>
+                                    <div class="flex items-center opacity-0 transition-opacity group-hover:opacity-100">
+                                        <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="icon"
+                                            class="h-8 w-8 text-[color:var(--passworddetail-muted-text)] hover:text-primary"
+                                            title="Download"
+                                            onclick={() => handleDownloadAttachment(file)}
+                                        >
+                                            <Download class="h-4 w-4" />
+                                        </Button>
+                                        <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="icon"
+                                            class="h-8 w-8 text-[color:var(--passworddetail-muted-text)] hover:text-destructive"
+                                            title="Delete"
+                                            onclick={() => handleDeleteAttachment(file)}
+                                        >
+                                            <Trash2 class="h-4 w-4" />
+                                        </Button>
+                                    </div>
+                                </div>
+                            {/each}
+                        </div>
+                    {/if}
                 </section>
 
         <PasswordMetadata item={selectedPasswordItem} bind:expanded={showTimestamps} />

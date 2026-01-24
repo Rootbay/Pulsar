@@ -1,5 +1,6 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
+  import { ChevronRight } from '@lucide/svelte';
 
   export let title: string;
   export let subtitle: string;
@@ -22,9 +23,7 @@
     <div class="sidebar-title">{title}</div>
     <div class="sidebar-subtitle">{subtitle}</div>
   </div>
-  <svg class="sidebar-arrow" viewBox="0 0 24 24">
-    <path d="m9 18 6-6-6-6" />
-  </svg>
+  <ChevronRight class="sidebar-arrow" />
 </button>
 
 <style>

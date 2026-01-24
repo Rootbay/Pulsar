@@ -210,6 +210,30 @@
     'integrity-check': false
   };
 
+  let healthReport: { reusedPasswords: any[], weakPasswordsCount: number } | null = null;
+  let healthLoading = false;
+  let healthError: string | null = null;
+
+  async function loadSecurityReport() {
+    healthLoading = true;
+    healthError = null;
+    try {
+      healthReport = await invoke('get_security_report');
+    } catch (error) {
+      healthError = parseError(error);
+    } finally {
+      healthLoading = false;
+    }
+  }
+
+  // Biometric State
+  let isBiometricsEnabled = false;
+  let isBiometricActionLoading = false;
+  let biometricModalOpen = false;
+  let biometricPassword = '';
+  let showBiometricPassword = false;
+  let biometricError = '';
+
   const memoryFormatter = new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 });
   const gigabyteFormatter = new Intl.NumberFormat(undefined, { maximumFractionDigits: 1 });
 
@@ -220,6 +244,79 @@
   };
 
   const formatSecret = (secret: string) => secret.replace(/(.{4})/g, '$1 ').trim();
+
+  // ... (existing functions)
+
+  async function loadBiometricsStatus() {
+    try {
+      isBiometricsEnabled = await invoke<boolean>('is_biometrics_enabled');
+    } catch (error) {
+      console.error('Failed to check biometric status:', error);
+    }
+  }
+
+  async function handleBiometricToggle() {
+    if (isBiometricActionLoading) return;
+    
+    if (isBiometricsEnabled) {
+      // Disable
+      isBiometricActionLoading = true;
+      try {
+        await invoke('disable_biometrics');
+        isBiometricsEnabled = false;
+        toast.success('Biometric unlock disabled.');
+      } catch (error) {
+        toast.error(`Failed to disable biometrics: ${parseError(error)}`);
+      } finally {
+        isBiometricActionLoading = false;
+      }
+    } else {
+      // Enable - Open Modal
+      biometricModalOpen = true;
+      biometricPassword = '';
+      biometricError = '';
+    }
+  }
+
+  async function submitBiometricEnable() {
+    if (!biometricPassword) {
+      biometricError = 'Password is required.';
+      return;
+    }
+
+    isBiometricActionLoading = true;
+    biometricError = '';
+    
+    try {
+        // Authenticate user presence first (native prompt)
+        const { authenticate } = await import('@tauri-apps/plugin-biometric');
+        await authenticate('Verify identity to enable biometric unlock');
+        
+        // If successful, store key
+        await invoke('enable_biometrics', { password: biometricPassword });
+        isBiometricsEnabled = true;
+        biometricModalOpen = false;
+        toast.success('Biometric unlock enabled.');
+    } catch (error) {
+        biometricError = parseError(error);
+        // If it was a biometric failure, it usually throws.
+    } finally {
+        isBiometricActionLoading = false;
+    }
+  }
+
+  function toggleBiometricPasswordVisibility() {
+    showBiometricPassword = !showBiometricPassword;
+  }
+
+  function handleBiometricDialogChange(open: boolean) {
+    biometricModalOpen = open;
+    if (!open) {
+      biometricPassword = '';
+      biometricError = '';
+      isBiometricActionLoading = false;
+    }
+  }
 
   function buildProvisioningUri(secret: string) {
     const label = encodeURIComponent(`${TOTP_ISSUER}:${TOTP_ACCOUNT}`);
@@ -440,6 +537,8 @@
   onMount(() => {
     loadArgon2Params();
     loadDevices();
+    loadBiometricsStatus();
+    loadSecurityReport();
   });
 
   onDestroy(() => {
@@ -742,6 +841,81 @@
 </script>
 
 <div class="flex-1 min-h-0 space-y-6 px-6 py-8">
+    <Card class="border-border/60 bg-card/80 backdrop-blur supports-[backdrop-filter]:bg-card/70">
+    <CardHeader class="flex flex-row items-start gap-3 border-b border-border/40 pb-4">
+      <div class="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
+        <ShieldCheck class="h-5 w-5" aria-hidden="true" />
+      </div>
+      <div class="flex w-full items-center justify-between">
+        <div>
+          <CardTitle>{t(locale, 'Vault Health', 'Valvets hälsa')}</CardTitle>
+          <CardDescription>
+            {t(locale, 'Security analysis of your stored items.', 'Säkerhetsanalys av dina sparade poster.')}
+          </CardDescription>
+        </div>
+        <Button variant="ghost" size="sm" onclick={loadSecurityReport} disabled={healthLoading}>
+          <RefreshCw class={cn("h-4 w-4", healthLoading && "animate-spin")} />
+        </Button>
+      </div>
+    </CardHeader>
+    <CardContent class="pt-4">
+      {#if healthLoading && !healthReport}
+        <div class="flex items-center justify-center py-8">
+          <Loader2 class="h-8 w-8 animate-spin text-primary/40" />
+        </div>
+      {:else if healthError}
+        <Alert variant="destructive">
+          <AlertCircle class="h-4 w-4" />
+          <AlertTitle>Error</AlertTitle>
+          <AlertDescription>{healthError}</AlertDescription>
+        </Alert>
+      {:else if healthReport}
+        {@const reusedCount = healthReport.reusedPasswords.length}
+        {@const weakCount = healthReport.weakPasswordsCount}
+        
+        <div class="grid gap-4 sm:grid-cols-2">
+          <div class={cn("rounded-lg border p-4", reusedCount > 0 ? "border-destructive/40 bg-destructive/5" : "border-border/60 bg-muted/20")}>
+            <p class="text-sm font-semibold">{t(locale, 'Reused Passwords', 'Återanvända lösenord')}</p>
+            <p class={cn("text-2xl font-bold mt-1", reusedCount > 0 ? "text-destructive" : "text-foreground")}>{reusedCount}</p>
+            <p class="text-xs text-muted-foreground mt-1">
+              {reusedCount > 0 
+                ? t(locale, 'Multiple items share the same password.', 'Flera poster delar samma lösenord.')
+                : t(locale, 'No password reuse detected.', 'Inga återanvända lösenord upptäckta.')}
+            </p>
+          </div>
+
+          <div class={cn("rounded-lg border p-4", weakCount > 0 ? "border-warning/40 bg-warning/5" : "border-border/60 bg-muted/20")}>
+            <p class="text-sm font-semibold">{t(locale, 'Weak Passwords', 'Svaga lösenord')}</p>
+            <p class={cn("text-2xl font-bold mt-1", weakCount > 0 ? "text-warning-foreground" : "text-foreground")}>{weakCount}</p>
+            <p class="text-xs text-muted-foreground mt-1">
+              {weakCount > 0 
+                ? t(locale, 'Passwords shorter than 8 characters.', 'Lösenord kortare än 8 tecken.')
+                : t(locale, 'No weak passwords detected.', 'Inga svaga lösenord upptäckta.')}
+            </p>
+          </div>
+        </div>
+
+        {#if reusedCount > 0 || weakCount > 0}
+          <div class="mt-4 flex items-start gap-3 rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+            <TriangleAlert class="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+            <p>
+              {t(
+                locale,
+                'Security issues detected. Consider updating shared or short passwords to improve vault integrity.',
+                'Säkerhetsproblem upptäckta. Överväg att uppdatera delade eller korta lösenord för att förbättra valvets säkerhet.'
+              )}
+            </p>
+          </div>
+        {:else}
+          <div class="mt-4 flex items-start gap-3 rounded-lg border border-emerald-500/40 bg-emerald-500/10 p-3 text-sm text-emerald-600">
+            <Check class="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+            <p>{t(locale, 'Your vault health looks great!', 'Din valv hälsa ser utmärkt ut!')}</p>
+          </div>
+        {/if}
+      {/if}
+    </CardContent>
+  </Card>
+
     <Card class="border-border/60 bg-card/80 backdrop-blur supports-[backdrop-filter]:bg-card/70">
     <CardHeader class="flex flex-row items-start gap-3 border-b border-border/40 pb-4">
       <div class="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
@@ -1253,9 +1427,10 @@
           </p>
         </div>
         <Switch
-          checked={currentSettings.biometricUnlock}
+          checked={isBiometricsEnabled}
+          disabled={isBiometricActionLoading}
           aria-label="Toggle biometric unlock"
-          onclick={() => toggleSetting('biometricUnlock')}
+          onclick={handleBiometricToggle}
         />
       </div>
 
@@ -1709,6 +1884,56 @@
           <Loader2 class="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
         {/if}
         {t(locale, 'Apply Changes', 'Verkställ ändringar')}
+      </Button>
+    </DialogFooter>
+  </DialogContent>
+</Dialog>
+
+<Dialog open={biometricModalOpen} onOpenChange={handleBiometricDialogChange}>
+  <DialogContent class="sm:max-w-md">
+    <DialogHeader>
+      <DialogTitle>Enable Biometric Unlock</DialogTitle>
+      <DialogDescription>
+        Enter your master password to securely store the encryption key in your system's keychain.
+      </DialogDescription>
+    </DialogHeader>
+    <div class="space-y-4 py-2">
+      <div class="space-y-2">
+        <Label for="bio-password">Master Password</Label>
+        <div class="relative">
+          <Input
+            id="bio-password"
+            type={showBiometricPassword ? 'text' : 'password'}
+            placeholder="Enter master password"
+            bind:value={biometricPassword}
+            onkeydown={(e) => e.key === 'Enter' && submitBiometricEnable()}
+          />
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            class="absolute right-1 top-1/2 -translate-y-1/2"
+            onclick={toggleBiometricPasswordVisibility}
+          >
+             {#if showBiometricPassword}
+              <EyeOff class="h-4 w-4" />
+            {:else}
+              <Eye class="h-4 w-4" />
+            {/if}
+          </Button>
+        </div>
+      </div>
+      {#if biometricError}
+        <p class="text-sm text-destructive">{biometricError}</p>
+      {/if}
+    </div>
+    <DialogFooter>
+      <Button variant="outline" onclick={() => handleBiometricDialogChange(false)}>Cancel</Button>
+      <Button onclick={submitBiometricEnable} disabled={isBiometricActionLoading}>
+        {#if isBiometricActionLoading}
+          <Loader2 class="mr-2 h-4 w-4 animate-spin" />
+        {/if}
+        Enable
       </Button>
     </DialogFooter>
   </DialogContent>

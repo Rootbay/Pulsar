@@ -1,5 +1,5 @@
 import { writable } from 'svelte/store';
-import { invoke } from '@tauri-apps/api/core';
+import { callBackend } from '../utils/backend';
 import {
     type AdvancedSettings,
     defaultAdvancedSettings,
@@ -66,11 +66,10 @@ export async function initAppSettings() {
     if (isInitialized) return;
 
     try {
-        const storedSettings = await invoke<string | null>('get_all_settings');
+        const storedSettings = await callBackend<string | null>('get_all_settings');
         if (storedSettings) {
             try {
                 let loadedSettings: any = JSON.parse(storedSettings);
-                // Backward compatibility: handle double-encoded JSON strings
                 if (typeof loadedSettings === 'string') {
                     try { loadedSettings = JSON.parse(loadedSettings); } catch {}
                 }
@@ -100,21 +99,17 @@ export async function initAppSettings() {
                     };
                     appSettings.set(mergedSettings);
                 } else {
-                    // loaded settings is not an object (e.g. "null" string was stored)
                     appSettings.set(defaultAllSettings);
                 }
             } catch (e) {
-                // parsing failed
                 console.error("Failed to parse stored settings:", e);
                 appSettings.set(defaultAllSettings);
             }
         } else {
-            // No settings found, save defaults
-            await invoke('set_all_settings', { settings: JSON.stringify(defaultAllSettings) });
+            await callBackend('set_all_settings', { settings: JSON.stringify(defaultAllSettings) });
         }
     } catch (error) {
         console.error('Failed to load settings:', error);
-        // Fallback to defaults if loading fails
         appSettings.set(defaultAllSettings);
     } finally {
         isInitialized = true;
@@ -123,14 +118,15 @@ export async function initAppSettings() {
 
 let saveTimeout: ReturnType<typeof setTimeout>;
 appSettings.subscribe(async (currentSettings) => {
-    if (!isInitialized) return; // Don't save until initialized
+    if (!isInitialized) return;
 
     clearTimeout(saveTimeout);
     saveTimeout = setTimeout(async () => {
         try {
-            await invoke('set_all_settings', { settings: JSON.stringify(currentSettings) });
+            await callBackend('set_all_settings', { settings: JSON.stringify(currentSettings) });
         } catch (error) {
             console.error('Failed to save settings:', error);
         }
-    }, 500); // Debounce saving for 500ms
+    }, 500);
 });
+

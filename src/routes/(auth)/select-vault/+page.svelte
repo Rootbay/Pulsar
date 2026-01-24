@@ -380,33 +380,4 @@
   :global(body) {
     font-family: 'Inter', sans-serif;
   }
-
-  .container {
-    --ds-surface: color-mix(in oklch, var(--background) 92%, var(--muted) 8%);
-    --ds-surface-strong: color-mix(in oklch, var(--background) 80%, var(--muted) 20%);
-    --ds-control-bg: color-mix(in oklch, var(--muted) 85%, transparent 15%);
-    --ds-control-border: color-mix(in oklch, var(--border) 70%, transparent 30%);
-    --ds-control-hover: color-mix(in oklch, var(--primary) 22%, var(--muted) 78%);
-    --ds-control-text: var(--foreground);
-    --ds-primary-gradient-start: color-mix(in oklch, var(--primary) 32%, var(--background) 68%);
-    --ds-primary-gradient-end: color-mix(in oklch, var(--primary) 18%, var(--background) 82%);
-    --ds-primary-gradient-hover-start: color-mix(in oklch, var(--primary) 46%, var(--background) 54%);
-    --ds-primary-gradient-hover-end: color-mix(in oklch, var(--primary) 30%, var(--background) 70%);
-    --ds-muted-text: color-mix(in oklch, var(--foreground) 65%, transparent);
-    --ds-subtle-text: color-mix(in oklch, var(--foreground) 42%, transparent);
-    --ds-hover-row: color-mix(in oklch, var(--muted) 60%, transparent 40%);
-    --ds-error-bg: color-mix(in oklch, var(--destructive) 12%, transparent);
-    --ds-error-border: color-mix(in oklch, var(--destructive) 38%, var(--border) 62%);
-    --ds-circle-glow: color-mix(in oklch, var(--primary) 22%, transparent);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    min-height: 100vh;
-    padding: 4rem 1.5rem 2rem;
-    gap: 2rem;
-    background: var(--background);
-    color: var(--foreground);
-  }
-
-  /* legacy styles kept for layout correctness */
 </style>

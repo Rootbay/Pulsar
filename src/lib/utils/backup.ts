@@ -30,31 +30,11 @@ export interface ImportVaultBackupOptions {
   onProgress?: (stage: ImportVaultProgressStage) => void;
 }
 
-export async function buildVaultSnapshot(): Promise<VaultBackupSnapshot> {
-  const [passwordItems, buttons, recipientKeys] = await Promise.all([
-    invoke<PasswordItem[]>('get_password_items'),
-    invoke<VaultBackupButton[]>('get_buttons'),
-    invoke<VaultBackupRecipientKey[]>('get_recipient_keys')
-  ]);
-
-  return {
-    version: 1,
-    exportedAt: new Date().toISOString(),
-    passwordItems,
-    buttons,
-    recipientKeys
-  };
-}
-
 export async function exportVaultBackup(
   passphrase: string,
   options: { plaintext?: boolean } = {}
 ): Promise<string> {
-  const snapshot = await buildVaultSnapshot();
-  const vaultData = JSON.stringify(snapshot);
-
-  return invoke<string>('export_vault', {
-    vaultData,
+  return invoke<string>('export_vault_backend', {
     passphrase,
     isPlaintext: options.plaintext ?? false
   });
@@ -67,21 +47,11 @@ export async function importVaultBackup(
   const { sourcePath = null, onProgress } = options;
 
   onProgress?.('decrypting');
-  const decrypted = await invoke<string>('import_vault', {
+  // restore_vault_backend handles both decryption AND restoration in one go efficiently
+  const snapshot = await invoke<VaultBackupSnapshot>('restore_vault_backend', {
     passphrase,
     path: sourcePath
   });
-
-  let snapshot: VaultBackupSnapshot;
-  try {
-    snapshot = JSON.parse(decrypted) as VaultBackupSnapshot;
-  } catch (error) {
-    console.error('Failed to parse imported vault snapshot:', error);
-    throw new Error('The imported vault could not be parsed.');
-  }
-
-  onProgress?.('restoring');
-  await invoke('restore_vault_snapshot', { snapshot });
 
   return snapshot;
 }

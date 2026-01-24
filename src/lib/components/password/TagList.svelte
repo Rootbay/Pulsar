@@ -2,11 +2,10 @@
 
 <script lang="ts">
   import type { PasswordItem } from '$lib/types/password';
-  import Icon from '../ui/Icon.svelte';
   import { iconPaths } from '$lib/icons';
-  import { invoke } from '@tauri-apps/api/core';
   import { dndzone } from 'svelte-dnd-action';
   import { flip } from 'svelte/animate';
+  import { Plus } from '@lucide/svelte';
 
   interface Props {
     selectedPasswordItem: PasswordItem | null;
@@ -205,7 +204,7 @@
         aria-expanded={showChooser}
         onclick={() => (showChooser = !showChooser)}
       >
-        <Icon path={iconPaths.plus} size="14" color="currentColor" />
+        <Plus class="size-4" />
         <span>Add tag</span>
       </button>
       {#if showChooser}
@@ -218,7 +217,7 @@
                 style="--tag-color: {tag.color};"
                 onclick={() => addExistingTag(tag.text)}
               >
-                <Icon path={tag.icon} size="14" color="currentColor" />
+                <img source={tag.icon} size="14" alt="tag icon" />
                 <span>{tag.text}</span>
               </button>
             {/each}

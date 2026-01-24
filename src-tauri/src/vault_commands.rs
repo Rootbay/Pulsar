@@ -8,6 +8,7 @@ use tauri::State;
 use tauri_plugin_store::StoreBuilder;
 
 use crate::state::AppState;
+use crate::error::{Error, Result};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
@@ -64,11 +65,11 @@ fn metadata_path(db_path: &Path) -> PathBuf {
         .join(meta_name)
 }
 
-fn load_stored_settings(app_handle: &tauri::AppHandle) -> Result<StoredAppSettings, String> {
+fn load_stored_settings(app_handle: &tauri::AppHandle) -> Result<StoredAppSettings> {
     let store = StoreBuilder::new(app_handle, ".settings.dat".parse::<PathBuf>().unwrap())
         .build()
-        .map_err(|e| e.to_string())?;
-    store.reload().map_err(|e| e.to_string())?;
+        .map_err(|e| Error::Internal(e.to_string()))?;
+    store.reload().map_err(|e| Error::Internal(e.to_string()))?;
 
     let Some(value) = store.get("settings") else {
         return Ok(StoredAppSettings::default());
@@ -76,10 +77,10 @@ fn load_stored_settings(app_handle: &tauri::AppHandle) -> Result<StoredAppSettin
 
     if let Some(raw) = value.as_str() {
         serde_json::from_str::<StoredAppSettings>(raw)
-            .map_err(|e| format!("Failed to parse stored settings: {e}"))
+            .map_err(|e| Error::Internal(format!("Failed to parse stored settings: {e}")))
     } else {
         serde_json::from_value::<StoredAppSettings>(value.clone())
-            .map_err(|e| format!("Failed to parse stored settings value: {e}"))
+            .map_err(|e| Error::Internal(format!("Failed to parse stored settings value: {e}")))
     }
 }
 
@@ -138,7 +139,7 @@ async fn resolve_item_count(pool: Option<SqlitePool>, include: bool) -> Option<u
 pub async fn list_vaults(
     app_handle: tauri::AppHandle,
     state: State<'_, AppState>,
-) -> Result<Vec<VaultInfo>, String> {
+) -> Result<Vec<VaultInfo>> {
     let stored_settings = load_stored_settings(&app_handle)?;
 
     let active_path = { state.db_path.lock().await.clone() };
@@ -216,3 +217,4 @@ pub async fn list_vaults(
 
     Ok(results)
 }
+

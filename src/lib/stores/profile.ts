@@ -1,4 +1,4 @@
-import { secureStorage } from '$lib/utils/secureStorage';
+import { createDatabaseStore } from '$lib/utils/databaseStore';
 
 export interface ProfileSettings {
   name: string;
@@ -18,8 +18,10 @@ export const defaultProfileSettings: ProfileSettings = {
   phone: '+39 555 0100',
 };
 
-export const profileSettings = secureStorage.createStore<ProfileSettings>(
+export const profileSettings = createDatabaseStore<ProfileSettings>(
   'pulsar.profile',
-  defaultProfileSettings
+  defaultProfileSettings,
+  'get_profile_settings',
+  'save_profile_settings'
 );
 

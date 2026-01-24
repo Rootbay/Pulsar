@@ -28,7 +28,6 @@
 </script>
 
 <div class="flex h-screen w-full overflow-hidden bg-background">
-  <!-- Left sidebar -->
   <aside class="hidden h-screen w-64 shrink-0 overflow-y-auto border-r border-border/60 bg-card/50 p-4 md:block">
     <nav class="space-y-1">
       {#each navItems as { href, label, Icon }}
@@ -57,16 +56,14 @@
     </div>
   </aside>
 
-  <!-- Main area -->
   <div class="flex h-screen min-w-0 flex-1 flex-col overflow-hidden">
-    <!-- Top header bar -->
-    <header class="sticky top-0 z-10 w-full border-b border-border/60 bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/70">
-      <div class="mx-auto flex h-14 max-w-[1600px] items-center gap-3 px-4">
+    <header class="sticky top-0 z-10 w-full border-b border-border/60 bg-background/80 backdrop-blur supports-backdrop-filter:bg-background/70">
+      <div class="mx-auto flex h-14 max-w-400 items-center gap-3 px-4">
         <button class="inline-flex items-center justify-center rounded-md p-2 text-muted-foreground hover:bg-muted md:hidden" aria-label="Open menu">
           <Menu class="size-4" />
         </button>
 
-        <div class="relative ml-1 hidden w-[380px] items-center md:flex">
+        <div class="relative ml-1 hidden w-95 items-center md:flex">
           <Search class="pointer-events-none absolute left-2 size-4 text-muted-foreground" />
           <Input class="w-full pl-8 text-sm" placeholder="Search settings" />
         </div>
@@ -75,8 +72,8 @@
           <button class="rounded-md p-2 text-muted-foreground hover:bg-muted" aria-label="Notifications">
             <Bell class="size-4" />
           </button>
-          <Button variant="ghost" class="h-8 px-2 disabled:opacity-50" on:click={() => settingsStore.resetAll()} disabled={!$settingsStore}>Reset</Button>
-          <Button class="h-8 px-3 disabled:opacity-50" on:click={() => settingsStore.saveAll()} disabled={!$settingsStore}>Save</Button>
+          <Button variant="ghost" class="h-8 px-2 disabled:opacity-50" onclick={() => settingsStore.resetAll()} disabled={!$settingsStore}>Reset</Button>
+          <Button class="h-8 px-3 disabled:opacity-50" onclick={() => settingsStore.saveAll()} disabled={!$settingsStore}>Save</Button>
           <Avatar class="h-8 w-8">
             <AvatarImage src="/svelte.svg" alt="Avatar" />
             <AvatarFallback>PV</AvatarFallback>
@@ -85,8 +82,7 @@
       </div>
     </header>
 
-    <!-- Routed content -->
-    <main class="mx-auto w-full max-w-[900px] flex-1 overflow-y-auto px-4 py-6">
+    <main class="mx-auto w-full max-w-225 flex-1 overflow-y-auto px-4 py-6">
       <slot />
     </main>
   </div>

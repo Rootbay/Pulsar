@@ -1,42 +1,28 @@
 <script lang="ts">
-  interface Props {
-    path: string;
-    color?: string;
-    size?: string | number;
-    stroke?: string;
-    strokeWidth?: number | string;
-    transform?: string;
-    className?: string;
-    viewBox?: string;
-  }
-
-  let {
-    path,
-    color = "currentColor",
-    size = "24",
-    stroke = undefined,
-    strokeWidth = undefined,
-    transform = undefined,
-    className = '',
-    viewBox = "0 0 44 44",
-  }: Props = $props();
-
-  // Compute CSS size string: add 'px' when numeric, otherwise passthrough (e.g., '1em')
-  const styleSize = $derived(() => {
-    const s = String(size);
-    return /^(\d+(?:\.\d+)?)$/.test(s) ? `${s}px` : s;
-  });
+  export let path: string = "";
+  export let size: string | number = "24";
+  export let color: string = "currentColor";
+  export let viewBox: string = "0 0 24 24";
+  export let stroke: string | undefined = undefined;
+  export let strokeWidth: number | undefined = undefined;
+  export let className: string = "";
 </script>
 
-<svg class={className}
-  viewBox={viewBox}
+<svg
+  xmlns="http://www.w3.org/2000/svg"
   width={size}
   height={size}
-  style={`color: ${color}; width: ${styleSize}; height: ${styleSize}; display: block;`}
-  fill="currentColor"
-  stroke={stroke}
+  viewBox={viewBox}
+  fill={stroke ? "none" : color}
+  stroke={stroke || (strokeWidth ? color : "none")}
   stroke-width={strokeWidth}
-  preserveAspectRatio="xMidYMid meet"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  class={className}
+  {...$$restProps}
 >
-  <path d={path} transform={transform}></path>
+  {#if path}
+    <path d={path} />
+  {/if}
+  <slot />
 </svg>

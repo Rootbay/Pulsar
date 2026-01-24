@@ -10,10 +10,8 @@ export type { PasswordItem } from '$lib/types/password';
 
 export async function load() {
     await initAppSettings();
-    // After settings are loaded, prune any non-existent recent paths (tolerant to transient errors)
     await pruneRecentDatabases();
 
-    // Seed current backend DB path into recents to survive reloads
     try {
         const activePath = await invoke<string | null>('get_active_db_path');
         if (activePath) {

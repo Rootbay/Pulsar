@@ -73,7 +73,6 @@
   const PIN_TAG_NAMES = new Set(['pinned', 'pin']);
   const RECENT_FILTER: FilterCategory = 'recent';
 
-  // Legacy resize state removed; handled in global PaneResizer
   let searchTerm = $state('');
   let selectedItemId = $state<number | null>(null);
   let showSkeleton = $state(false);
@@ -121,10 +120,8 @@
 
   const currentSkeletonKey = $derived(() => `${$selectedTag ?? 'all'}|${$filterCategory}`);
 
-  // Prevent re-entrant select dispatch loops
   let internalSelecting = $state(false);
 
-  // Single effect to drive selection without reading selectedItemId
   let lastDispatchedId: number | null = null;
   $effect(() => {
     const visibleIds = new Set(filteredItems.map((item) => item.id));
@@ -137,7 +134,6 @@
       desiredId = nextItem ? nextItem.id : null;
     }
 
-    // Apply in a microtask to avoid re-entrancy during the same flush
     Promise.resolve().then(() => {
       selectedItemId = desiredId;
       if (desiredId != null && lastDispatchedId !== desiredId) {
@@ -184,8 +180,6 @@
       }, 200);
     });
   });
-
-  // Removed separate selectedId mirror effect to avoid update loops
 
   onDestroy(() => {
     if (skeletonTimer) {
@@ -552,7 +546,7 @@
                                 Edit Entry
                               </ContextMenuItem>
                               <ContextMenuItem
-                                class="text-destructive focus:text-destructive data-[highlighted]:bg-destructive/10"
+                                class="text-destructive focus:text-destructive data-highlighted:bg-destructive/10"
                                 onSelect={() => handleRemoveEntry(item)}
                               >
                                 Remove Entry
@@ -574,12 +568,10 @@
       <ContextMenuItem onSelect={handleCreateEntry}>Create Entry</ContextMenuItem>
     </ContextMenuContent>
   </ContextMenu>
-  <!-- Resizer handle moved to global overlay in layout -->
 </nav>
 
 <style>
   .passwordList {
-    /* Use explicit secondary sidebar tokens */
     --passwordlist-surface: var(--passwordlist-base);
     --passwordlist-elevated: var(--passwordlist-item);
     --passwordlist-hover: var(--passwordlist-hover-bg);
@@ -646,14 +638,12 @@
   }
 
   .sectionTitle {
-    /* Align title with item text (12px from panel edge) */
     margin-left: 0;
     font-size: 12px;
     color: var(--passwordlist-muted-text);
     margin-top: 0;
   }
 
-  /* Reduce vertical space between section title and its list */
   .sectionTitle + .itemList {
     margin-top: 0;
   }
@@ -661,7 +651,6 @@
   .itemList {
     margin-top: 8px;
     list-style: none;
-    /* Remove side gaps so items reach panel edges */
     padding: 0;
     margin-left: -12px;
     margin-right: -12px;
@@ -713,12 +702,6 @@
 
   .item.selected {
     background: var(--passwordlist-hover);
-  }
-
-  .item.editing-target {
-    background: color-mix(in oklch, var(--passwordlist-hover) 90%, transparent);
-    box-shadow: 0 0 0 2px color-mix(in oklch, var(--passwordlist-strong-text) 22%, transparent);
-    border-radius: 10px;
   }
 
   .itemLink {
@@ -782,8 +765,6 @@
     color: var(--passwordlist-subtle-text);
     font-style: italic;
   }
-
-  /* Local resizer removed */
 </style>
 
 

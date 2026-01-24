@@ -13,7 +13,6 @@ async function filterNonExistentDatabases(paths: string[]): Promise<string[]> {
                 console.warn(`Non-existent database path removed from recent list: ${path}`);
             }
         } catch (e) {
-            // If the check fails (e.g., Tauri not ready), keep the entry to avoid wiping the list.
             console.warn(`Skipping existence check failure for ${path}; keeping in recent list.`, e);
             existentPaths.push(path);
         }
@@ -24,7 +23,6 @@ async function filterNonExistentDatabases(paths: string[]): Promise<string[]> {
 function createRecentDatabasesStore() {
     const { subscribe } = derived(appSettings, ($appSettings) => {
         const arr = Array.isArray($appSettings.recentDatabases) ? $appSettings.recentDatabases : [];
-        // Deduplicate while preserving order
         const seen = new Set<string>();
         const unique: string[] = [];
         for (const p of arr) {
@@ -39,10 +37,7 @@ function createRecentDatabasesStore() {
     return {
         subscribe,
         addRecentDatabase: async (path: string) => {
-            // Accept the path immediately so UI updates; existence is re-validated on startup and selection
-            // (some flows create the file only after initial configuration)
             try {
-                // Fire-and-forget existence check to trim later if needed
                 void invoke('check_file_exists', { path }).then((exists) => {
                     if (!exists) {
                         console.warn(`Recent path does not yet exist (will be trimmed later): ${path}`);
@@ -59,7 +54,6 @@ function createRecentDatabasesStore() {
                     recentDatabases: [path, ...filteredPaths].slice(0, 5)
                 };
             });
-            // Persist immediately so a quick refresh doesn't lose the entry
             try {
                 await invoke('set_all_settings', { settings: JSON.stringify(get(appSettings)) });
             } catch (e) {
@@ -97,7 +91,6 @@ function createRecentDatabasesStore() {
 
 export const recentDatabases = createRecentDatabasesStore();
 
-// Expose a safe, explicit initializer to prune non-existent entries once the app settings are loaded.
 export async function pruneRecentDatabases() {
     const currentSettings = get(appSettings);
     const filtered = await filterNonExistentDatabases(currentSettings.recentDatabases);

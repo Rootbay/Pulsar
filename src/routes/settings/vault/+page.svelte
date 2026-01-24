@@ -165,7 +165,6 @@
       if (status === 'locked') return 'Låst';
       if (status === 'available') return 'Tillgängligt';
     }
-    // Fallback: capitalise first letter
     return status.charAt(0).toUpperCase() + status.slice(1);
   }
 

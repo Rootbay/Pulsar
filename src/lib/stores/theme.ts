@@ -8,11 +8,8 @@ export const theme = derived(appSettings, ($appSettings) => {
     return $appSettings?.appearance?.theme || 'dark';
 });
 
-// This writable store will hold the *current* theme value for UI interaction
-// and will be used to update appSettings.appearance.theme
 const currentThemeWritable = writable<'light' | 'dark' | 'system'>();
 
-// Initialize currentThemeWritable with the value from appSettings
 appSettings.subscribe(($appSettings) => {
     if ($appSettings && $appSettings.appearance) {
         currentThemeWritable.set($appSettings.appearance.theme);
@@ -54,7 +51,6 @@ settingsStore.registerModule('theme', {
     hasUnsavedChanges
 });
 
-// Export a set function for the UI to update the theme
 export function setTheme(newTheme: 'light' | 'dark' | 'system') {
     currentThemeWritable.set(newTheme);
 }

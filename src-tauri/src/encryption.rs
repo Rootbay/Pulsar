@@ -6,7 +6,17 @@ use rand::{rngs::OsRng, RngCore};
 use base64::{engine::general_purpose, Engine as _};
 use crate::error::{Error, Result};
 
+const KEY_LEN_BYTES: usize = 32;
+
+fn ensure_key_len(key: &[u8], err: fn(String) -> Error) -> Result<()> {
+    if key.len() != KEY_LEN_BYTES {
+        return Err(err("Invalid key length".to_string()));
+    }
+    Ok(())
+}
+
 pub fn encrypt(plaintext: &str, key: &[u8]) -> Result<String> {
+    ensure_key_len(key, Error::Encryption)?;
     let key: &Key = Key::from_slice(key);
     let cipher = XChaCha20Poly1305::new(key);
 
@@ -25,6 +35,7 @@ pub fn encrypt(plaintext: &str, key: &[u8]) -> Result<String> {
 }
 
 pub fn encrypt_bytes(data: &[u8], key: &[u8]) -> Result<Vec<u8>> {
+    ensure_key_len(key, Error::Encryption)?;
     let key: &Key = Key::from_slice(key);
     let cipher = XChaCha20Poly1305::new(key);
 
@@ -44,6 +55,7 @@ pub fn encrypt_bytes(data: &[u8], key: &[u8]) -> Result<Vec<u8>> {
 }
 
 pub fn decrypt_bytes(encrypted_data: &[u8], key: &[u8]) -> Result<Vec<u8>> {
+    ensure_key_len(key, Error::Decryption)?;
     if encrypted_data.len() < 24 {
         return Err(Error::Decryption("Invalid encrypted data: too short to contain nonce".to_string()));
     }
@@ -62,6 +74,7 @@ pub fn decrypt_bytes(encrypted_data: &[u8], key: &[u8]) -> Result<Vec<u8>> {
 }
 
 pub fn decrypt(encrypted_payload: &str, key: &[u8]) -> Result<String> {
+    ensure_key_len(key, Error::Decryption)?;
     let mut parts = encrypted_payload.split(':');
     let nonce_b64 = parts.next().ok_or_else(|| Error::Decryption("Invalid encrypted payload format: missing nonce".to_string()))?;
     let ciphertext_b64 = parts.next().ok_or_else(|| Error::Decryption("Invalid encrypted payload format: missing ciphertext".to_string()))?;
@@ -100,7 +113,7 @@ mod tests {
 
     #[test]
     fn test_encrypt_decrypt_roundtrip() {
-        let key = b"an-example-key-that-is-32-bytes";
+        let key = b"an-example-key-that-is-32-bytes!";
         let plaintext = "this is a secret message";
         let encrypted = encrypt(plaintext, key).unwrap();
         let decrypted = decrypt(&encrypted, key).unwrap();
@@ -109,15 +122,24 @@ mod tests {
 
     #[test]
     fn test_decrypt_invalid_format() {
-        let key = b"an-example-key-that-is-32-bytes";
+        let key = b"an-example-key-that-is-32-bytes!";
         assert!(decrypt("invalid", key).is_err());
         assert!(decrypt("a:b:c", key).is_err());
     }
 
     #[test]
     fn test_decrypt_bad_base64() {
-        let key = b"an-example-key-that-is-32-bytes";
+        let key = b"an-example-key-that-is-32-bytes!";
         assert!(decrypt("@@@:valid_b64", key).is_err());
         assert!(decrypt("dmFsaWRfYjY0:@@@", key).is_err());
+    }
+
+    #[test]
+    fn test_invalid_key_length_errors() {
+        let short_key = b"short-key";
+        assert!(encrypt("hello", short_key).is_err());
+        assert!(encrypt_bytes(b"hello", short_key).is_err());
+        assert!(decrypt("a:b", short_key).is_err());
+        assert!(decrypt_bytes(&[0u8; 24], short_key).is_err());
     }
 }

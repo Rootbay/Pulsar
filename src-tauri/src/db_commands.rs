@@ -61,6 +61,24 @@ async fn get_db_pool(state: &State<'_, AppState>) -> Result<SqlitePool> {
     guard.clone().ok_or(Error::VaultNotLoaded)
 }
 
+struct CryptoHelper<'a> {
+    key: &'a [u8],
+}
+
+impl<'a> CryptoHelper<'a> {
+    fn new(key: &'a [u8]) -> Self {
+        Self { key }
+    }
+
+    fn encrypt(&self, text: &str) -> Result<String> {
+        encrypt(text, self.key)
+    }
+
+    fn encrypt_opt(&self, text: Option<&String>) -> Result<Option<String>> {
+        text.map(|t| self.encrypt(t)).transpose()
+    }
+}
+
 #[tauri::command]
 pub async fn save_button(
     state: State<'_, AppState>,
@@ -70,10 +88,11 @@ pub async fn save_button(
 ) -> Result<()> {
     let key = get_key(&state).await?;
     let db_pool = get_db_pool(&state).await?;
+    let helper = CryptoHelper::new(key.as_slice());
 
-    let text_enc = encrypt(&text, key.as_slice())?;
-    let icon_enc = encrypt(&icon, key.as_slice())?;
-    let color_enc = encrypt(&color, key.as_slice())?;
+    let text_enc = helper.encrypt(&text)?;
+    let icon_enc = helper.encrypt(&icon)?;
+    let color_enc = helper.encrypt(&color)?;
 
     sqlx::query("INSERT INTO buttons (text, icon, color) VALUES (?, ?, ?)")
         .bind(text_enc)
@@ -123,10 +142,11 @@ pub async fn update_button(
 ) -> Result<()> {
     let key = get_key(&state).await?;
     let db_pool = get_db_pool(&state).await?;
+    let helper = CryptoHelper::new(key.as_slice());
 
-    let text_enc = encrypt(&text, key.as_slice())?;
-    let icon_enc = encrypt(&icon, key.as_slice())?;
-    let color_enc = encrypt(&color, key.as_slice())?;
+    let text_enc = helper.encrypt(&text)?;
+    let icon_enc = helper.encrypt(&icon)?;
+    let color_enc = helper.encrypt(&color)?;
 
     sqlx::query("UPDATE buttons SET text = ?, icon = ?, color = ? WHERE id = ?")
         .bind(text_enc)
@@ -149,6 +169,138 @@ pub async fn delete_button(state: State<'_, AppState>, id: i64) -> Result<()> {
     Ok(())
 }
 
+#[tauri::command]
+pub async fn remove_tag_from_password_items(
+    state: State<'_, AppState>,
+    tag: String,
+) -> Result<i64> {
+    let key = get_key(&state).await?;
+    let db_pool = get_db_pool(&state).await?;
+    let tag_trimmed = tag.trim().to_string();
+    if tag_trimmed.is_empty() {
+        return Ok(0);
+    }
+
+    let mut tx = db_pool.begin().await?;
+    let rows = sqlx::query("SELECT id, tags FROM password_items")
+        .fetch_all(&mut *tx)
+        .await?;
+    let mut updated = 0i64;
+    let now = Utc::now().to_rfc3339();
+
+    for row in rows {
+        let id: i64 = row.get("id");
+        let tags_enc: Option<String> = row.get("tags");
+        let tags = tags_enc
+            .as_deref()
+            .map(|t| decrypt(t, key.as_slice()))
+            .transpose()?;
+
+        let Some(tags_str) = tags else { continue };
+
+        let mut parts: Vec<String> = tags_str
+            .split(',')
+            .map(|t| t.trim())
+            .filter(|t| !t.is_empty())
+            .map(|t| t.to_string())
+            .collect();
+
+        let original_len = parts.len();
+        parts.retain(|t| t != &tag_trimmed);
+        if parts.len() == original_len {
+            continue;
+        }
+
+        let new_tags = parts.join(", ");
+        let tags_enc_opt = if new_tags.trim().is_empty() {
+            None
+        } else {
+            Some(encrypt(&new_tags, key.as_slice())?)
+        };
+
+        sqlx::query("UPDATE password_items SET tags = ?, updated_at = ? WHERE id = ?")
+            .bind(tags_enc_opt)
+            .bind(&now)
+            .bind(id)
+            .execute(&mut *tx)
+            .await?;
+        updated += 1;
+    }
+
+    tx.commit().await?;
+    Ok(updated)
+}
+
+#[tauri::command]
+pub async fn rename_tag_in_password_items(
+    state: State<'_, AppState>,
+    old_tag: String,
+    new_tag: String,
+) -> Result<i64> {
+    let key = get_key(&state).await?;
+    let db_pool = get_db_pool(&state).await?;
+    let old_trimmed = old_tag.trim().to_string();
+    let new_trimmed = new_tag.trim().to_string();
+    if old_trimmed.is_empty() || new_trimmed.is_empty() {
+        return Ok(0);
+    }
+
+    let mut tx = db_pool.begin().await?;
+    let rows = sqlx::query("SELECT id, tags FROM password_items")
+        .fetch_all(&mut *tx)
+        .await?;
+    let mut updated = 0i64;
+    let now = Utc::now().to_rfc3339();
+
+    for row in rows {
+        let id: i64 = row.get("id");
+        let tags_enc: Option<String> = row.get("tags");
+        let tags = tags_enc
+            .as_deref()
+            .map(|t| decrypt(t, key.as_slice()))
+            .transpose()?;
+
+        let Some(tags_str) = tags else { continue };
+
+        let mut parts: Vec<String> = tags_str
+            .split(',')
+            .map(|t| t.trim())
+            .filter(|t| !t.is_empty())
+            .map(|t| t.to_string())
+            .collect();
+
+        let mut changed = false;
+        for tag in parts.iter_mut() {
+            if tag == &old_trimmed {
+                *tag = new_trimmed.clone();
+                changed = true;
+            }
+        }
+
+        if !changed {
+            continue;
+        }
+
+        let new_tags = parts.join(", ");
+        let tags_enc_opt = if new_tags.trim().is_empty() {
+            None
+        } else {
+            Some(encrypt(&new_tags, key.as_slice())?)
+        };
+
+        sqlx::query("UPDATE password_items SET tags = ?, updated_at = ? WHERE id = ?")
+            .bind(tags_enc_opt)
+            .bind(&now)
+            .bind(id)
+            .execute(&mut *tx)
+            .await?;
+        updated += 1;
+    }
+
+    tx.commit().await?;
+    Ok(updated)
+}
+
 
 #[tauri::command]
 pub async fn save_password_item(
@@ -158,22 +310,25 @@ pub async fn save_password_item(
     item.validate().map_err(|e| Error::Validation(e.to_string()))?;
 
     let key = get_key(&state).await?;
+    let helper = CryptoHelper::new(key.as_slice());
     let now = Utc::now().to_rfc3339();
 
-    let category_enc = encrypt(&item.category, key.as_slice())?;
-    let title_enc = encrypt(&item.title, key.as_slice())?;
-    let description_enc = item.description.map(|d| encrypt(&d, key.as_slice())).transpose()?;
-    let img_enc = item.img.map(|i| encrypt(&i, key.as_slice())).transpose()?;
-    let tags_enc = item.tags.map(|t| encrypt(&t, key.as_slice())).transpose()?;
-    let username_enc = item.username.map(|u| encrypt(&u, key.as_slice())).transpose()?;
-    let url_enc = item.url.map(|u| encrypt(&u, key.as_slice())).transpose()?;
-    let notes_enc = item.notes.map(|n| encrypt(&n, key.as_slice())).transpose()?;
-    let password_enc = encrypt(&item.password, key.as_slice())?;
-    let totp_secret_enc = item.totp_secret.map(|t| encrypt(&t, key.as_slice())).transpose()?;
+    let category_enc = helper.encrypt(&item.category)?;
+    let title_enc = helper.encrypt(&item.title)?;
+    let description_enc = helper.encrypt_opt(item.description.as_ref())?;
+    let img_enc = helper.encrypt_opt(item.img.as_ref())?;
+    let tags_enc = helper.encrypt_opt(item.tags.as_ref())?;
+    let username_enc = helper.encrypt_opt(item.username.as_ref())?;
+    let url_enc = helper.encrypt_opt(item.url.as_ref())?;
+    let notes_enc = helper.encrypt_opt(item.notes.as_ref())?;
+    let password_enc = helper.encrypt(&item.password)?;
+    let totp_secret_enc = helper.encrypt_opt(item.totp_secret.as_ref())?;
+    
     let custom_fields_json = serde_json::to_string(&item.custom_fields)?;
-    let custom_fields_enc = encrypt(&custom_fields_json, key.as_slice())?;
+    let custom_fields_enc = helper.encrypt(&custom_fields_json)?;
+    
     let field_order_json = item.field_order.map(|fo| serde_json::to_string(&fo)).transpose()?;
-    let field_order_enc = field_order_json.map(|fo_json| encrypt(&fo_json, key.as_slice())).transpose()?;
+    let field_order_enc = helper.encrypt_opt(field_order_json.as_ref())?;
 
     let db_pool = get_db_pool(&state).await?;
     sqlx::query("INSERT INTO password_items (category, title, description, img, tags, username, url, notes, password, created_at, updated_at, color, totp_secret, custom_fields, field_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
@@ -365,23 +520,25 @@ pub async fn update_password_item(
     item.validate().map_err(|e| Error::Validation(e.to_string()))?;
 
     let key = get_key(&state).await?;
+    let helper = CryptoHelper::new(key.as_slice());
     let now = Utc::now().to_rfc3339();
 
-    let category_enc = encrypt(&item.category, key.as_slice())?;
-    let title_enc = encrypt(&item.title, key.as_slice())?;
-    let description_enc = item.description.map(|d| encrypt(&d, &key)).transpose()?;
-    let img_enc = item.img.map(|i| encrypt(&i, &key)).transpose()?;
-    let tags_enc = item.tags.map(|t| encrypt(&t, &key)).transpose()?;
-    let username_enc = item.username.map(|u| encrypt(&u, &key)).transpose()?;
-    let url_enc = item.url.map(|u| encrypt(&u, &key)).transpose()?;
-    let notes_enc = item.notes.map(|n| encrypt(&n, &key)).transpose()?;
-    let password_enc = encrypt(&item.password, key.as_slice())?;
-    let totp_secret_enc = item.totp_secret.map(|t| encrypt(&t, key.as_slice())).transpose()?;
+    let category_enc = helper.encrypt(&item.category)?;
+    let title_enc = helper.encrypt(&item.title)?;
+    let description_enc = helper.encrypt_opt(item.description.as_ref())?;
+    let img_enc = helper.encrypt_opt(item.img.as_ref())?;
+    let tags_enc = helper.encrypt_opt(item.tags.as_ref())?;
+    let username_enc = helper.encrypt_opt(item.username.as_ref())?;
+    let url_enc = helper.encrypt_opt(item.url.as_ref())?;
+    let notes_enc = helper.encrypt_opt(item.notes.as_ref())?;
+    let password_enc = helper.encrypt(&item.password)?;
+    let totp_secret_enc = helper.encrypt_opt(item.totp_secret.as_ref())?;
+    
     let custom_fields_json = serde_json::to_string(&item.custom_fields)?;
-    let custom_fields_enc = encrypt(&custom_fields_json, key.as_slice())?;
+    let custom_fields_enc = helper.encrypt(&custom_fields_json)?;
 
     let field_order_json = item.field_order.map(|fo| serde_json::to_string(&fo)).transpose()?;
-    let field_order_enc = field_order_json.map(|fo_json| encrypt(&fo_json, key.as_slice())).transpose()?;
+    let field_order_enc = helper.encrypt_opt(field_order_json.as_ref())?;
 
 
     let db_pool = get_db_pool(&state).await?;

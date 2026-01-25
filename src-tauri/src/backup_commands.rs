@@ -1,6 +1,6 @@
-use crate::encryption::encrypt;
+use crate::encryption::{decrypt, decrypt_bytes, encrypt, encrypt_bytes};
 use crate::state::AppState;
-use crate::types::{ExportPayload, VaultBackupSnapshot};
+use crate::types::{ExportPayload, VaultBackupAttachment, VaultBackupSnapshot};
 use crate::db_commands::{get_password_items_impl, get_buttons_impl, get_recipient_keys_impl};
 use crate::error::{Error, Result};
 use chrono::Utc;
@@ -13,7 +13,7 @@ use chacha20poly1305::{
 use rand::rngs::OsRng;
 use rand::RngCore;
 use serde_json::{self, Value};
-use sqlx::{Error as SqlxError, SqlitePool};
+use sqlx::{Error as SqlxError, Row, SqlitePool};
 use std::fs;
 use std::path::PathBuf;
 use tauri::command;
@@ -31,6 +31,36 @@ async fn get_key(state: &State<'_, AppState>) -> Result<Zeroizing<Vec<u8>>> {
 async fn get_db_pool(state: &State<'_, AppState>) -> Result<SqlitePool> {
     let guard = state.db.lock().await;
     guard.clone().ok_or(Error::VaultNotLoaded)
+}
+
+async fn get_attachments_snapshot(db_pool: &SqlitePool, key: &[u8]) -> Result<Vec<VaultBackupAttachment>> {
+    let rows = sqlx::query(
+        "SELECT id, item_id, file_name, file_size, mime_type, data, created_at FROM attachments",
+    )
+    .fetch_all(db_pool)
+    .await?;
+
+    let mut attachments = Vec::with_capacity(rows.len());
+    for row in rows {
+        let name_enc: String = row.get("file_name");
+        let mime_enc: String = row.get("mime_type");
+        let data_blob: Vec<u8> = row.get("data");
+
+        let data = decrypt_bytes(&data_blob, key)?;
+        let data_b64 = general_purpose::STANDARD.encode(&data);
+
+        attachments.push(VaultBackupAttachment {
+            id: row.get("id"),
+            item_id: row.get("item_id"),
+            file_name: decrypt(&name_enc, key)?,
+            file_size: row.get("file_size"),
+            mime_type: decrypt(&mime_enc, key)?,
+            created_at: row.get("created_at"),
+            data_b64,
+        });
+    }
+
+    Ok(attachments)
 }
 
 #[command]
@@ -54,6 +84,7 @@ pub async fn export_vault_backend(
     let password_items = get_password_items_impl(&db_pool, key.as_slice()).await?;
     let buttons = get_buttons_impl(&db_pool, key.as_slice()).await?;
     let recipient_keys = get_recipient_keys_impl(&db_pool, key.as_slice()).await?;
+    let attachments = get_attachments_snapshot(&db_pool, key.as_slice()).await?;
 
     let snapshot = VaultBackupSnapshot {
         version: 1,
@@ -61,6 +92,7 @@ pub async fn export_vault_backend(
         password_items,
         buttons,
         recipient_keys,
+        attachments,
     };
 
     let vault_data = serde_json::to_string(&snapshot)?;
@@ -377,8 +409,11 @@ pub async fn restore_vault_snapshot(
     sqlx::query("DELETE FROM recipient_keys")
         .execute(&mut *tx)
         .await?;
+    sqlx::query("DELETE FROM attachments")
+        .execute(&mut *tx)
+        .await?;
     if let Err(e) = sqlx::query(
-        "DELETE FROM sqlite_sequence WHERE name IN ('password_items', 'buttons', 'recipient_keys')",
+        "DELETE FROM sqlite_sequence WHERE name IN ('password_items', 'buttons', 'recipient_keys', 'attachments')",
     )
     .execute(&mut *tx)
     .await
@@ -486,6 +521,26 @@ pub async fn restore_vault_snapshot(
             .bind(name_enc)
             .bind(public_key_enc)
             .bind(private_key_enc)
+            .execute(&mut *tx)
+            .await?;
+    }
+
+    for attachment in &snapshot.attachments {
+        let file_name_enc = encrypt(&attachment.file_name, key.as_slice())?;
+        let mime_type_enc = encrypt(&attachment.mime_type, key.as_slice())?;
+        let data = general_purpose::STANDARD
+            .decode(&attachment.data_b64)
+            .map_err(|e| Error::Internal(format!("Invalid attachment data: {}", e)))?;
+        let data_enc = encrypt_bytes(&data, key.as_slice())?;
+
+        sqlx::query("INSERT INTO attachments (id, item_id, file_name, file_size, mime_type, data, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)")
+            .bind(attachment.id)
+            .bind(attachment.item_id)
+            .bind(file_name_enc)
+            .bind(attachment.file_size)
+            .bind(mime_type_enc)
+            .bind(data_enc)
+            .bind(&attachment.created_at)
             .execute(&mut *tx)
             .await?;
     }

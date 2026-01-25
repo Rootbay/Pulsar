@@ -10,7 +10,9 @@ use chacha20poly1305::{
 };
 use hkdf::Hkdf;
 use sha2::Sha256;
+use subtle::ConstantTimeEq;
 use keyring::Entry;
+use tokio::sync::Semaphore;
 use rand::rngs::OsRng;
 use rand::RngCore;
 use serde::{Deserialize, Serialize};
@@ -19,9 +21,10 @@ use sqlx::sqlite::{SqliteConnectOptions, SqliteConnection};
 use sqlx::{Connection, Row};
 use std::path::{Path, PathBuf};
 use std::time::Instant;
-use tauri::State;
+use tauri::{AppHandle, State};
 use tauri_plugin_clipboard_manager::ClipboardExt;
 use tokio::fs;
+use tokio::io::AsyncWriteExt;
 use tokio::time::Duration;
 use totp_rs::{Algorithm as TotpAlgorithm, Secret, TOTP};
 use zeroize::{Zeroize, Zeroizing};
@@ -30,6 +33,190 @@ const KEYRING_SERVICE: &str = "pulsar-vault";
 const PASSWORD_CHECK_PLAINTEXT: &[u8] = b"pulsar-password-check";
 const PENDING_TOTP_TTL: Duration = Duration::from_secs(120);
 const MAX_TOTP_ATTEMPTS: u8 = 5;
+const UNLOCK_BACKOFF_BASE_MS: u64 = 250;
+const UNLOCK_BACKOFF_MAX_MS: u64 = 5000;
+const ARGON2_MIN_MEMORY_KIB: u32 = 8 * 1024;
+const ARGON2_MAX_MEMORY_KIB: u32 = 1024 * 1024;
+const ARGON2_MAX_TIME_COST: u32 = 10;
+const ARGON2_MAX_PARALLELISM: u32 = 16;
+pub const UNLOCK_CONCURRENCY_LIMIT: usize = 1;
+
+#[cfg(target_os = "macos")]
+#[link(name = "LocalAuthentication", kind = "framework")]
+extern "C" {}
+
+#[cfg(mobile)]
+use tauri_plugin_biometric::{AuthOptions, BiometricExt, BiometryType};
+
+#[cfg(target_os = "windows")]
+use windows::{
+    core::HSTRING,
+    Security::Credentials::UI::{
+        UserConsentVerifier, UserConsentVerifierAvailability, UserConsentVerificationResult,
+    },
+};
+
+#[cfg(target_os = "macos")]
+use {
+    block::ConcreteBlock,
+    dispatch::Semaphore,
+    objc::{class, msg_send, sel, sel_impl},
+    objc::runtime::Object,
+    objc_foundation::NSString,
+    std::sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+};
+
+#[cfg(mobile)]
+fn ensure_biometric_available(app: &AppHandle) -> Result<()> {
+    let status = app
+        .biometric()
+        .status()
+        .map_err(|e| Error::Internal(format!("Biometric status check failed: {}", e)))?;
+
+    if !status.is_available || matches!(status.biometry_type, BiometryType::None) {
+        let reason = status
+            .error
+            .unwrap_or_else(|| "Biometric authentication is unavailable.".to_string());
+        return Err(Error::Internal(reason));
+    }
+
+    Ok(())
+}
+
+#[cfg(target_os = "windows")]
+fn ensure_biometric_available(_app: &AppHandle) -> Result<()> {
+    let availability = UserConsentVerifier::CheckAvailabilityAsync()
+        .map_err(|e| Error::Internal(format!("Biometric availability check failed: {}", e)))?
+        .get()
+        .map_err(|e| Error::Internal(format!("Biometric availability check failed: {}", e)))?;
+
+    match availability {
+        UserConsentVerifierAvailability::Available => Ok(()),
+        UserConsentVerifierAvailability::DeviceNotPresent => Err(Error::Internal(
+            "No biometric device is present.".to_string(),
+        )),
+        UserConsentVerifierAvailability::NotConfiguredForUser => Err(Error::Internal(
+            "Biometrics are not configured for this user.".to_string(),
+        )),
+        UserConsentVerifierAvailability::DisabledByPolicy => Err(Error::Internal(
+            "Biometrics are disabled by policy.".to_string(),
+        )),
+        _ => Err(Error::Internal(
+            "Biometric authentication is unavailable.".to_string(),
+        )),
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn ensure_biometric_available(_app: &AppHandle) -> Result<()> {
+    unsafe {
+        let context: *mut Object = msg_send![class!(LAContext), new];
+        let mut error: *mut Object = std::ptr::null_mut();
+        let policy: i64 = 2; // LAPolicyDeviceOwnerAuthentication (biometrics or passcode)
+        let can: bool = msg_send![context, canEvaluatePolicy:policy error:&mut error];
+        if !can {
+            return Err(Error::Internal(
+                "Biometric authentication is unavailable.".to_string(),
+            ));
+        }
+        Ok(())
+    }
+}
+
+#[cfg(not(any(mobile, target_os = "windows", target_os = "macos")))]
+fn ensure_biometric_available(_app: &AppHandle) -> Result<()> {
+    Err(Error::Internal(
+        "Biometric authentication is not supported on this platform.".to_string(),
+    ))
+}
+
+#[cfg(mobile)]
+fn authenticate_biometric(app: &AppHandle, reason: &str) -> Result<()> {
+    ensure_biometric_available(app)?;
+    let options = AuthOptions {
+        allow_device_credential: true,
+        title: Some("Unlock Pulsar".to_string()),
+        subtitle: Some("Confirm your identity to access the vault".to_string()),
+        confirmation_required: Some(true),
+        ..Default::default()
+    };
+
+    app.biometric()
+        .authenticate(reason.to_string(), options)
+        .map_err(|e| Error::Internal(format!("Biometric authentication failed: {}", e)))
+}
+
+#[cfg(target_os = "windows")]
+fn authenticate_biometric(_app: &AppHandle, reason: &str) -> Result<()> {
+    ensure_biometric_available(_app)?;
+
+    let reason = HSTRING::from(reason);
+    let result = UserConsentVerifier::RequestVerificationAsync(&reason)
+        .map_err(|e| Error::Internal(format!("Biometric authentication failed: {}", e)))?
+        .get()
+        .map_err(|e| Error::Internal(format!("Biometric authentication failed: {}", e)))?;
+
+    match result {
+        UserConsentVerificationResult::Verified => Ok(()),
+        UserConsentVerificationResult::DeviceBusy => Err(Error::Internal(
+            "Biometric device is busy.".to_string(),
+        )),
+        UserConsentVerificationResult::DeviceNotPresent => Err(Error::Internal(
+            "No biometric device is present.".to_string(),
+        )),
+        UserConsentVerificationResult::DisabledByPolicy => Err(Error::Internal(
+            "Biometrics are disabled by policy.".to_string(),
+        )),
+        UserConsentVerificationResult::NotConfiguredForUser => Err(Error::Internal(
+            "Biometrics are not configured for this user.".to_string(),
+        )),
+        UserConsentVerificationResult::Canceled => Err(Error::Internal(
+            "Biometric verification was canceled.".to_string(),
+        )),
+        _ => Err(Error::Internal(
+            "Biometric verification failed.".to_string(),
+        )),
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn authenticate_biometric(app: &AppHandle, reason: &str) -> Result<()> {
+    ensure_biometric_available(app)?;
+
+    unsafe {
+        let context: *mut Object = msg_send![class!(LAContext), new];
+        let policy: i64 = 2; // LAPolicyDeviceOwnerAuthentication (biometrics or passcode)
+        let reason = NSString::from_str(reason);
+        let semaphore = Arc::new(Semaphore::new(0));
+        let success = Arc::new(AtomicBool::new(false));
+        let success_clone = success.clone();
+        let semaphore_clone = semaphore.clone();
+
+        let handler = ConcreteBlock::new(move |ok: bool, _err: *mut Object| {
+            success_clone.store(ok, Ordering::SeqCst);
+            semaphore_clone.signal();
+        })
+        .copy();
+
+        let _: () = msg_send![context, evaluatePolicy:policy localizedReason:reason reply:handler];
+        semaphore.wait();
+        if success.load(Ordering::SeqCst) {
+            Ok(())
+        } else {
+            Err(Error::Internal("Biometric verification failed.".to_string()))
+        }
+    }
+}
+
+#[cfg(not(any(mobile, target_os = "windows", target_os = "macos")))]
+fn authenticate_biometric(_app: &AppHandle, _reason: &str) -> Result<()> {
+    Err(Error::Internal(
+        "Biometric authentication is not supported on this platform.".to_string(),
+    ))
+}
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 struct PasswordMetadata {
@@ -146,6 +333,7 @@ async fn write_password_metadata(
     mac_key: Option<&[u8]>,
 ) -> Result<()> {
     let path = metadata_path(db_path);
+    let tmp_path = path.with_extension("meta.json.tmp");
     let mut meta = meta.clone();
     if let Some(key) = mac_key {
         let vault_id = get_vault_id(db_path);
@@ -156,8 +344,35 @@ async fn write_password_metadata(
     }
 
     let bytes = serde_json::to_vec_pretty(&meta)?;
-    fs::write(&path, bytes).await?;
-    Ok(())
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        let mut file = fs::OpenOptions::new()
+            .create(true)
+            .write(true)
+            .truncate(true)
+            .mode(0o600)
+            .open(&tmp_path)
+            .await?;
+        let _ = file.set_permissions(std::fs::Permissions::from_mode(0o600)).await;
+        file.write_all(&bytes).await?;
+        file.sync_all().await?;
+        fs::rename(&tmp_path, &path).await?;
+        if let Ok(dir) = fs::File::open(
+            path.parent().unwrap_or_else(|| Path::new(".")),
+        )
+        .await
+        {
+            let _ = dir.sync_all().await;
+        }
+        return Ok(());
+    }
+    #[cfg(not(unix))]
+    {
+        fs::write(&tmp_path, bytes).await?;
+        fs::rename(&tmp_path, &path).await?;
+        Ok(())
+    }
 }
 
 fn decode_metadata(meta: &PasswordMetadata) -> Result<(Vec<u8>, Vec<u8>, Vec<u8>)> {
@@ -167,10 +382,48 @@ fn decode_metadata(meta: &PasswordMetadata) -> Result<(Vec<u8>, Vec<u8>, Vec<u8>
     let nonce = general_purpose::STANDARD
         .decode(&meta.nonce_b64)
         .map_err(|e| Error::Internal(format!("Invalid nonce encoding: {}", e)))?;
+    if nonce.len() != 24 {
+        return Err(Error::Validation("Invalid nonce length".to_string()));
+    }
     let ciphertext = general_purpose::STANDARD
         .decode(&meta.ciphertext_b64)
         .map_err(|e| Error::Internal(format!("Invalid ciphertext encoding: {}", e)))?;
     Ok((salt, nonce, ciphertext))
+}
+
+fn unlock_backoff_duration(failures: u32) -> Duration {
+    if failures == 0 {
+        return Duration::from_millis(0);
+    }
+    let exp = failures.min(6);
+    let base = UNLOCK_BACKOFF_BASE_MS.saturating_mul(1u64 << exp);
+    Duration::from_millis(base.min(UNLOCK_BACKOFF_MAX_MS))
+}
+
+async fn ensure_unlock_not_throttled(state: &State<'_, AppState>) -> Result<()> {
+    let guard = state.unlock_rate_limit.lock().await;
+    let Some(last_failure) = guard.last_failure else {
+        return Ok(());
+    };
+    let backoff = unlock_backoff_duration(guard.failures);
+    if last_failure.elapsed() < backoff {
+        return Err(Error::Validation(
+            "Too many attempts. Please wait and try again.".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+async fn register_unlock_failure(state: &State<'_, AppState>) {
+    let mut guard = state.unlock_rate_limit.lock().await;
+    guard.failures = guard.failures.saturating_add(1);
+    guard.last_failure = Some(Instant::now());
+}
+
+async fn reset_unlock_failures(state: &State<'_, AppState>) {
+    let mut guard = state.unlock_rate_limit.lock().await;
+    guard.failures = 0;
+    guard.last_failure = None;
 }
 
 #[derive(Serialize)]
@@ -259,7 +512,9 @@ fn verify_metadata_mac(meta: &PasswordMetadata, vault_id: &str, master_key: &[u8
         .encrypt(XNonce::from_slice(&nonce_bytes), Payload { msg: b"", aad: &payload })
         .map_err(|e| Error::Encryption(format!("Metadata MAC failed: {}", e)))?;
 
-    if expected_tag != tag_bytes {
+    if expected_tag.len() != tag_bytes.len()
+        || expected_tag.ct_eq(&tag_bytes).unwrap_u8() != 1
+    {
         return Err(Error::Validation(
             "Vault metadata integrity check failed.".to_string(),
         ));
@@ -397,6 +652,29 @@ fn is_not_a_database_error(err: &sqlx::Error) -> bool {
 fn is_unable_to_open_db_error(err: &sqlx::Error) -> bool {
     let msg = err.to_string().to_lowercase();
     msg.contains("unable to open database") || msg.contains("code 14") || msg.contains("code: 14")
+}
+
+async fn replace_db_with_backup(
+    db_path: &Path,
+    temp_db_path: &Path,
+    context: &str,
+) -> Result<()> {
+    let backup_path = db_path.with_extension("psec_backup");
+    if backup_path.exists() {
+        let _ = fs::remove_file(&backup_path).await;
+    }
+
+    fs::rename(db_path, &backup_path).await?;
+    if let Err(err) = fs::rename(temp_db_path, db_path).await {
+        let _ = fs::rename(&backup_path, db_path).await;
+        return Err(Error::Internal(format!(
+            "Failed to replace vault database during {}: {}",
+            context, err
+        )));
+    }
+
+    let _ = fs::remove_file(&backup_path).await;
+    Ok(())
 }
 
 fn build_attach_cmd(path: &Path, hex_key: &str) -> String {
@@ -705,6 +983,8 @@ pub async fn set_master_password(
     state: State<'_, AppState>,
     password: String,
 ) -> Result<()> {
+    let password = Zeroizing::new(password);
+    validate_new_password(password.as_str())?;
     let _rekey_lock = tokio::time::timeout(Duration::from_secs(15), state.rekey.lock())
         .await
         .map_err(|_| Error::Internal("Vault is busy. Please try again.".to_string()))?;
@@ -715,8 +995,10 @@ pub async fn set_master_password(
 
     let argon_params = Argon2ParamsConfig::default();
 
-    let mut derived_key = derive_key(&password, &salt, &argon_params)?;
+    let mut derived_key = derive_key(password.as_str(), &salt, &argon_params)?;
+    drop(password);
     let key_z = Zeroizing::new(derived_key.to_vec());
+    derived_key.zeroize();
 
     let cipher = XChaCha20Poly1305::new(Key::from_slice(&key_z));
     let mut nonce = [0u8; 24];
@@ -804,7 +1086,14 @@ pub async fn unlock(
     state: State<'_, AppState>,
     password: String,
 ) -> Result<UnlockResponse> {
+    let password = Zeroizing::new(password);
+    let _unlock_permit = state
+        .unlock_guard
+        .acquire()
+        .await
+        .map_err(|_| Error::Internal("Unlock guard closed".to_string()))?;
     let db_path = get_db_path(&state).await?;
+    ensure_unlock_not_throttled(&state).await?;
 
     let metadata = match read_password_metadata(db_path.as_path()).await? {
         Some(meta) => Some(meta),
@@ -819,18 +1108,28 @@ pub async fn unlock(
     let (salt, nonce, ciphertext) = decode_metadata(&meta)?;
 
     let argon_params = meta.argon2_params();
+    validate_argon_params(&argon_params)?;
 
-    let mut derived_key = derive_key(&password, &salt, &argon_params)?;
+    let mut derived_key = derive_key(password.as_str(), &salt, &argon_params)?;
+    drop(password);
     let key_z = Zeroizing::new(derived_key.to_vec());
     let cipher = XChaCha20Poly1305::new(Key::from_slice(&key_z));
 
-    let decrypted = cipher
-        .decrypt(XNonce::from_slice(&nonce), ciphertext.as_ref())
-        .map_err(|_| Error::InvalidPassword)?;
+    let mut decrypted = match cipher.decrypt(XNonce::from_slice(&nonce), ciphertext.as_ref()) {
+        Ok(value) => value,
+        Err(_) => {
+            register_unlock_failure(&state).await;
+            return Err(Error::InvalidPassword);
+        }
+    };
 
-    if decrypted != PASSWORD_CHECK_PLAINTEXT {
+    let is_valid = decrypted.ct_eq(PASSWORD_CHECK_PLAINTEXT).unwrap_u8() == 1;
+    decrypted.zeroize();
+    if !is_valid {
+        register_unlock_failure(&state).await;
         return Err(Error::InvalidPassword);
     }
+    reset_unlock_failures(&state).await;
 
     if meta.mac_tag_b64.is_some() {
         let vault_id = get_vault_id(db_path.as_path());
@@ -1011,10 +1310,10 @@ pub async fn verify_login_totp(state: State<'_, AppState>, token: String) -> Res
             .await?;
 
     let secret_enc = secret_enc.ok_or_else(|| Error::Internal("Login TOTP is not configured.".to_string()))?;
-    let secret_b32 = decrypt(&secret_enc, pending_key.as_slice())?;
+    let secret_b32 = Zeroizing::new(decrypt(&secret_enc, pending_key.as_slice())?);
 
-    let secret = Secret::Encoded(secret_b32.clone());
-    let secret_bytes = secret.to_bytes().map_err(|e| Error::Totp(e.to_string()))?;
+    let secret = Secret::Encoded(secret_b32.to_string());
+    let mut secret_bytes = secret.to_bytes().map_err(|e| Error::Totp(e.to_string()))?;
 
     let totp = TOTP::new(
         TotpAlgorithm::SHA1,
@@ -1028,6 +1327,7 @@ pub async fn verify_login_totp(state: State<'_, AppState>, token: String) -> Res
     .map_err(|e| Error::Totp(e.to_string()))?;
 
     let is_valid = totp.check_current(trimmed).unwrap_or(false);
+    secret_bytes.zeroize();
     if !is_valid {
         let mut guard = state.pending_key.lock().await;
         if let Some(pending) = guard.as_mut() {
@@ -1054,14 +1354,23 @@ fn validate_password_inputs(current: &str, new_password: &str) -> Result<()> {
         return Err(Error::Validation("Current password is required.".to_string()));
     }
 
-    if new_password.trim().len() < 8 {
-        return Err(Error::Validation("New password must be at least 8 characters.".to_string()));
-    }
+    validate_new_password(new_password)?;
 
     if new_password.trim() == current.trim() {
         return Err(Error::Validation("New password must be different from the current password.".to_string()));
     }
 
+    Ok(())
+}
+
+fn validate_new_password(new_password: &str) -> Result<()> {
+    let trimmed = new_password.trim();
+    if trimmed.is_empty() {
+        return Err(Error::Validation("Password is required.".to_string()));
+    }
+    if trimmed.len() < 12 {
+        return Err(Error::Validation("Password must be at least 12 characters.".to_string()));
+    }
     Ok(())
 }
 
@@ -1079,16 +1388,25 @@ async fn load_existing_metadata(
 }
 
 fn validate_argon_params(params: &Argon2ParamsConfig) -> Result<()> {
-    if params.memory_kib < 8 * 1024 {
+    if params.memory_kib < ARGON2_MIN_MEMORY_KIB {
         return Err(Error::Validation("Argon2 memory must be at least 8 MiB.".to_string()));
+    }
+    if params.memory_kib > ARGON2_MAX_MEMORY_KIB {
+        return Err(Error::Validation("Argon2 memory is too high.".to_string()));
     }
 
     if params.time_cost == 0 {
         return Err(Error::Validation("Argon2 time cost must be at least 1.".to_string()));
     }
+    if params.time_cost > ARGON2_MAX_TIME_COST {
+        return Err(Error::Validation("Argon2 time cost is too high.".to_string()));
+    }
 
     if params.parallelism == 0 {
         return Err(Error::Validation("Argon2 parallelism must be at least 1.".to_string()));
+    }
+    if params.parallelism > ARGON2_MAX_PARALLELISM {
+        return Err(Error::Validation("Argon2 parallelism is too high.".to_string()));
     }
 
     Ok(())
@@ -1113,7 +1431,9 @@ pub async fn rotate_master_password(
     current_password: String,
     new_password: String,
 ) -> Result<()> {
-    validate_password_inputs(&current_password, &new_password)?;
+    let current_password = Zeroizing::new(current_password);
+    let new_password = Zeroizing::new(new_password);
+    validate_password_inputs(current_password.as_str(), new_password.as_str())?;
 
     let _rekey_lock = state.rekey.lock().await;
     let db_pool = get_db_pool(&state).await?;
@@ -1122,20 +1442,28 @@ pub async fn rotate_master_password(
     let mut metadata = load_existing_metadata(&state, &db_pool, db_path.as_path()).await?;
     let (salt, nonce, ciphertext) = decode_metadata(&metadata)?;
     let argon_params = metadata.argon2_params();
+    validate_argon_params(&argon_params)?;
 
-    let mut current_key_bytes = derive_key(&current_password, &salt, &argon_params)?;
+    let mut current_key_bytes = derive_key(current_password.as_str(), &salt, &argon_params)?;
     let current_key_z = Zeroizing::new(current_key_bytes.to_vec());
     current_key_bytes.zeroize();
 
     let cipher = XChaCha20Poly1305::new(Key::from_slice(&current_key_z));
-    cipher
+    let mut decrypted = cipher
         .decrypt(XNonce::from_slice(&nonce), ciphertext.as_ref())
         .map_err(|_| Error::Validation("Invalid current password".to_string()))?;
+    let is_valid = decrypted.ct_eq(PASSWORD_CHECK_PLAINTEXT).unwrap_u8() == 1;
+    decrypted.zeroize();
+    if !is_valid {
+        return Err(Error::Validation("Invalid current password".to_string()));
+    }
 
     let mut new_salt = [0u8; 16];
     OsRng.fill_bytes(&mut new_salt);
 
-    let mut new_key_bytes = derive_key(&new_password, &new_salt, &argon_params)?;
+    let mut new_key_bytes = derive_key(new_password.as_str(), &new_salt, &argon_params)?;
+    drop(current_password);
+    drop(new_password);
     let new_key_z = Zeroizing::new(new_key_bytes.to_vec());
     new_key_bytes.zeroize();
 
@@ -1185,8 +1513,7 @@ pub async fn rotate_master_password(
                 write_password_metadata_to_db(&temp_db_path, new_key_z.as_slice(), &metadata).await?;
                 
                 tokio::time::sleep(Duration::from_millis(1000)).await;
-                fs::remove_file(&db_path).await?;
-                fs::rename(&temp_db_path, &db_path).await?;
+                replace_db_with_backup(&db_path, &temp_db_path, "master password rotation").await?;
                 
                 write_password_metadata(db_path.as_path(), &metadata, Some(new_key_z.as_slice()))
                     .await?;
@@ -1217,6 +1544,7 @@ pub async fn update_argon2_params(
     time_cost: u32,
     parallelism: u32,
 ) -> Result<()> {
+    let current_password = Zeroizing::new(current_password);
     if current_password.trim().is_empty() {
         return Err(Error::Validation("Current password is required.".to_string()));
     }
@@ -1235,20 +1563,27 @@ pub async fn update_argon2_params(
     let mut metadata = load_existing_metadata(&state, &db_pool, db_path.as_path()).await?;
     let (salt, nonce, ciphertext) = decode_metadata(&metadata)?;
     let current_params = metadata.argon2_params();
+    validate_argon_params(&current_params)?;
 
-    let mut current_key_bytes = derive_key(&current_password, &salt, &current_params)?;
+    let mut current_key_bytes = derive_key(current_password.as_str(), &salt, &current_params)?;
     let current_key_z = Zeroizing::new(current_key_bytes.to_vec());
     current_key_bytes.zeroize();
 
     let cipher = XChaCha20Poly1305::new(Key::from_slice(&current_key_z));
-    cipher
+    let mut decrypted = cipher
         .decrypt(XNonce::from_slice(&nonce), ciphertext.as_ref())
         .map_err(|_| Error::Validation("Invalid current password".to_string()))?;
+    let is_valid = decrypted.ct_eq(PASSWORD_CHECK_PLAINTEXT).unwrap_u8() == 1;
+    decrypted.zeroize();
+    if !is_valid {
+        return Err(Error::Validation("Invalid current password".to_string()));
+    }
 
     let mut new_salt = [0u8; 16];
     OsRng.fill_bytes(&mut new_salt);
 
-    let mut new_key_bytes = derive_key(&current_password, &new_salt, &new_params)?;
+    let mut new_key_bytes = derive_key(current_password.as_str(), &new_salt, &new_params)?;
+    drop(current_password);
     let new_key_z = Zeroizing::new(new_key_bytes.to_vec());
     new_key_bytes.zeroize();
 
@@ -1298,8 +1633,7 @@ pub async fn update_argon2_params(
                 write_password_metadata_to_db(&temp_db_path, new_key_z.as_slice(), &metadata).await?;
                 
                 tokio::time::sleep(Duration::from_millis(1000)).await;
-                fs::remove_file(&db_path).await?;
-                fs::rename(&temp_db_path, &db_path).await?;
+                replace_db_with_backup(&db_path, &temp_db_path, "Argon2 parameter update").await?;
                 
                 write_password_metadata(db_path.as_path(), &metadata, Some(new_key_z.as_slice()))
                     .await?;
@@ -1327,6 +1661,7 @@ pub async fn configure_login_totp(
     state: State<'_, AppState>,
     secret_b32: String,
 ) -> Result<()> {
+    let secret_b32 = Zeroizing::new(secret_b32);
     let key_opt = {
         let guard = state.key.lock().await;
         guard.clone()
@@ -1334,11 +1669,11 @@ pub async fn configure_login_totp(
 
     let key_z = key_opt.ok_or(Error::VaultLocked)?;
 
-    Secret::Encoded(secret_b32.clone())
+    Secret::Encoded(secret_b32.to_string())
         .to_bytes()
         .map_err(|e| Error::Validation(format!("Invalid TOTP secret: {}", e)))?;
 
-    let encrypted = encrypt(&secret_b32, key_z.as_slice())?;
+    let encrypted = encrypt(secret_b32.as_str(), key_z.as_slice())?;
     let db_pool = get_db_pool(&state).await?;
 
     sqlx::query(
@@ -1383,15 +1718,8 @@ pub async fn lock(app: tauri::AppHandle, state: State<'_, AppState>) -> Result<(
         }
     }
 
-    let should_clear = {
-        let policy = state.clipboard_policy.lock().await;
-        policy.integration_enabled && policy.only_unlocked
-    };
-
-    if should_clear {
-        if let Err(error) = app.clipboard().clear() {
-            eprintln!("Failed to clear clipboard on lock: {}", error);
-        }
+    if let Err(error) = app.clipboard().clear() {
+        eprintln!("Failed to clear clipboard on lock: {}", error);
     }
     Ok(())
 }
@@ -1430,9 +1758,12 @@ fn get_vault_id(db_path: &Path) -> String {
 
 #[tauri::command]
 pub async fn enable_biometrics(
+    app: AppHandle,
     state: State<'_, AppState>,
     password: String,
 ) -> Result<()> {
+    let password = Zeroizing::new(password);
+    ensure_biometric_available(&app)?;
     let db_path = get_db_path(&state).await?;
     let metadata = match read_password_metadata(db_path.as_path()).await? {
         Some(meta) => Some(meta),
@@ -1445,24 +1776,29 @@ pub async fn enable_biometrics(
     let meta = metadata.ok_or_else(|| Error::Internal("Vault is not initialised.".to_string()))?;
     let (salt, nonce, ciphertext) = decode_metadata(&meta)?;
     let argon_params = meta.argon2_params();
+    validate_argon_params(&argon_params)?;
 
-    let derived_key = derive_key(&password, &salt, &argon_params)?;
+    let mut derived_key = derive_key(password.as_str(), &salt, &argon_params)?;
     let key_z = Zeroizing::new(derived_key.to_vec());
+    derived_key.zeroize();
     let cipher = XChaCha20Poly1305::new(Key::from_slice(&key_z));
 
-    let decrypted = cipher
+    let mut decrypted = cipher
         .decrypt(XNonce::from_slice(&nonce), ciphertext.as_ref())
         .map_err(|_| Error::Validation("Invalid password".to_string()))?;
 
-    if decrypted != PASSWORD_CHECK_PLAINTEXT {
+    let is_valid = decrypted.ct_eq(PASSWORD_CHECK_PLAINTEXT).unwrap_u8() == 1;
+    decrypted.zeroize();
+    if !is_valid {
         return Err(Error::Validation("Invalid password".to_string()));
     }
 
     let mut bio_key_bytes = [0u8; 32];
     OsRng.fill_bytes(&mut bio_key_bytes);
-    let bio_key_b64 = general_purpose::STANDARD.encode(bio_key_bytes);
+    let bio_key_b64 = Zeroizing::new(general_purpose::STANDARD.encode(bio_key_bytes));
 
-    let encrypted_password_blob = encrypt(&password, &bio_key_bytes)?;
+    let encrypted_password_blob = encrypt(password.as_str(), &bio_key_bytes)?;
+    drop(password);
     let db_pool = get_db_pool(&state).await?;
     sqlx::query(
         "INSERT OR REPLACE INTO configuration (key, value) VALUES ('biometric_encrypted_password', ?)",
@@ -1473,7 +1809,8 @@ pub async fn enable_biometrics(
 
     let vault_user = get_vault_id(&db_path);
     let entry = Entry::new(KEYRING_SERVICE, &vault_user).map_err(|e| Error::Internal(e.to_string()))?;
-    entry.set_password(&bio_key_b64).map_err(|e| Error::Internal(e.to_string()))?;
+    entry.set_password(bio_key_b64.as_str()).map_err(|e| Error::Internal(e.to_string()))?;
+    bio_key_bytes.zeroize();
 
     Ok(())
 }
@@ -1496,7 +1833,10 @@ pub async fn disable_biometrics(state: State<'_, AppState>) -> Result<()> {
 }
 
 #[tauri::command]
-pub async fn is_biometrics_enabled(state: State<'_, AppState>) -> Result<bool> {
+pub async fn is_biometrics_enabled(app: AppHandle, state: State<'_, AppState>) -> Result<bool> {
+    if ensure_biometric_available(&app).is_err() {
+        return Ok(false);
+    }
     let db_path = get_db_path(&state).await?;
     let vault_user = get_vault_id(&db_path);
     let entry = Entry::new(KEYRING_SERVICE, &vault_user).map_err(|e| Error::Internal(e.to_string()))?;
@@ -1509,8 +1849,10 @@ pub async fn is_biometrics_enabled(state: State<'_, AppState>) -> Result<bool> {
 
 #[tauri::command]
 pub async fn unlock_with_biometrics(
+    app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<UnlockResponse> {
+    authenticate_biometric(&app, "Unlock your Pulsar vault")?;
     let db_path = get_db_path(&state).await?;
     let vault_user = get_vault_id(&db_path);
 
@@ -1523,9 +1865,16 @@ pub async fn unlock_with_biometrics(
         }
     })?;
 
-    let bio_key_bytes = general_purpose::STANDARD
+    let mut bio_key_vec = general_purpose::STANDARD
         .decode(&bio_key_b64)
         .map_err(|_| Error::Internal("Invalid biometric key format".to_string()))?;
+    if bio_key_vec.len() != 32 {
+        bio_key_vec.zeroize();
+        return Err(Error::Internal("Invalid biometric key length".to_string()));
+    }
+    let mut bio_key_bytes = [0u8; 32];
+    bio_key_bytes.copy_from_slice(&bio_key_vec);
+    bio_key_vec.zeroize();
 
     let db_pool = get_db_pool(&state).await?;
     let row = sqlx::query("SELECT value FROM configuration WHERE key = 'biometric_encrypted_password'")
@@ -1539,8 +1888,73 @@ pub async fn unlock_with_biometrics(
 
     let master_password = decrypt(&encrypted_password_blob, &bio_key_bytes)
         .map_err(|_| Error::Internal("Biometric decryption failed".to_string()))?;
+    bio_key_bytes.zeroize();
 
     unlock(state, master_password).await
 }
 
+#[cfg(test)]
+mod tests {
+    use super::replace_db_with_backup;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::time::{SystemTime, UNIX_EPOCH};
+    use tokio::fs;
+
+    fn unique_temp_dir() -> std::path::PathBuf {
+        static COUNTER: AtomicUsize = AtomicUsize::new(0);
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_nanos();
+        let count = COUNTER.fetch_add(1, Ordering::Relaxed);
+        std::env::temp_dir().join(format!("pulsar-rekey-test-{}-{}", nanos, count))
+    }
+
+    #[tokio::test]
+    async fn replace_db_with_backup_swaps_and_cleans() {
+        let dir = unique_temp_dir();
+        fs::create_dir_all(&dir).await.unwrap();
+
+        let db_path = dir.join("vault.db");
+        let temp_path = dir.join("vault.tmp");
+
+        fs::write(&db_path, b"old").await.unwrap();
+        fs::write(&temp_path, b"new").await.unwrap();
+
+        replace_db_with_backup(&db_path, &temp_path, "test")
+            .await
+            .unwrap();
+
+        let final_bytes = fs::read(&db_path).await.unwrap();
+        assert_eq!(final_bytes, b"new");
+        assert!(!temp_path.exists());
+
+        let backup_path = db_path.with_extension("psec_backup");
+        assert!(!backup_path.exists());
+
+        let _ = fs::remove_dir_all(&dir).await;
+    }
+
+    #[tokio::test]
+    async fn replace_db_with_backup_rolls_back_on_failure() {
+        let dir = unique_temp_dir();
+        fs::create_dir_all(&dir).await.unwrap();
+
+        let db_path = dir.join("vault.db");
+        let temp_path = dir.join("missing.tmp");
+
+        fs::write(&db_path, b"old").await.unwrap();
+
+        let result = replace_db_with_backup(&db_path, &temp_path, "test").await;
+        assert!(result.is_err());
+
+        let final_bytes = fs::read(&db_path).await.unwrap();
+        assert_eq!(final_bytes, b"old");
+
+        let backup_path = db_path.with_extension("psec_backup");
+        assert!(!backup_path.exists());
+
+        let _ = fs::remove_dir_all(&dir).await;
+    }
+}
 

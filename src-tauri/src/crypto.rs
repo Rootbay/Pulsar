@@ -197,6 +197,9 @@ pub async fn import_password_entry_with_private_key(
     let nonce = general_purpose::STANDARD
         .decode(&payload.nonce_b64)
         .map_err(|_| Error::Validation("invalid nonce b64".to_string()))?;
+    if nonce.len() != 24 {
+        return Err(Error::Validation("nonce must be 24 bytes".into()));
+    }
     let ciphertext = general_purpose::STANDARD
         .decode(&payload.ciphertext_b64)
         .map_err(|_| Error::Validation("invalid ciphertext b64".to_string()))?;

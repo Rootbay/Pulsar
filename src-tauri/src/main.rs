@@ -17,9 +17,10 @@ mod vault_commands;
 
 use std::path::PathBuf;
 use std::sync::Arc;
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, Semaphore};
 
 use crate::state::AppState;
+use crate::auth::UNLOCK_CONCURRENCY_LIMIT;
 use crate::error::{Error, Result};
 use tauri::State;
 use tauri_plugin_store::StoreBuilder;
@@ -117,7 +118,7 @@ async fn switch_database(db_path: PathBuf, app_state: State<'_, AppState>) -> Re
 fn main() {
 
     let context = tauri::generate_context!();
-    tauri::Builder::default()
+    let mut builder = tauri::Builder::default()
         .manage(AppState {
             db: Arc::new(Mutex::new(None)),
             key: Arc::new(Mutex::new(None)),
@@ -125,8 +126,17 @@ fn main() {
             db_path: Arc::new(Mutex::new(None)),
             rekey: Arc::new(Mutex::new(())),
             clipboard_policy: Arc::new(Mutex::new(Default::default())),
+            unlock_rate_limit: Arc::new(Mutex::new(Default::default())),
+            unlock_guard: Arc::new(Semaphore::new(UNLOCK_CONCURRENCY_LIMIT)),
         })
-        .plugin(tauri_plugin_clipboard_manager::init())
+        .plugin(tauri_plugin_clipboard_manager::init());
+
+    #[cfg(mobile)]
+    {
+        builder = builder.plugin(tauri_plugin_biometric::init());
+    }
+
+    builder = builder
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_store::Builder::new().build())
@@ -154,6 +164,8 @@ fn main() {
             db_commands::get_buttons,
             db_commands::update_button,
             db_commands::delete_button,
+            db_commands::remove_tag_from_password_items,
+            db_commands::rename_tag_in_password_items,
             db_commands::save_password_item,
             db_commands::get_password_items,
             db_commands::update_password_item,
@@ -198,7 +210,9 @@ fn main() {
             clipboard::get_clipboard_capabilities,
             clipboard::apply_clipboard_policy,
             clipboard::clear_clipboard,
-        ])
+        ]);
+
+    builder
         .run(context)
         .expect("error while running tauri application");
 }
@@ -230,7 +244,7 @@ fn get_or_create_settings_key() -> Result<Vec<u8>> {
 
 #[tauri::command]
 async fn get_all_settings(app_handle: tauri::AppHandle) -> Result<Option<String>> {
-    let store = StoreBuilder::new(&app_handle, ".settings.dat".parse::<PathBuf>().unwrap())
+    let store = StoreBuilder::new(&app_handle, PathBuf::from(".settings.dat"))
         .build()
         .map_err(|e| Error::Internal(e.to_string()))?;
     store.reload().map_err(|e| Error::Internal(e.to_string()))?;
@@ -253,7 +267,7 @@ async fn get_all_settings(app_handle: tauri::AppHandle) -> Result<Option<String>
 
 #[tauri::command]
 async fn set_all_settings(app_handle: tauri::AppHandle, settings: String) -> Result<()> {
-    let store = StoreBuilder::new(&app_handle, ".settings.dat".parse::<PathBuf>().unwrap())
+    let store = StoreBuilder::new(&app_handle, PathBuf::from(".settings.dat"))
         .build()
         .map_err(|e| Error::Internal(e.to_string()))?;
     store.reload().map_err(|e| Error::Internal(e.to_string()))?;

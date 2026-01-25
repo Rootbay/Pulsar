@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { isLocked, showSettingsPopup, totpVerified } from '$lib/stores';
+  import { isLocked, showSettingsPopup } from '$lib/stores';
   import AppSidebar from '$lib/components/layout/sidebar.svelte';
   import PasswordList from '$lib/components/layout/passwordList.svelte';
   import PasswordDetail from '$lib/components/layout/passwordDetail.svelte';
@@ -29,10 +29,12 @@
   let showCreatePasswordPopup = $state(false);
   let showPopup = $state(false);
   let popupMode = $state<'create' | 'edit'>('create');
-  let popupTag = $state<any>(null);
+  let popupTag = $state<Button | null>(null);
   let buttons = $state<Button[]>([]);
   let displayColor = $state('#94a3b8');
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let passwordListRef = $state<any>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let passwordDetailRef = $state<any>(null);
 
   $effect(() => {
@@ -82,20 +84,7 @@
     }
   });
 
-  async function handleLock() {
-    try {
-      await callBackend('lock');
-      isLocked.set(true);
-      totpVerified.set(false);
-      selectedPasswordItem = null;
-      passwordItems = [];
-      buttons = [];
-    } catch (error) {
-      console.error('Lock failed:', error);
-    }
-  }
-
-  function openPopup(detail: { mode: 'create' | 'edit'; tag?: any }) {
+  function openPopup(detail: { mode: 'create' | 'edit'; tag?: Button }) {
     popupMode = detail.mode;
     popupTag = detail.tag || null;
     showPopup = true;
@@ -105,12 +94,12 @@
     showPopup = false;
   }
 
-  async function handleSave(detail: { mode: 'create' | 'edit'; updatedTag?: any }) {
+  async function handleSave(detail: { mode: 'create' | 'edit'; updatedTag?: Button }) {
     const { mode, updatedTag } = detail;
 
     if (mode === 'create') {
       buttons = await callBackend('get_buttons');
-    } else if (mode === 'edit') {
+    } else if (mode === 'edit' && updatedTag) {
       const oldTag = popupTag;
       buttons = buttons.map((b) => (b.id === updatedTag.id ? updatedTag : b));
 

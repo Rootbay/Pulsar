@@ -7,15 +7,16 @@ export async function callBackend<T>(
 ): Promise<T> {
   try {
     return await invoke<T>(command, args);
-  } catch (error: any) {
+  } catch (error: unknown) {
     let errorMessage = 'An unknown error occurred';
     let errorCode = 'Unknown';
 
     if (typeof error === 'string') {
       errorMessage = error;
     } else if (error && typeof error === 'object') {
-      errorMessage = error.message || JSON.stringify(error);
-      errorCode = error.code || 'Unknown';
+      const e = error as Record<string, unknown>;
+      errorMessage = (e.message as string) || JSON.stringify(error);
+      errorCode = (e.code as string) || 'Unknown';
     }
 
     console.error(`Backend error in ${command} [${errorCode}]:`, errorMessage);

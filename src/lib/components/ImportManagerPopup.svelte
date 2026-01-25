@@ -22,7 +22,11 @@
 
   interface Props {
     show?: boolean;
-    onimportSelected?: (detail: any) => void;
+    onimportSelected?: (detail: {
+      manager: string;
+      importedPath: string;
+      passphrase: string;
+    }) => void;
     onclose?: () => void;
   }
 

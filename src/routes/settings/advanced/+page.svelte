@@ -17,12 +17,11 @@
   import { Switch } from '$lib/components/ui/switch';
   import { cn } from '$lib/utils';
   import { Gauge, TriangleAlert, ShieldCheck, ShieldAlert } from '@lucide/svelte';
-  import { currentLocale } from '$lib/i18n';
+  import { currentLocale, t } from '$lib/i18n';
 
   type KdfPreset = AdvancedSettings['kdfPreset'];
 
-  const t = (locale: 'en' | 'sv', en: string, sv: string) => (locale === 'sv' ? sv : en);
-  let locale = $derived($currentLocale as 'en' | 'sv');
+  const locale = $derived($currentLocale);
 
   const kdfPresets: Array<{ value: KdfPreset }> = [
     { value: 'fast' },
@@ -106,12 +105,10 @@
 
     try {
       await callBackend('wipe_vault_database');
-      toast.success(t(locale, 'Vault database wiped successfully.', 'Valvdatabasen har raderats.'));
+      toast.success(t(locale, 'Vault database wiped successfully.'));
       wipeConfirmationText = '';
     } catch (error) {
-      toast.error(
-        `${t(locale, 'Failed to wipe vault', 'Misslyckades med att radera valvet')}: ${error}`
-      );
+      toast.error(`${t(locale, 'Failed to wipe vault')}: ${error}`);
     }
   }
 
@@ -128,7 +125,7 @@
       </div>
       <div>
         <CardTitle>
-          {t(locale, 'KDF Tuning (Argon2id)', 'KDF-inställning (Argon2id)')}
+          {t(locale, 'KDF Tuning (Argon2id)')}
         </CardTitle>
         <CardDescription>
           {t(
@@ -155,10 +152,10 @@
 
       <div class="space-y-3">
         <Label class="text-foreground text-sm font-medium">
-          {t(locale, 'Presets', 'Förval')}
+          {t(locale, 'Presets')}
         </Label>
         <div class="flex flex-wrap gap-2">
-          {#each kdfPresets as preset}
+          {#each kdfPresets as preset (preset.value)}
             <Button
               type="button"
               size="sm"
@@ -172,12 +169,12 @@
               onclick={() => selectPreset(preset.value)}
             >
               {preset.value === 'fast'
-                ? t(locale, 'Fast', 'Snabb')
+                ? t(locale, 'Fast')
                 : preset.value === 'balanced'
-                  ? t(locale, 'Balanced', 'Balanserad')
+                  ? t(locale, 'Balanced')
                   : preset.value === 'secure'
-                    ? t(locale, 'Secure', 'Säker')
-                    : t(locale, 'Paranoid', 'Paranoid')}
+                    ? t(locale, 'Secure')
+                    : t(locale, 'Paranoid')}
             </Button>
           {/each}
         </div>
@@ -186,7 +183,7 @@
       <div class="space-y-5">
         <div class="space-y-2">
           <Label class="text-foreground text-sm font-medium" for="time-cost">
-            {t(locale, 'Time Cost (iterations)', 'Tidskostnad (iterationer)')}
+            {t(locale, 'Time Cost (iterations)')}
           </Label>
           <div class="flex items-center gap-4">
             <input
@@ -204,7 +201,7 @@
 
         <div class="space-y-2">
           <Label class="text-foreground text-sm font-medium" for="memory-cost">
-            {t(locale, 'Memory Cost (MB)', 'Minneskostnad (MB)')}
+            {t(locale, 'Memory Cost (MB)')}
           </Label>
           <div class="flex items-center gap-4">
             <input
@@ -223,7 +220,7 @@
 
         <div class="space-y-2">
           <Label class="text-foreground text-sm font-medium" for="parallelism">
-            {t(locale, 'Parallelism (threads)', 'Parallelism (trådar)')}
+            {t(locale, 'Parallelism (threads)')}
           </Label>
           <div class="flex items-center gap-4">
             <input
@@ -251,7 +248,7 @@
       </div>
       <div>
         <CardTitle>
-          {t(locale, 'Memory Hardening', 'Hårdare minnesskydd')}
+          {t(locale, 'Memory Hardening')}
         </CardTitle>
         <CardDescription>
           {t(
@@ -263,15 +260,15 @@
       </div>
     </CardHeader>
     <CardContent class="flex flex-col gap-4 pt-4">
-      {#each memoryToggles as toggle}
+      {#each memoryToggles as toggle (toggle.key)}
         <div
           class="border-border/60 bg-muted/20 flex items-start justify-between gap-4 rounded-lg border px-4 py-3"
         >
           <div>
             <p class="text-foreground text-sm font-semibold">
               {toggle.key === 'lockMemoryPages'
-                ? t(locale, 'Lock Memory Pages', 'Lås minnessidor')
-                : t(locale, 'Secure Memory Allocation', 'Säker minnesallokering')}
+                ? t(locale, 'Lock Memory Pages')
+                : t(locale, 'Secure Memory Allocation')}
             </p>
             <p class="text-muted-foreground text-sm">
               {toggle.key === 'lockMemoryPages'
@@ -306,7 +303,7 @@
       </div>
       <div>
         <CardTitle>
-          {t(locale, 'Destructive Actions', 'Förstörande åtgärder')}
+          {t(locale, 'Destructive Actions')}
         </CardTitle>
         <CardDescription>
           {t(
@@ -321,7 +318,7 @@
       <div class="border-destructive/40 bg-destructive/10 space-y-4 rounded-lg border p-4">
         <div>
           <p class="text-destructive text-sm font-semibold">
-            {t(locale, 'Wipe Vault Database', 'Radera valvdatabas')}
+            {t(locale, 'Wipe Vault Database')}
           </p>
           <p class="text-destructive/80 text-sm">
             {t(
@@ -351,7 +348,7 @@
           disabled={!canWipeVault}
           onclick={handleWipeVault}
         >
-          {t(locale, 'Wipe Vault Database', 'Radera valvdatabas')}
+          {t(locale, 'Wipe Vault Database')}
         </Button>
       </div>
     </CardContent>

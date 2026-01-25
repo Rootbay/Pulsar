@@ -18,14 +18,13 @@
     ShieldQuestionMark,
     CloudUpload
   } from '@lucide/svelte';
-  import { currentLocale } from '$lib/i18n';
+  import { currentLocale, t } from '$lib/i18n';
 
   type UpdateStatus = 'idle' | 'checking' | 'uptoDate';
   type IconComponent = typeof FileText;
 
   let updateStatus: UpdateStatus = 'idle';
-  const t = (locale: 'en' | 'sv', en: string, sv: string) => (locale === 'sv' ? sv : en);
-  $: locale = $currentLocale as 'en' | 'sv';
+  const locale = $derived($currentLocale);
   let uploadDiagnostics = false;
 
   const versionDetails = [
@@ -76,7 +75,7 @@
       </div>
       <div>
         <CardTitle>
-          {t(locale, 'Application Information', 'Information om applikationen')}
+          {t(locale, 'Application Information')}
         </CardTitle>
         <CardDescription>
           {t(
@@ -89,7 +88,7 @@
     </CardHeader>
     <CardContent class="flex flex-col gap-6 pt-4">
       <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-        {#each versionDetails as detail}
+        {#each versionDetails as detail (detail.label)}
           <div class="border-border/50 bg-muted/30 rounded-lg border p-4 text-center">
             <div class="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
               {detail.label}
@@ -104,7 +103,7 @@
       >
         <div class="space-y-1">
           <h3 class="text-foreground text-sm font-semibold">
-            {t(locale, 'Check for Updates', 'Sök efter uppdateringar')}
+            {t(locale, 'Check for Updates')}
           </h3>
           <p class="text-muted-foreground text-sm">
             {t(
@@ -117,13 +116,13 @@
         <Button class="shrink-0" onclick={checkForUpdates} disabled={updateStatus !== 'idle'}>
           {#if updateStatus === 'idle'}
             <RefreshCw class="mr-2 h-4 w-4" aria-hidden="true" />
-            {t(locale, 'Check Now', 'Sök nu')}
+            {t(locale, 'Check Now')}
           {:else if updateStatus === 'checking'}
             <RefreshCw class="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
-            {t(locale, 'Checking...', 'Söker...')}
+            {t(locale, 'Checking...')}
           {:else}
             <BadgeCheck class="text-chart-success mr-2 h-4 w-4" aria-hidden="true" />
-            {t(locale, 'Up to date', 'Uppdaterad')}
+            {t(locale, 'Up to date')}
           {/if}
         </Button>
       </div>
@@ -139,7 +138,7 @@
       </div>
       <div>
         <CardTitle>
-          {t(locale, 'Documentation & Support', 'Dokumentation & support')}
+          {t(locale, 'Documentation & Support')}
         </CardTitle>
         <CardDescription>
           {t(
@@ -152,7 +151,7 @@
     </CardHeader>
     <CardContent class="pt-4">
       <div class="grid gap-3 sm:grid-cols-2">
-        {#each resourceLinks as { label, Icon, action }}
+        {#each resourceLinks as { label, Icon, action } (label)}
           <Button
             type="button"
             variant="secondary"
@@ -161,12 +160,12 @@
           >
             <Icon class="h-4 w-4" aria-hidden="true" />
             {label === 'License'
-              ? t(locale, 'License', 'Licens')
+              ? t(locale, 'License')
               : label === 'Security Whitepaper'
-                ? t(locale, 'Security Whitepaper', 'Säkerhetswhitepaper')
+                ? t(locale, 'Security Whitepaper')
                 : label === 'Contact Support'
-                  ? t(locale, 'Contact Support', 'Kontakta support')
-                  : t(locale, 'Source Code', 'Källkod')}
+                  ? t(locale, 'Contact Support')
+                  : t(locale, 'Source Code')}
           </Button>
         {/each}
       </div>
@@ -182,7 +181,7 @@
       </div>
       <div>
         <CardTitle>
-          {t(locale, 'Diagnostic Tools', 'Diagnostikverktyg')}
+          {t(locale, 'Diagnostic Tools')}
         </CardTitle>
         <CardDescription>
           {t(
@@ -199,10 +198,10 @@
       >
         <div>
           <h3 class="text-foreground text-sm font-semibold">
-            {t(locale, 'Open Logs Folder', 'Öppna loggmapp')}
+            {t(locale, 'Open Logs Folder')}
           </h3>
           <p class="text-muted-foreground text-sm">
-            {t(locale, 'Access application log files', 'Öppna programmets loggfiler')}
+            {t(locale, 'Access application log files')}
           </p>
         </div>
         <Button
@@ -212,7 +211,7 @@
           onclick={() => openLink('Logs Folder')}
         >
           <FolderOpen class="h-4 w-4" aria-hidden="true" />
-          {t(locale, 'Open', 'Öppna')}
+          {t(locale, 'Open')}
         </Button>
       </div>
 
@@ -221,7 +220,7 @@
       >
         <div>
           <h3 class="text-foreground text-sm font-semibold">
-            {t(locale, 'Upload Diagnostics to Support', 'Ladda upp diagnostik till supporten')}
+            {t(locale, 'Upload Diagnostics to Support')}
           </h3>
           <p class="text-muted-foreground text-sm">
             {t(

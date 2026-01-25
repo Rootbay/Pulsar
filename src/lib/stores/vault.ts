@@ -61,8 +61,9 @@ function createVaultSettingsStore() {
           return settings;
         }
 
-        const { [vaultId]: _removed, ...rest } = settings.vaultSettingsById;
-        settings.vaultSettingsById = rest;
+        const newVaultSettings = { ...settings.vaultSettingsById };
+        delete newVaultSettings[vaultId];
+        settings.vaultSettingsById = newVaultSettings;
         return settings;
       });
 

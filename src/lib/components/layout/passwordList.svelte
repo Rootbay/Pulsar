@@ -2,6 +2,7 @@
 
 <script lang="ts">
   import { onDestroy, tick } from 'svelte';
+  import { SvelteDate } from 'svelte/reactivity';
   import TagIcon from '../ui/TagIcon.svelte';
   import Favicon from '../ui/Favicon.svelte';
   import { iconPaths } from '$lib/icons';
@@ -129,8 +130,6 @@
   const sectionedItems = $derived.by(() => partitionItems(filteredItems));
 
   const currentSkeletonKey = $derived(() => `${$selectedTag ?? 'all'}|${$filterCategory}`);
-
-  let internalSelecting = $state(false);
 
   let lastDispatchedId: number | null = null;
   $effect(() => {
@@ -285,7 +284,7 @@
   }
 
   function toDate(dateStr: string): Date | null {
-    const date = new Date(dateStr);
+    const date = new SvelteDate(dateStr);
     return Number.isNaN(date.getTime()) ? null : date;
   }
 
@@ -302,7 +301,7 @@
     if (!date) {
       return false;
     }
-    const now = new Date();
+    const now = new SvelteDate();
     return isSameDay(date, now);
   }
 
@@ -311,7 +310,7 @@
     if (!date) {
       return false;
     }
-    const yesterday = new Date();
+    const yesterday = new SvelteDate();
     yesterday.setDate(yesterday.getDate() - 1);
     return isSameDay(date, yesterday);
   }
@@ -321,7 +320,7 @@
     if (!date) {
       return false;
     }
-    const now = new Date();
+    const now = new SvelteDate();
     const diff = now.getTime() - date.getTime();
     if (diff < 0) {
       return false;
@@ -527,8 +526,8 @@
                         >
                           <ContextMenu>
                             <ContextMenuTrigger>
-                              <a
-                                href={item.url ?? '#'}
+                              <button
+                                type="button"
                                 class="itemLink"
                                 onclick={(event: MouseEvent) => {
                                   event.preventDefault();
@@ -558,7 +557,7 @@
                                     {tagMap}
                                   />
                                 </div>
-                              </a>
+                              </button>
                             </ContextMenuTrigger>
                             <ContextMenuContent class="w-48">
                               <ContextMenuItem onSelect={() => handlePinToggle(item)}

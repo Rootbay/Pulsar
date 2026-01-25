@@ -21,12 +21,11 @@
     totpVerified,
     totpRequired
   } from '$lib/stores';
-  import { currentLocale } from '$lib/i18n';
+  import { currentLocale, t } from '$lib/i18n';
   import { Lock, Eye, EyeOff, ArrowLeft, FingerprintPattern, TriangleAlert } from '@lucide/svelte';
   import { onMount } from 'svelte';
 
-  const t = (locale: 'en' | 'sv', en: string, sv: string) => (locale === 'sv' ? sv : en);
-  let locale = $derived($currentLocale as 'en' | 'sv');
+  let locale = $derived($currentLocale);
 
   let password = $state('');
   let loginError = $state<string | null>(null);
@@ -63,7 +62,7 @@
 
     try {
       const { authenticate } = await import('@tauri-apps/plugin-biometric');
-      await authenticate('Unlock your vault');
+      await authenticate(t(locale, 'loginBiometricPrompt'));
 
       const result = await callBackend<{ totp_required: boolean }>('unlock_with_biometrics');
 
@@ -78,11 +77,15 @@
         isLocked.set(false);
         await goto('/', { replaceState: true });
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Biometric unlock failed:', error);
-      const msg = error.message || error.toString();
-      if (!msg.toLowerCase().includes('cancel') && !msg.toLowerCase().includes('user canceled')) {
-        loginError = t(locale, 'Biometric unlock failed.', 'Biometrisk upplåsning misslyckades.');
+      const msg = (error as Record<string, unknown>).message || String(error);
+      if (
+        typeof msg === 'string' &&
+        !msg.toLowerCase().includes('cancel') &&
+        !msg.toLowerCase().includes('user canceled')
+      ) {
+        loginError = t(locale, 'loginBiometricFailed');
       }
     } finally {
       isBiometricUnlocking = false;
@@ -123,12 +126,12 @@
         isLocked.set(false);
         await goto('/', { replaceState: true });
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Unlock failed:', error);
       totpRequired.set(false);
       totpVerified.set(false);
       loginError =
-        error.message || t(locale, 'An unknown error occurred.', 'Ett okänt fel inträffade.');
+        ((error as Record<string, unknown>).message as string) || t(locale, 'loginUnknownError');
     } finally {
       isUnlocking = false;
     }
@@ -171,7 +174,7 @@
     onclick={goBack}
   >
     <ArrowLeft class="h-4 w-4" />
-    {t(locale, 'Back', 'Tillbaka')}
+    {t(locale, 'back')}
   </button>
   <div class="pointer-events-none absolute inset-0 -z-10">
     <div
@@ -194,27 +197,23 @@
             <Lock class="size-6" />
           </div>
           <CardTitle class="text-2xl font-semibold tracking-tight">
-            {t(locale, 'Welcome back', 'Välkommen tillbaka')}
+            {t(locale, 'loginTitle')}
           </CardTitle>
           <CardDescription class="mt-0">
-            {t(
-              locale,
-              'Unlock your vault with your master password',
-              'Lås upp ditt valv med ditt huvudlösenord'
-            )}
+            {t(locale, 'loginSubtitle')}
           </CardDescription>
         </CardHeader>
 
         <CardContent class="mt-6 space-y-4">
           <div class="space-y-2">
             <Label for="master-password">
-              {t(locale, 'Master password', 'Huvudlösenord')}
+              {t(locale, 'loginMasterPasswordLabel')}
             </Label>
             <div class="relative">
               <Input
                 id="master-password"
                 type={showPassword ? 'text' : 'password'}
-                placeholder={t(locale, 'Enter your master password', 'Ange ditt huvudlösenord')}
+                placeholder={t(locale, 'loginMasterPasswordPlaceholder')}
                 bind:value={password}
                 autocomplete="current-password"
                 disabled={isUnlocking}
@@ -226,8 +225,8 @@
                 class="text-muted-foreground hover:text-foreground absolute inset-y-0 right-0 flex items-center px-3"
                 onclick={() => (showPassword = !showPassword)}
                 aria-label={showPassword
-                  ? t(locale, 'Hide password', 'Dölj lösenord')
-                  : t(locale, 'Show password', 'Visa lösenord')}
+                  ? t(locale, 'loginHidePassword')
+                  : t(locale, 'loginShowPassword')}
                 tabindex="-1"
               >
                 {#if showPassword}
@@ -238,9 +237,11 @@
               </button>
             </div>
             {#if isCapsLockOn}
-              <p class="text-warning-foreground flex items-center gap-1.5 pt-1 text-[11px] font-medium animate-pulse">
+              <p
+                class="text-warning-foreground flex animate-pulse items-center gap-1.5 pt-1 text-[11px] font-medium"
+              >
                 <TriangleAlert class="size-3" />
-                {t(locale, 'Caps Lock is ON', 'Caps Lock är PÅ')}
+                {t(locale, 'loginCapsLockOn')}
               </p>
             {/if}
           </div>
@@ -253,9 +254,9 @@
         <CardFooter class="mt-6 flex flex-col gap-2">
           <Button type="submit" class="w-full" disabled={!canSubmit}>
             {#if isUnlocking}
-              <Spinner class="mr-2 size-4" /> {t(locale, 'Unlocking…', 'Låser upp…')}
+              <Spinner class="mr-2 size-4" /> {t(locale, 'loginUnlocking')}
             {:else}
-              {t(locale, 'Unlock', 'Lås upp')}
+              {t(locale, 'loginUnlock')}
             {/if}
           </Button>
 
@@ -272,12 +273,12 @@
               {:else}
                 <FingerprintPattern class="size-4" />
               {/if}
-              {t(locale, 'Unlock with Biometrics', 'Lås upp med biometrik')}
+              {t(locale, 'loginUnlockBiometric')}
             </Button>
           {/if}
 
           <Button type="button" variant="ghost" class="w-full" onclick={handleChangeDatabase}>
-            {t(locale, 'Open another vault', 'Öppna ett annat valv')}
+            {t(locale, 'loginOpenAnotherVault')}
           </Button>
         </CardFooter>
       </form>
@@ -285,11 +286,7 @@
 
     <div class="mt-6 text-center text-xs">
       <span class="crypto-tagline text-muted-foreground">
-        {t(
-          locale,
-          'Secure by Argon2id + XChaCha20-Poly1305',
-          'Säker med Argon2id + XChaCha20-Poly1305'
-        )}
+        {t(locale, 'loginCryptoTagline')}
       </span>
     </div>
   </div>

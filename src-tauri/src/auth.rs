@@ -1,13 +1,15 @@
 use crate::encryption::{decrypt, encrypt};
-use crate::state::AppState;
+use crate::state::{AppState, PendingUnlock};
 use crate::security::register_device;
 use crate::error::{Error, Result};
 use argon2::{Algorithm, Argon2, Params, Version};
 use base64::{engine::general_purpose, Engine as _};
 use chacha20poly1305::{
-    aead::{Aead, KeyInit},
+    aead::{Aead, KeyInit, Payload},
     Key, XChaCha20Poly1305, XNonce,
 };
+use hkdf::Hkdf;
+use sha2::Sha256;
 use keyring::Entry;
 use rand::rngs::OsRng;
 use rand::RngCore;
@@ -16,6 +18,7 @@ use serde_json;
 use sqlx::sqlite::{SqliteConnectOptions, SqliteConnection};
 use sqlx::{Connection, Row};
 use std::path::{Path, PathBuf};
+use std::time::Instant;
 use tauri::State;
 use tauri_plugin_clipboard_manager::ClipboardExt;
 use tokio::fs;
@@ -25,6 +28,8 @@ use zeroize::{Zeroize, Zeroizing};
 
 const KEYRING_SERVICE: &str = "pulsar-vault";
 const PASSWORD_CHECK_PLAINTEXT: &[u8] = b"pulsar-password-check";
+const PENDING_TOTP_TTL: Duration = Duration::from_secs(120);
+const MAX_TOTP_ATTEMPTS: u8 = 5;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 struct PasswordMetadata {
@@ -38,6 +43,12 @@ struct PasswordMetadata {
     argon2_time_cost: Option<u32>,
     #[serde(default)]
     argon2_parallelism: Option<u32>,
+    #[serde(default)]
+    mac_version: Option<u8>,
+    #[serde(default)]
+    mac_nonce_b64: Option<String>,
+    #[serde(default)]
+    mac_tag_b64: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -129,9 +140,22 @@ async fn read_password_metadata(db_path: &Path) -> Result<Option<PasswordMetadat
     }
 }
 
-async fn write_password_metadata(db_path: &Path, meta: &PasswordMetadata) -> Result<()> {
+async fn write_password_metadata(
+    db_path: &Path,
+    meta: &PasswordMetadata,
+    mac_key: Option<&[u8]>,
+) -> Result<()> {
     let path = metadata_path(db_path);
-    let bytes = serde_json::to_vec_pretty(meta)?;
+    let mut meta = meta.clone();
+    if let Some(key) = mac_key {
+        let vault_id = get_vault_id(db_path);
+        let (nonce_b64, tag_b64) = compute_metadata_mac(&meta, &vault_id, key)?;
+        meta.mac_version = Some(1);
+        meta.mac_nonce_b64 = Some(nonce_b64);
+        meta.mac_tag_b64 = Some(tag_b64);
+    }
+
+    let bytes = serde_json::to_vec_pretty(&meta)?;
     fs::write(&path, bytes).await?;
     Ok(())
 }
@@ -147,6 +171,101 @@ fn decode_metadata(meta: &PasswordMetadata) -> Result<(Vec<u8>, Vec<u8>, Vec<u8>
         .decode(&meta.ciphertext_b64)
         .map_err(|e| Error::Internal(format!("Invalid ciphertext encoding: {}", e)))?;
     Ok((salt, nonce, ciphertext))
+}
+
+#[derive(Serialize)]
+struct MetadataMacPayload<'a> {
+    vault_id: &'a str,
+    version: u8,
+    salt_b64: &'a str,
+    nonce_b64: &'a str,
+    ciphertext_b64: &'a str,
+    argon2_memory_kib: Option<u32>,
+    argon2_time_cost: Option<u32>,
+    argon2_parallelism: Option<u32>,
+}
+
+fn metadata_mac_payload(meta: &PasswordMetadata, vault_id: &str) -> Result<Vec<u8>> {
+    serde_json::to_vec(&MetadataMacPayload {
+        vault_id,
+        version: meta.version,
+        salt_b64: &meta.salt_b64,
+        nonce_b64: &meta.nonce_b64,
+        ciphertext_b64: &meta.ciphertext_b64,
+        argon2_memory_kib: meta.argon2_memory_kib,
+        argon2_time_cost: meta.argon2_time_cost,
+        argon2_parallelism: meta.argon2_parallelism,
+    })
+    .map_err(|e| Error::Internal(format!("Failed to serialize metadata MAC payload: {}", e)))
+}
+
+fn derive_metadata_mac_key(master_key: &[u8]) -> Result<[u8; 32]> {
+    let hk = Hkdf::<Sha256>::new(None, master_key);
+    let mut out = [0u8; 32];
+    hk.expand(b"pulsar:meta", &mut out)
+        .map_err(|_| Error::Internal("Failed to derive metadata MAC key".to_string()))?;
+    Ok(out)
+}
+
+fn compute_metadata_mac(
+    meta: &PasswordMetadata,
+    vault_id: &str,
+    master_key: &[u8],
+) -> Result<(String, String)> {
+    let mac_key = derive_metadata_mac_key(master_key)?;
+    let payload = metadata_mac_payload(meta, vault_id)?;
+    let cipher = XChaCha20Poly1305::new(Key::from_slice(&mac_key));
+
+    let mut nonce_bytes = [0u8; 24];
+    OsRng.fill_bytes(&mut nonce_bytes);
+    let nonce = XNonce::from_slice(&nonce_bytes);
+    let tag = cipher
+        .encrypt(nonce, Payload { msg: b"", aad: &payload })
+        .map_err(|e| Error::Encryption(format!("Metadata MAC failed: {}", e)))?;
+
+    let nonce_b64 = general_purpose::STANDARD.encode(nonce_bytes);
+    let tag_b64 = general_purpose::STANDARD.encode(tag);
+    Ok((nonce_b64, tag_b64))
+}
+
+fn verify_metadata_mac(meta: &PasswordMetadata, vault_id: &str, master_key: &[u8]) -> Result<()> {
+    let mac_key = derive_metadata_mac_key(master_key)?;
+    if meta.mac_version.unwrap_or(1) != 1 {
+        return Err(Error::Validation("Unsupported metadata MAC version".to_string()));
+    }
+    let nonce_b64 = meta
+        .mac_nonce_b64
+        .as_deref()
+        .ok_or_else(|| Error::Validation("Missing metadata MAC nonce".to_string()))?;
+    let tag_b64 = meta
+        .mac_tag_b64
+        .as_deref()
+        .ok_or_else(|| Error::Validation("Missing metadata MAC tag".to_string()))?;
+
+    let nonce_bytes = general_purpose::STANDARD
+        .decode(nonce_b64)
+        .map_err(|e| Error::Validation(format!("Invalid metadata MAC nonce: {}", e)))?;
+    if nonce_bytes.len() != 24 {
+        return Err(Error::Validation("Invalid metadata MAC nonce length".to_string()));
+    }
+
+    let tag_bytes = general_purpose::STANDARD
+        .decode(tag_b64)
+        .map_err(|e| Error::Validation(format!("Invalid metadata MAC tag: {}", e)))?;
+
+    let payload = metadata_mac_payload(meta, vault_id)?;
+    let cipher = XChaCha20Poly1305::new(Key::from_slice(&mac_key));
+    let expected_tag = cipher
+        .encrypt(XNonce::from_slice(&nonce_bytes), Payload { msg: b"", aad: &payload })
+        .map_err(|e| Error::Encryption(format!("Metadata MAC failed: {}", e)))?;
+
+    if expected_tag != tag_bytes {
+        return Err(Error::Validation(
+            "Vault metadata integrity check failed.".to_string(),
+        ));
+    }
+
+    Ok(())
 }
 
 async fn load_metadata_from_db(
@@ -212,6 +331,9 @@ async fn load_metadata_from_db(
         argon2_memory_kib,
         argon2_time_cost,
         argon2_parallelism,
+        mac_version: None,
+        mac_nonce_b64: None,
+        mac_tag_b64: None,
     }))
 }
 
@@ -311,6 +433,72 @@ async fn attach_encrypted_db(
             }
         }
     }
+}
+
+async fn write_password_metadata_to_db(
+    db_path: &Path,
+    key_bytes: &[u8],
+    metadata: &PasswordMetadata,
+) -> Result<()> {
+    let hex_key = hex::encode(key_bytes);
+    let connect_options = SqliteConnectOptions::new()
+        .filename(db_path)
+        .create_if_missing(false)
+        .busy_timeout(Duration::from_secs(30))
+        .pragma("key", format!("\"x'{}'\"", hex_key));
+
+    let mut conn = connect_with_timeout(&connect_options, Duration::from_secs(15))
+        .await
+        .map_err(Error::Database)?;
+
+    sqlx::query("BEGIN").execute(&mut conn).await?;
+
+    sqlx::query("INSERT OR REPLACE INTO configuration (key, value) VALUES (?, ?)")
+        .bind("password_salt")
+        .bind(&metadata.salt_b64)
+        .execute(&mut conn)
+        .await?;
+
+    sqlx::query("INSERT OR REPLACE INTO configuration (key, value) VALUES (?, ?)")
+        .bind("password_check_nonce")
+        .bind(&metadata.nonce_b64)
+        .execute(&mut conn)
+        .await?;
+
+    sqlx::query("INSERT OR REPLACE INTO configuration (key, value) VALUES (?, ?)")
+        .bind("password_check_ciphertext")
+        .bind(&metadata.ciphertext_b64)
+        .execute(&mut conn)
+        .await?;
+
+    if let Some(val) = metadata.argon2_memory_kib {
+        sqlx::query("INSERT OR REPLACE INTO configuration (key, value) VALUES (?, ?)")
+            .bind("argon2_memory_kib")
+            .bind(val.to_string())
+            .execute(&mut conn)
+            .await?;
+    }
+
+    if let Some(val) = metadata.argon2_time_cost {
+        sqlx::query("INSERT OR REPLACE INTO configuration (key, value) VALUES (?, ?)")
+            .bind("argon2_time_cost")
+            .bind(val.to_string())
+            .execute(&mut conn)
+            .await?;
+    }
+
+    if let Some(val) = metadata.argon2_parallelism {
+        sqlx::query("INSERT OR REPLACE INTO configuration (key, value) VALUES (?, ?)")
+            .bind("argon2_parallelism")
+            .bind(val.to_string())
+            .execute(&mut conn)
+            .await?;
+    }
+
+    sqlx::query("COMMIT").execute(&mut conn).await?;
+    conn.close().await?;
+
+    Ok(())
 }
 
 async fn is_plaintext_sqlite(db_path: &Path) -> Result<bool> {
@@ -494,7 +682,9 @@ async fn finalize_unlock(
 
     {
         let mut pending_guard = state.pending_key.lock().await;
-        *pending_guard = None;
+        if let Some(mut key) = pending_guard.take() {
+            key.key.zeroize();
+        }
     }
 
     match tokio::time::timeout(Duration::from_secs(5), register_device(state)).await {
@@ -548,6 +738,9 @@ pub async fn set_master_password(
         argon2_memory_kib: Some(argon_params.memory_kib),
         argon2_time_cost: Some(argon_params.time_cost),
         argon2_parallelism: Some(argon_params.parallelism),
+        mac_version: None,
+        mac_nonce_b64: None,
+        mac_tag_b64: None,
     };
 
     if let Some(pool) = { state.db.lock().await.take() } {
@@ -568,73 +761,29 @@ pub async fn set_master_password(
         .create_if_missing(false)
         .busy_timeout(Duration::from_secs(30));
     
-    let mut last_err = None;
+    let mut last_err: Option<Error> = None;
     for _ in 0..10 {
         match connect_with_timeout(&connect_options, Duration::from_secs(15)).await {
             Ok(mut conn) => {
-                sqlx::query("BEGIN").execute(&mut conn).await?;
-                
-                sqlx::query("INSERT OR REPLACE INTO configuration (key, value) VALUES (?, ?)")
-                    .bind("password_salt")
-                    .bind(&metadata.salt_b64)
-                    .execute(&mut conn)
-                    .await?;
-
-                sqlx::query("INSERT OR REPLACE INTO configuration (key, value) VALUES (?, ?)")
-                    .bind("password_check_nonce")
-                    .bind(&metadata.nonce_b64)
-                    .execute(&mut conn)
-                    .await?;
-
-                sqlx::query("INSERT OR REPLACE INTO configuration (key, value) VALUES (?, ?)")
-                    .bind("password_check_ciphertext")
-                    .bind(&metadata.ciphertext_b64)
-                    .execute(&mut conn)
-                    .await?;
-
-                if let Some(val) = metadata.argon2_memory_kib {
-                    sqlx::query("INSERT OR REPLACE INTO configuration (key, value) VALUES (?, ?)")
-                        .bind("argon2_memory_kib")
-                        .bind(val.to_string())
-                        .execute(&mut conn)
-                        .await?;
-                }
-                
-                if let Some(val) = metadata.argon2_time_cost {
-                    sqlx::query("INSERT OR REPLACE INTO configuration (key, value) VALUES (?, ?)")
-                        .bind("argon2_time_cost")
-                        .bind(val.to_string())
-                        .execute(&mut conn)
-                        .await?;
-                }
-
-                if let Some(val) = metadata.argon2_parallelism {
-                    sqlx::query("INSERT OR REPLACE INTO configuration (key, value) VALUES (?, ?)")
-                        .bind("argon2_parallelism")
-                        .bind(val.to_string())
-                        .execute(&mut conn)
-                        .await?;
-                }
-
-                sqlx::query("COMMIT").execute(&mut conn).await?;
-
-                let temp_path_str = temp_db_path.to_string_lossy().replace('\\', "/");
                 attach_encrypted_db(&mut conn, &temp_db_path, &hex_key).await?;
                 sqlx::query("SELECT sqlcipher_export('encrypted')").execute(&mut conn).await?;
                 sqlx::query("DETACH DATABASE encrypted").execute(&mut conn).await?;
 
                 conn.close().await?;
+
+                write_password_metadata_to_db(&temp_db_path, key_z.as_slice(), &metadata).await?;
                 
                 tokio::time::sleep(Duration::from_millis(1000)).await;
                 fs::remove_file(&db_path).await?;
                 fs::rename(&temp_db_path, &db_path).await?;
                 
-                write_password_metadata(db_path.as_path(), &metadata).await?;
+                write_password_metadata(db_path.as_path(), &metadata, Some(key_z.as_slice()))
+                    .await?;
                 last_err = None;
                 break;
             }
             Err(e) => {
-                last_err = Some(e);
+                last_err = Some(Error::Database(e));
                 tokio::time::sleep(Duration::from_millis(1500)).await;
             }
         }
@@ -683,7 +832,13 @@ pub async fn unlock(
         return Err(Error::InvalidPassword);
     }
 
-    if read_password_metadata(db_path.as_path()).await?.is_none() {
+    if meta.mac_tag_b64.is_some() {
+        let vault_id = get_vault_id(db_path.as_path());
+        verify_metadata_mac(&meta, &vault_id, key_z.as_slice())?;
+    }
+
+    let should_refresh_meta = meta.mac_tag_b64.is_none();
+    if should_refresh_meta || read_password_metadata(db_path.as_path()).await?.is_none() {
         write_password_metadata(
             db_path.as_path(),
             &PasswordMetadata {
@@ -694,7 +849,11 @@ pub async fn unlock(
                 argon2_memory_kib: meta.argon2_memory_kib,
                 argon2_time_cost: meta.argon2_time_cost,
                 argon2_parallelism: meta.argon2_parallelism,
+                mac_version: None,
+                mac_nonce_b64: None,
+                mac_tag_b64: None,
             },
+            Some(key_z.as_slice()),
         )
         .await?;
     }
@@ -779,7 +938,11 @@ pub async fn unlock(
     if totp_required {
         {
             let mut pending_guard = state.pending_key.lock().await;
-            *pending_guard = Some(key_z.clone());
+            *pending_guard = Some(PendingUnlock {
+                key: key_z.clone(),
+                created_at: Instant::now(),
+                attempts: 0,
+            });
         }
         derived_key.zeroize();
         Ok(UnlockResponse {
@@ -796,14 +959,46 @@ pub async fn unlock(
 
 #[tauri::command]
 pub async fn verify_login_totp(state: State<'_, AppState>, token: String) -> Result<()> {
-    let pending_key_opt = {
-        let guard = state.pending_key.lock().await;
-        guard.clone()
-    };
+    let pending_key = {
+        let mut guard = state.pending_key.lock().await;
+        let pending = guard
+            .as_mut()
+            .ok_or_else(|| Error::Internal("No pending unlock operation".to_string()))?;
 
-    let pending_key = pending_key_opt.ok_or_else(|| Error::Internal("No pending unlock operation".to_string()))?;
+        if pending.created_at.elapsed() > PENDING_TOTP_TTL {
+            if let Some(mut expired) = guard.take() {
+                expired.key.zeroize();
+            }
+            return Err(Error::Validation(
+                "TOTP session expired. Please unlock again.".to_string(),
+            ));
+        }
+
+        if pending.attempts >= MAX_TOTP_ATTEMPTS {
+            if let Some(mut exhausted) = guard.take() {
+                exhausted.key.zeroize();
+            }
+            return Err(Error::Validation(
+                "Too many invalid attempts. Please unlock again.".to_string(),
+            ));
+        }
+
+        pending.key.clone()
+    };
     let trimmed = token.trim();
     if trimmed.len() < 6 {
+        let mut guard = state.pending_key.lock().await;
+        if let Some(pending) = guard.as_mut() {
+            pending.attempts = pending.attempts.saturating_add(1);
+            if pending.attempts >= MAX_TOTP_ATTEMPTS {
+                if let Some(mut exhausted) = guard.take() {
+                    exhausted.key.zeroize();
+                }
+                return Err(Error::Validation(
+                    "Too many invalid attempts. Please unlock again.".to_string(),
+                ));
+            }
+        }
         return Err(Error::Validation("Invalid TOTP token".to_string()));
     }
 
@@ -834,6 +1029,18 @@ pub async fn verify_login_totp(state: State<'_, AppState>, token: String) -> Res
 
     let is_valid = totp.check_current(trimmed).unwrap_or(false);
     if !is_valid {
+        let mut guard = state.pending_key.lock().await;
+        if let Some(pending) = guard.as_mut() {
+            pending.attempts = pending.attempts.saturating_add(1);
+            if pending.attempts >= MAX_TOTP_ATTEMPTS {
+                if let Some(mut exhausted) = guard.take() {
+                    exhausted.key.zeroize();
+                }
+                return Err(Error::Validation(
+                    "Too many invalid attempts. Please unlock again.".to_string(),
+                ));
+            }
+        }
         return Err(Error::Validation("Invalid TOTP token".to_string()));
     }
 
@@ -965,48 +1172,29 @@ pub async fn rotate_master_password(
         .busy_timeout(Duration::from_secs(30))
         .pragma("key", format!("\"x'{}'\"", hex_old_key));
     
-    let mut last_err = None;
+    let mut last_err: Option<Error> = None;
     for _ in 0..10 {
         match connect_with_timeout(&connect_options, Duration::from_secs(15)).await {
             Ok(mut conn) => {
-                sqlx::query("BEGIN").execute(&mut conn).await?;
-                
-                sqlx::query("INSERT OR REPLACE INTO configuration (key, value) VALUES (?, ?)")
-                    .bind("password_salt")
-                    .bind(&metadata.salt_b64)
-                    .execute(&mut conn)
-                    .await?;
-
-                sqlx::query("INSERT OR REPLACE INTO configuration (key, value) VALUES (?, ?)")
-                    .bind("password_check_nonce")
-                    .bind(&metadata.nonce_b64)
-                    .execute(&mut conn)
-                    .await?;
-
-                sqlx::query("INSERT OR REPLACE INTO configuration (key, value) VALUES (?, ?)")
-                    .bind("password_check_ciphertext")
-                    .bind(&metadata.ciphertext_b64)
-                    .execute(&mut conn)
-                    .await?;
-
-                sqlx::query("COMMIT").execute(&mut conn).await?;
-
                 attach_encrypted_db(&mut conn, &temp_db_path, &hex_new_key).await?;
                 sqlx::query("SELECT sqlcipher_export('encrypted')").execute(&mut conn).await?;
                 sqlx::query("DETACH DATABASE encrypted").execute(&mut conn).await?;
 
                 conn.close().await?;
+
+                write_password_metadata_to_db(&temp_db_path, new_key_z.as_slice(), &metadata).await?;
                 
                 tokio::time::sleep(Duration::from_millis(1000)).await;
                 fs::remove_file(&db_path).await?;
                 fs::rename(&temp_db_path, &db_path).await?;
                 
-                write_password_metadata(db_path.as_path(), &metadata).await?;
+                write_password_metadata(db_path.as_path(), &metadata, Some(new_key_z.as_slice()))
+                    .await?;
                 last_err = None;
                 break;
             }
             Err(e) => {
-                last_err = Some(e);
+                last_err = Some(Error::Database(e));
                 tokio::time::sleep(Duration::from_millis(1500)).await;
             }
         }
@@ -1097,66 +1285,29 @@ pub async fn update_argon2_params(
         .busy_timeout(Duration::from_secs(30))
         .pragma("key", format!("\"x'{}'\"", hex_old_key));
     
-    let mut last_err = None;
+    let mut last_err: Option<Error> = None;
     for _ in 0..10 {
         match connect_with_timeout(&connect_options, Duration::from_secs(15)).await {
             Ok(mut conn) => {
-                sqlx::query("BEGIN").execute(&mut conn).await?;
-                
-                sqlx::query("INSERT OR REPLACE INTO configuration (key, value) VALUES (?, ?)")
-                    .bind("password_salt")
-                    .bind(&metadata.salt_b64)
-                    .execute(&mut conn)
-                    .await?;
-
-                sqlx::query("INSERT OR REPLACE INTO configuration (key, value) VALUES (?, ?)")
-                    .bind("password_check_nonce")
-                    .bind(&metadata.nonce_b64)
-                    .execute(&mut conn)
-                    .await?;
-
-                sqlx::query("INSERT OR REPLACE INTO configuration (key, value) VALUES (?, ?)")
-                    .bind("password_check_ciphertext")
-                    .bind(&metadata.ciphertext_b64)
-                    .execute(&mut conn)
-                    .await?;
-
-                sqlx::query("INSERT OR REPLACE INTO configuration (key, value) VALUES (?, ?)")
-                    .bind("argon2_memory_kib")
-                    .bind(new_params.memory_kib.to_string())
-                    .execute(&mut conn)
-                    .await?;
-
-                sqlx::query("INSERT OR REPLACE INTO configuration (key, value) VALUES (?, ?)")
-                    .bind("argon2_time_cost")
-                    .bind(new_params.time_cost.to_string())
-                    .execute(&mut conn)
-                    .await?;
-
-                sqlx::query("INSERT OR REPLACE INTO configuration (key, value) VALUES (?, ?)")
-                    .bind("argon2_parallelism")
-                    .bind(new_params.parallelism.to_string())
-                    .execute(&mut conn)
-                    .await?;
-
-                sqlx::query("COMMIT").execute(&mut conn).await?;
-
                 attach_encrypted_db(&mut conn, &temp_db_path, &hex_new_key).await?;
                 sqlx::query("SELECT sqlcipher_export('encrypted')").execute(&mut conn).await?;
                 sqlx::query("DETACH DATABASE encrypted").execute(&mut conn).await?;
 
                 conn.close().await?;
+
+                write_password_metadata_to_db(&temp_db_path, new_key_z.as_slice(), &metadata).await?;
                 
                 tokio::time::sleep(Duration::from_millis(1000)).await;
                 fs::remove_file(&db_path).await?;
                 fs::rename(&temp_db_path, &db_path).await?;
                 
-                write_password_metadata(db_path.as_path(), &metadata).await?;
+                write_password_metadata(db_path.as_path(), &metadata, Some(new_key_z.as_slice()))
+                    .await?;
                 last_err = None;
                 break;
             }
             Err(e) => {
-                last_err = Some(e);
+                last_err = Some(Error::Database(e));
                 tokio::time::sleep(Duration::from_millis(1500)).await;
             }
         }
@@ -1227,7 +1378,9 @@ pub async fn lock(app: tauri::AppHandle, state: State<'_, AppState>) -> Result<(
     }
     {
         let mut pending = state.pending_key.lock().await;
-        *pending = None;
+        if let Some(mut key) = pending.take() {
+            key.key.zeroize();
+        }
     }
 
     let should_clear = {

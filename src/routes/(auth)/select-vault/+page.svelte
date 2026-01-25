@@ -8,7 +8,7 @@
   import { recentDatabases } from '$lib/stores/recentDatabases';
   import { importVaultBackup, notifyVaultRefresh } from '$lib/utils/backup';
   import type { ImportVaultProgressStage } from '$lib/utils/backup';
-  import { currentLocale } from '$lib/i18n';
+  import { currentLocale, t } from '$lib/i18n';
   import { Spinner } from '$lib/components/ui/spinner/index.js';
   import { Button } from '$lib/components/ui/button';
 
@@ -23,9 +23,7 @@
     Shield
   } from '@lucide/svelte';
 
-  const t = (locale: 'en' | 'sv', en: string, sv: string) => (locale === 'sv' ? sv : en);
-
-  let locale = $derived($currentLocale as 'en' | 'sv');
+  let locale = $derived($currentLocale);
   let error = $state<string | null>(null);
   let importMessage = $state<string | null>(null);
   let importProgress = $state<string | null>(null);
@@ -34,8 +32,8 @@
   let triedElevated = $state(false);
 
   const importProgressMessages = $derived<Record<ImportVaultProgressStage, string>>({
-    decrypting: t(locale, 'Decrypting backup…', 'Dekrypterar backup…'),
-    restoring: t(locale, 'Restoring vault contents…', 'Återställer valvets innehåll…')
+    decrypting: t(locale, 'decryptingBackup'),
+    restoring: t(locale, 'restoringVault')
   });
 
   const hasAccessDeniedError = $derived(Boolean(error?.toLowerCase().includes('access is denied')));
@@ -75,13 +73,13 @@
 
       $isDatabaseLoaded = true;
       recentDatabases.addRecentDatabase(path);
-    } catch (cause: any) {
+    } catch (cause: unknown) {
       console.error('Failed to load database:', cause);
       error =
-        cause.message ||
-        t(locale, 'Failed to load the selected vault.', 'Misslyckades att ladda det valda valvet.');
+        ((cause as Record<string, unknown>).message as string) || t(locale, 'failedToLoadVault');
 
-      const message = cause.message || cause.toString() || '';
+      const message =
+        ((cause as Record<string, unknown>).message as string) || cause?.toString() || '';
       if (!triedElevated && message.toLowerCase().includes('access is denied')) {
         triedElevated = true;
         void attemptElevatedCopy();
@@ -99,15 +97,10 @@
       if (typeof destination === 'string') {
         await loadAndCheckDatabase(destination);
       }
-    } catch (cause: any) {
+    } catch (cause: unknown) {
       console.error('Elevated copy failed:', cause);
       error =
-        cause.message ||
-        t(
-          locale,
-          'Failed to copy the vault with elevated permissions.',
-          'Misslyckades kopiera valvet med förhöjda rättigheter.'
-        );
+        ((cause as Record<string, unknown>).message as string) || t(locale, 'elevatedCopyFailed');
     }
   };
 
@@ -122,8 +115,8 @@
   const selectExistingVault = async () => {
     try {
       const picked = await open({
-        title: 'Select a Pulsar Vault',
-        filters: [{ name: 'Pulsar Vault', extensions: ['psec'] }],
+        title: t(locale, 'selectVaultDialogTitle'),
+        filters: [{ name: t(locale, 'vaultFileFilterName'), extensions: ['psec'] }],
         multiple: false
       });
 
@@ -138,8 +131,8 @@
   const createNewVault = async () => {
     try {
       const picked = await save({
-        title: 'Create a new Pulsar Vault',
-        filters: [{ name: 'Pulsar Vault', extensions: ['psec'] }]
+        title: t(locale, 'createVaultDialogTitle'),
+        filters: [{ name: t(locale, 'vaultFileFilterName'), extensions: ['psec'] }]
       });
 
       if (picked) {
@@ -163,7 +156,7 @@
     showImportPopup = true;
   };
 
-  const handleImportSelected = async (detail: any) => {
+  const handleImportSelected = async (detail: { importedPath: string; passphrase: string }) => {
     showImportPopup = false;
     importMessage = null;
     importProgress = null;
@@ -172,16 +165,12 @@
     const passphrase = typeof detail?.passphrase === 'string' ? detail.passphrase.trim() : '';
 
     if (!importedPath) {
-      error = t(locale, 'No backup file was selected.', 'Ingen backupfil valdes.');
+      error = t(locale, 'noBackupFileSelected');
       return;
     }
 
     if (!passphrase) {
-      error = t(
-        locale,
-        'A passphrase is required to unlock the selected backup.',
-        'En lösenfras krävs för att låsa upp den valda backupen.'
-      );
+      error = t(locale, 'passphraseRequired');
       return;
     }
 
@@ -199,23 +188,18 @@
       const itemCount = snapshot.passwordItems.length;
       const tagCount = snapshot.buttons.length;
 
-      importMessage = t(
+      const itemLabel = itemCount === 1 ? t(locale, 'itemSingular') : t(locale, 'itemPlural');
+      const tagLabel = tagCount === 1 ? t(locale, 'tagSingular') : t(locale, 'tagPlural');
+      importMessage = `${t(locale, 'vaultRestoredPrefix')} ${itemCount} ${itemLabel} ${t(
         locale,
-        `Vault restored: ${itemCount} item${itemCount === 1 ? '' : 's'} and ${tagCount} tag${tagCount === 1 ? '' : 's'} imported successfully.`,
-        `Valv återställt: ${itemCount} post${itemCount === 1 ? '' : 'er'} och ${tagCount} tagg${tagCount === 1 ? '' : 'ar'} importerades.`
-      );
+        'and'
+      )} ${tagCount} ${tagLabel} ${t(locale, 'vaultRestoredSuffix')}`;
 
       importProgress = null;
       notifyVaultRefresh('import');
-    } catch (cause: any) {
+    } catch (cause: unknown) {
       console.error('Failed to import backup:', cause);
-      error =
-        cause.message ||
-        t(
-          locale,
-          'Failed to import the selected backup. Please verify the passphrase and try again.',
-          'Misslyckades att importera den valda backupen. Kontrollera lösenfrasen och försök igen.'
-        );
+      error = ((cause as Record<string, unknown>).message as string) || t(locale, 'importFailed');
       importProgress = null;
     }
   };
@@ -231,19 +215,11 @@
         await loadAndCheckDatabase(path);
       } else {
         recentDatabases.removeRecentDatabase(path);
-        error = t(
-          locale,
-          'Selected recent file could not be found.',
-          'Den valda senaste filen kunde inte hittas.'
-        );
+        error = t(locale, 'selectedRecentNotFound');
       }
     } catch (cause) {
       console.error(`Failed to check file existence for ${path}:`, cause);
-      error = t(
-        locale,
-        'An error occurred while checking the file.',
-        'Ett fel uppstod när filen kontrollerades.'
-      );
+      error = t(locale, 'fileCheckError');
     }
   };
 </script>
@@ -268,19 +244,15 @@
   <div class="mx-auto flex w-full max-w-4xl flex-col items-center justify-start px-6 pt-20 pb-20">
     <div class="mb-12 w-full text-center">
       <div
-        class="bg-primary/10 text-primary mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl ring-1 ring-primary/20"
+        class="bg-primary/10 text-primary ring-primary/20 mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl ring-1"
       >
         <Shield class="h-8 w-8" />
       </div>
       <h1 class="text-foreground text-4xl font-bold tracking-tight">
-        {t(locale, 'Welcome to Pulsar', 'Välkommen till Pulsar')}
+        {t(locale, 'welcomeTitle')}
       </h1>
       <p class="text-muted-foreground mt-3 text-lg">
-        {t(
-          locale,
-          'Secure your digital life with professional-grade encryption.',
-          'Säkra ditt digitala liv med kryptering av professionell kvalitet.'
-        )}
+        {t(locale, 'welcomeSubtitle')}
       </p>
     </div>
 
@@ -291,22 +263,18 @@
         onclick={createNewVault}
       >
         <div
-          class="bg-primary/10 text-primary mb-4 flex h-12 w-12 items-center justify-center rounded-xl transition-colors group-hover:bg-primary/20"
+          class="bg-primary/10 text-primary group-hover:bg-primary/20 mb-4 flex h-12 w-12 items-center justify-center rounded-xl transition-colors"
         >
           <Plus class="h-6 w-6" />
         </div>
         <h3 class="text-foreground text-lg font-semibold">
-          {t(locale, 'Create New Vault', 'Skapa nytt valv')}
+          {t(locale, 'createNewVaultTitle')}
         </h3>
         <p class="text-muted-foreground mt-2 text-sm leading-relaxed">
-          {t(
-            locale,
-            'Start fresh with a new secure database file.',
-            'Börja på nytt med en ny säker databasfil.'
-          )}
+          {t(locale, 'createNewVaultDesc')}
         </p>
         <div class="text-primary mt-auto flex items-center gap-2 pt-4 text-xs font-medium">
-          {t(locale, 'Get Started', 'Kom igång')}
+          {t(locale, 'createNewVaultCta')}
           <ArrowRight class="h-3 w-3 transition-transform group-hover:translate-x-1" />
         </div>
       </button>
@@ -317,22 +285,18 @@
         onclick={selectExistingVault}
       >
         <div
-          class="bg-primary/10 text-primary mb-4 flex h-12 w-12 items-center justify-center rounded-xl transition-colors group-hover:bg-primary/20"
+          class="bg-primary/10 text-primary group-hover:bg-primary/20 mb-4 flex h-12 w-12 items-center justify-center rounded-xl transition-colors"
         >
           <FolderOpen class="h-6 w-6" />
         </div>
         <h3 class="text-foreground text-lg font-semibold">
-          {t(locale, 'Open Existing', 'Öppna befintligt')}
+          {t(locale, 'openExistingTitle')}
         </h3>
         <p class="text-muted-foreground mt-2 text-sm leading-relaxed">
-          {t(
-            locale,
-            'Browse your files for an existing Pulsar vault.',
-            'Bläddra bland dina filer efter ett befintligt Pulsar-valv.'
-          )}
+          {t(locale, 'openExistingDesc')}
         </p>
         <div class="text-primary mt-auto flex items-center gap-2 pt-4 text-xs font-medium">
-          {t(locale, 'Select File', 'Välj fil')}
+          {t(locale, 'openExistingCta')}
           <ArrowRight class="h-3 w-3 transition-transform group-hover:translate-x-1" />
         </div>
       </button>
@@ -343,22 +307,18 @@
         onclick={handleImportFile}
       >
         <div
-          class="bg-primary/10 text-primary mb-4 flex h-12 w-12 items-center justify-center rounded-xl transition-colors group-hover:bg-primary/20"
+          class="bg-primary/10 text-primary group-hover:bg-primary/20 mb-4 flex h-12 w-12 items-center justify-center rounded-xl transition-colors"
         >
           <Upload class="h-6 w-6" />
         </div>
         <h3 class="text-foreground text-lg font-semibold">
-          {t(locale, 'Migrate / Restore', 'Migrera / Återställ')}
+          {t(locale, 'migrateTitle')}
         </h3>
         <p class="text-muted-foreground mt-2 text-sm leading-relaxed">
-          {t(
-            locale,
-            'Import data from a backup or another manager.',
-            'Importera data från en backup eller en annan hanterare.'
-          )}
+          {t(locale, 'migrateDesc')}
         </p>
         <div class="text-primary mt-auto flex items-center gap-2 pt-4 text-xs font-medium">
-          {t(locale, 'Start Import', 'Importera')}
+          {t(locale, 'migrateCta')}
           <ArrowRight class="h-3 w-3 transition-transform group-hover:translate-x-1" />
         </div>
       </button>
@@ -368,8 +328,8 @@
       <div class="space-y-4">
         <div class="flex items-center gap-2 px-1">
           <Clock class="text-muted-foreground h-4 w-4" />
-          <h2 class="text-foreground text-sm font-semibold uppercase tracking-wider">
-            {t(locale, 'Recently Opened', 'Senaste öppnade')}
+          <h2 class="text-foreground text-sm font-semibold tracking-wider uppercase">
+            {t(locale, 'recentlyOpenedTitle')}
           </h2>
         </div>
 
@@ -378,29 +338,35 @@
             {#each $recentDatabases as dbPath (dbPath)}
               <button
                 type="button"
-                class="cursor-pointer border-border/40 bg-card/30 hover:border-primary/30 hover:bg-primary/5 group flex w-full items-center justify-between rounded-xl border px-4 py-3 transition-all"
+                class="border-border/40 bg-card/30 hover:border-primary/30 hover:bg-primary/5 group flex w-full cursor-pointer items-center justify-between rounded-xl border px-4 py-3 transition-all"
                 onclick={() => selectRecentDatabase(dbPath)}
               >
                 <div class="flex items-center gap-3">
                   <Database class="text-muted-foreground h-4 w-4" />
                   <div class="text-left">
-                    <p class="text-foreground text-sm font-medium transition-colors group-hover:text-primary">
+                    <p
+                      class="text-foreground group-hover:text-primary text-sm font-medium transition-colors"
+                    >
                       {basename(dbPath)}
                     </p>
-                    <p class="text-muted-foreground truncate text-[11px] max-w-50" title={dbPath}>
+                    <p class="text-muted-foreground max-w-50 truncate text-[11px]" title={dbPath}>
                       {dbPath}
                     </p>
                   </div>
                 </div>
-                <ArrowRight class="text-muted-foreground h-4 w-4 opacity-0 transition-all group-hover:translate-x-1 group-hover:opacity-100" />
+                <ArrowRight
+                  class="text-muted-foreground h-4 w-4 opacity-0 transition-all group-hover:translate-x-1 group-hover:opacity-100"
+                />
               </button>
             {/each}
           </div>
         {:else}
-          <div class="border-border/40 bg-muted/5 flex flex-col items-center justify-center rounded-2xl border border-dashed py-8 text-center">
+          <div
+            class="border-border/40 bg-muted/5 flex flex-col items-center justify-center rounded-2xl border border-dashed py-8 text-center"
+          >
             <Database class="text-muted-foreground/30 mb-2 h-8 w-8" />
             <p class="text-muted-foreground text-xs italic">
-              {t(locale, 'No recent vaults found.', 'Inga senaste valv hittades.')}
+              {t(locale, 'noRecentVaults')}
             </p>
           </div>
         {/if}
@@ -410,50 +376,52 @@
         {#if error || importProgress || importMessage}
           <div class="flex items-center gap-2 px-1">
             <FileWarning class="text-muted-foreground h-4 w-4" />
-            <h2 class="text-foreground text-sm font-semibold uppercase tracking-wider">
-              {t(locale, 'Status', 'Status')}
+            <h2 class="text-foreground text-sm font-semibold tracking-wider uppercase">
+              {t(locale, 'statusTitle')}
             </h2>
           </div>
 
           <div class="space-y-3">
             {#if error}
               <div class="border-destructive/40 bg-destructive/10 rounded-xl border p-4">
-                <p class="text-destructive text-sm font-medium leading-relaxed">{error}</p>
+                <p class="text-destructive text-sm leading-relaxed font-medium">{error}</p>
                 {#if hasAccessDeniedError}
                   <Button
                     variant="outline"
                     size="sm"
-                    class="mt-3 w-full border-destructive/20 bg-destructive/5 hover:bg-destructive/10"
+                    class="border-destructive/20 bg-destructive/5 hover:bg-destructive/10 mt-3 w-full"
                     onclick={attemptElevatedCopy}
                   >
-                    {t(locale, 'Try elevated access', 'Försök med förhöjd åtkomst')}
+                    {t(locale, 'tryElevatedAccess')}
                   </Button>
                 {/if}
               </div>
             {/if}
 
             {#if importProgress}
-              <div class="border-primary/40 bg-primary/5 flex items-center gap-3 rounded-xl border p-4">
+              <div
+                class="border-primary/40 bg-primary/5 flex items-center gap-3 rounded-xl border p-4"
+              >
                 <Spinner class="text-primary h-4 w-4" />
                 <p class="text-foreground text-sm font-medium">{importProgress}</p>
               </div>
             {/if}
 
             {#if importMessage}
-              <div class="border-emerald-500/40 bg-emerald-500/10 rounded-xl border p-4">
-                <p class="text-emerald-600 text-sm font-medium leading-relaxed">{importMessage}</p>
+              <div class="rounded-xl border border-emerald-500/40 bg-emerald-500/10 p-4">
+                <p class="text-sm leading-relaxed font-medium text-emerald-600">{importMessage}</p>
               </div>
             {/if}
           </div>
         {:else}
-          <div class="bg-primary/5 flex h-full flex-col justify-center rounded-2xl border border-primary/10 p-6">
-            <h4 class="text-primary text-sm font-bold uppercase tracking-widest">{t(locale, 'Pulsar Tip', 'Pulsar Tips')}</h4>
-            <p class="text-muted-foreground mt-2 text-sm italic leading-relaxed">
-              {t(
-                locale,
-                'Keep your vault file on an encrypted drive for maximum security. Pulsar encrypts every item, but physical security matters too.',
-                'Förvara din valvfil på en krypterad disk för maximal säkerhet. Pulsar krypterar varje post, men fysisk säkerhet är också viktig.'
-              )}
+          <div
+            class="bg-primary/5 border-primary/10 flex h-full flex-col justify-center rounded-2xl border p-6"
+          >
+            <h4 class="text-primary text-sm font-bold tracking-widest uppercase">
+              {t(locale, 'pulsarTipTitle')}
+            </h4>
+            <p class="text-muted-foreground mt-2 text-sm leading-relaxed italic">
+              {t(locale, 'pulsarTipBody')}
             </p>
           </div>
         {/if}

@@ -65,8 +65,8 @@
           <li class="item" class:selected={selectedItemId === item.id} role="listitem">
             <ContextMenu>
               <ContextMenuTrigger>
-                <a
-                  href={item.url ?? '#'}
+                <button
+                  type="button"
                   class="itemLink"
                   onclick={(event: MouseEvent) => {
                     event.preventDefault();
@@ -96,7 +96,7 @@
                       {tagMap}
                     />
                   </div>
-                </a>
+                </button>
               </ContextMenuTrigger>
               <ContextMenuContent class="w-48">
                 <ContextMenuItem onSelect={() => onPinToggle?.(item)}

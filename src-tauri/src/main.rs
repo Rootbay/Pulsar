@@ -23,6 +23,7 @@ use crate::state::AppState;
 use crate::error::{Error, Result};
 use tauri::State;
 use tauri_plugin_store::StoreBuilder;
+use zeroize::Zeroize;
 
 #[tauri::command]
 async fn is_database_loaded(app_state: State<'_, AppState>) -> Result<bool> {
@@ -105,7 +106,9 @@ async fn switch_database(db_path: PathBuf, app_state: State<'_, AppState>) -> Re
 
     {
         let mut pending = app_state.pending_key.lock().await;
-        *pending = None;
+        if let Some(mut key) = pending.take() {
+            key.key.zeroize();
+        }
     }
 
     Ok(())

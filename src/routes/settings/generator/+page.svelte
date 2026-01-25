@@ -30,10 +30,10 @@
     Sparkles,
     Trash2
   } from '@lucide/svelte';
-  import { currentLocale } from '$lib/i18n';
+  import { currentLocale, t } from '$lib/i18n';
   import { copyText } from '$lib/utils/copyHelper';
 
-  import { GeneratorService, AMBIGUOUS_CHARS, SIMILAR_CHARS, SYMBOL_CHARSET } from '$lib/utils/generator';
+  import { GeneratorService } from '$lib/utils/generator';
 
   type GeneratorOptions = GeneratorSettings['options'];
   type GeneratorOptionKey = keyof GeneratorOptions;
@@ -57,8 +57,7 @@
 
   type StrengthLevel = 'weak' | 'medium' | 'strong';
 
-  const t = (locale: 'en' | 'sv', en: string, sv: string) => (locale === 'sv' ? sv : en);
-  let locale = $derived($currentLocale as 'en' | 'sv');
+  const locale = $derived($currentLocale);
 
   const STRENGTH_META: Record<
     StrengthLevel,
@@ -280,7 +279,7 @@
     editModalType = null;
   }
 
-  function handleSaveEdit(updatedItem: any) {
+  function handleSaveEdit(updatedItem: PasswordPreset | SiteRule) {
     if (editModalType === 'preset' && itemToEdit) {
       passwordPresets.updatePreset((itemToEdit as PasswordPreset).name, updatedItem);
     } else if (editModalType === 'rule' && itemToEdit) {
@@ -344,7 +343,7 @@
         </div>
         <div>
           <CardTitle>
-            {t(locale, 'Password Generator', 'Lösenordsgenerator')}
+            {t(locale, 'Password Generator')}
           </CardTitle>
           <CardDescription>
             {t(
@@ -356,7 +355,7 @@
         </div>
       </div>
       <Badge variant="secondary" class="mt-2 w-fit sm:mt-0">
-        {t(locale, 'Length', 'Längd')}&nbsp;{passwordLength}
+        {t(locale, 'Length')}&nbsp;{passwordLength}
       </Badge>
     </CardHeader>
 
@@ -364,7 +363,7 @@
       <div class="border-border/60 bg-muted/10 space-y-3 rounded-xl border p-4">
         <div class="flex flex-wrap items-center justify-between gap-2">
           <p class="text-muted-foreground text-sm font-medium">
-            {t(locale, 'Generated password', 'Genererat lösenord')}
+            {t(locale, 'Generated password')}
           </p>
           <Button
             type="button"
@@ -375,7 +374,7 @@
             disabled={!hasCharacterPool}
           >
             <RefreshCcw class="size-4" aria-hidden="true" />
-            {t(locale, 'Generate new', 'Generera nytt')}
+            {t(locale, 'Generate new')}
           </Button>
         </div>
         <div
@@ -411,11 +410,11 @@
             onclick={saveCurrentSettingsAsPreset}
           >
             <Save class="size-4" aria-hidden="true" />
-            {t(locale, 'Save as preset', 'Spara som förval')}
+            {t(locale, 'Save as preset')}
           </Button>
           <Button type="button" variant="outline" class="gap-2" onclick={resetOptions}>
             <RotateCcw class="size-4" aria-hidden="true" />
-            {t(locale, 'Reset to defaults', 'Återställ till standard')}
+            {t(locale, 'Reset to defaults')}
           </Button>
         </div>
       </div>
@@ -424,19 +423,19 @@
         <div class="flex flex-wrap items-center justify-between gap-3">
           <div>
             <p class="text-foreground text-sm font-semibold">
-              {t(locale, 'Password strength', 'Lösenordsstyrka')}
+              {t(locale, 'Password strength')}
             </p>
             <p class="text-muted-foreground text-xs">
-              {t(locale, 'Entropy', 'Entropi')} ≈ {strengthEntropy}
-              {t(locale, 'bits', 'bitar')}
+              {t(locale, 'Entropy')} ≈ {strengthEntropy}
+              {t(locale, 'bits')}
             </p>
           </div>
           <span class={cn('text-sm font-semibold', strengthMeta.textClass)}>
             {strengthLevel === 'weak'
-              ? t(locale, 'Weak', 'Svagt')
+              ? t(locale, 'Weak')
               : strengthLevel === 'medium'
-                ? t(locale, 'Good', 'Bra')
-                : t(locale, 'Very strong', 'Mycket starkt')}
+                ? t(locale, 'Good')
+                : t(locale, 'Very strong')}
           </span>
         </div>
         <Progress value={strengthProgress} class={cn('bg-muted/40', strengthMeta.barClass)} />
@@ -446,7 +445,7 @@
         <div class="space-y-4">
           <div class="space-y-2">
             <p class="text-foreground text-sm font-medium">
-              {t(locale, 'Password length', 'Lösenordslängd')}
+              {t(locale, 'Password length')}
             </p>
             <input
               type="range"
@@ -464,7 +463,7 @@
 
           <div class="space-y-2">
             <p class="text-foreground text-sm font-medium">
-              {t(locale, 'Apply saved preset', 'Använd sparat förval')}
+              {t(locale, 'Apply saved preset')}
             </p>
             {#if presets.length}
               <Select
@@ -474,18 +473,18 @@
               >
                 <SelectTrigger aria-label="Select password preset" class="w-full">
                   <span data-slot="select-value" class="flex items-center gap-2 truncate text-sm">
-                    {selectedPresetName ?? t(locale, 'Choose a preset', 'Välj ett förval')}
+                    {selectedPresetName ?? t(locale, 'Choose a preset')}
                   </span>
                 </SelectTrigger>
                 <SelectContent>
-                  {#each presets as preset}
+                  {#each presets as preset (preset.name)}
                     <SelectItem value={preset.name}>{preset.name}</SelectItem>
                   {/each}
                 </SelectContent>
               </Select>
             {:else}
               <p class="text-muted-foreground text-sm">
-                {t(locale, 'No presets available yet.', 'Inga förval sparade ännu.')}
+                {t(locale, 'No presets available yet.')}
               </p>
             {/if}
           </div>
@@ -493,7 +492,7 @@
 
         <div class="space-y-4">
           <p class="text-foreground text-sm font-semibold">
-            {t(locale, 'Character options', 'Teckenväljare')}
+            {t(locale, 'Character options')}
           </p>
           <div class="space-y-3">
             {#each CHARACTER_TOGGLES as option (option.key)}
@@ -503,12 +502,12 @@
                 <div>
                   <p class="text-foreground text-sm font-medium">
                     {option.key === 'uppercase'
-                      ? t(locale, 'Include uppercase (A-Z)', 'Inkludera versaler (A–Z)')
+                      ? t(locale, 'Include uppercase (A-Z)')
                       : option.key === 'lowercase'
-                        ? t(locale, 'Include lowercase (a-z)', 'Inkludera gemener (a–z)')
+                        ? t(locale, 'Include lowercase (a-z)')
                         : option.key === 'digits'
-                          ? t(locale, 'Include digits (0-9)', 'Inkludera siffror (0–9)')
-                          : t(locale, 'Include symbols (!@#$)', 'Inkludera symboler (!@#$)')}
+                          ? t(locale, 'Include digits (0-9)')
+                          : t(locale, 'Include symbols (!@#$)')}
                   </p>
                   <p class="text-muted-foreground text-xs">
                     {option.key === 'uppercase'
@@ -551,7 +550,7 @@
         <div class="flex items-center gap-2">
           <Sparkles class="text-muted-foreground size-4" aria-hidden="true" />
           <p class="text-foreground text-sm font-semibold">
-            {t(locale, 'Advanced options', 'Avancerade alternativ')}
+            {t(locale, 'Advanced options')}
           </p>
         </div>
         <div class="grid gap-3 md:grid-cols-2">
@@ -562,14 +561,14 @@
               <div>
                 <p class="text-foreground text-sm font-medium">
                   {option.key === 'ambiguous'
-                    ? t(locale, 'Avoid ambiguous characters', 'Undvik tvetydiga tecken')
+                    ? t(locale, 'Avoid ambiguous characters')
                     : option.key === 'similar'
                       ? t(
                           locale,
                           'Exclude visually similar characters',
                           'Exkludera visuellt liknande tecken'
                         )
-                      : t(locale, 'Pronounceable mode', 'Läsläge (uttalbart)')}
+                      : t(locale, 'Pronounceable mode')}
                 </p>
                 <p class="text-muted-foreground text-xs">
                   {option.key === 'ambiguous'
@@ -612,7 +611,7 @@
       </div>
       <div>
         <CardTitle>
-          {t(locale, 'Saved presets', 'Sparade förval')}
+          {t(locale, 'Saved presets')}
         </CardTitle>
         <CardDescription>
           {t(
@@ -634,7 +633,7 @@
                 <div>
                   <p class="text-foreground text-sm font-semibold">{preset.name}</p>
                   <p class="text-muted-foreground text-xs">
-                    {t(locale, 'Length', 'Längd')}
+                    {t(locale, 'Length')}
                     {preset.length} · {preset.charSet}
                   </p>
                 </div>
@@ -673,7 +672,7 @@
                 class="mt-1 w-full"
                 onclick={() => applyPreset(preset)}
               >
-                {t(locale, 'Use preset', 'Använd förval')}
+                {t(locale, 'Use preset')}
               </Button>
             </div>
           {/each}
@@ -699,7 +698,7 @@
       </div>
       <div>
         <CardTitle>
-          {t(locale, 'Site rule templates', 'Mall för webbplatsregler')}
+          {t(locale, 'Site rule templates')}
         </CardTitle>
         <CardDescription>
           {t(
@@ -747,7 +746,7 @@
               </div>
               <div class="text-muted-foreground flex flex-wrap gap-2 text-xs">
                 <Badge variant="secondary">
-                  {t(locale, 'Length', 'Längd')}
+                  {t(locale, 'Length')}
                   {rule.length}
                 </Badge>
                 <Badge variant="outline">{rule.type}</Badge>

@@ -19,6 +19,7 @@
   import { GeneratorService } from '$lib/utils/generator';
   import PasswordStrength from '$lib/components/password/PasswordStrength.svelte';
   import { Wand2 } from '@lucide/svelte';
+  import type { PasswordHealth } from '$lib/utils/security';
 
   interface Props {
     isEditing: boolean;
@@ -48,7 +49,7 @@
     onfinalize
   }: Props = $props();
 
-  let securityHealth = $state<Record<number, any>>({});
+  let securityHealth = $state<Record<number, PasswordHealth>>({});
 
   const unsub = securityDashboard.subscribe((state) => {
     securityHealth = state.items;
@@ -237,7 +238,7 @@
 >
   {#if !isEditing}
     {#if showSkeleton}
-      {#each viewSkeletonPlaceholders as _, index}
+      {#each viewSkeletonPlaceholders as _, i (i)}
         <div class="flex items-center gap-4 py-2" aria-hidden="true">
           <Skeleton class="h-5 w-5 rounded-md" />
           <div class="flex flex-1 flex-col gap-2">
@@ -322,7 +323,7 @@
       {/each}
     {/if}
   {:else if showSkeleton}
-    {#each editSkeletonPlaceholders as _}
+    {#each editSkeletonPlaceholders as _, i (i)}
       <div class="flex items-center gap-4 py-2" aria-hidden="true">
         <Skeleton class="h-5 w-5 rounded-md" />
         <div class="flex flex-1 flex-col gap-2">

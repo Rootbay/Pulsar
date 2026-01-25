@@ -30,10 +30,9 @@
   interface Props {
     onclose?: () => void;
     onpasswordSaved?: () => void;
-    ontagCreated?: () => void;
   }
 
-  let { onclose, onpasswordSaved, ontagCreated }: Props = $props();
+  let { onclose, onpasswordSaved }: Props = $props();
 
   const categories = [
     { id: 'login', label: 'Login', icon: Key },
@@ -135,9 +134,7 @@
   <DialogContent class="sm:max-w-xl">
     <DialogHeader>
       <DialogTitle>New item</DialogTitle>
-      <DialogDescription>
-        Add a new credential to your secure vault.
-      </DialogDescription>
+      <DialogDescription>Add a new credential to your secure vault.</DialogDescription>
     </DialogHeader>
 
     <ScrollArea class="max-h-[70vh] pr-4">
@@ -169,7 +166,13 @@
 
         <div class="grid gap-2">
           <Label for="title">Title</Label>
-          <Input id="title" placeholder="e.g. GitHub, Netflix" bind:value={title} required autofocus />
+          <Input
+            id="title"
+            placeholder="e.g. GitHub, Netflix"
+            bind:value={title}
+            required
+            autofocus
+          />
         </div>
 
         <div class="grid gap-2">
@@ -201,7 +204,7 @@
             />
             <button
               type="button"
-              class="text-muted-foreground hover:text-foreground absolute right-3 top-1/2 -translate-y-1/2"
+              class="text-muted-foreground hover:text-foreground absolute top-1/2 right-3 -translate-y-1/2"
               onclick={() => (showPassword = !showPassword)}
             >
               {#if showPassword}
@@ -258,14 +261,14 @@
           <ScrollArea class="border-border/60 bg-muted/40 max-h-40 rounded-md border p-2">
             <div class="grid gap-2">
               {#if !availableTags.length}
-                <p class="text-muted-foreground text-sm text-center py-4">No tags available yet.</p>
+                <p class="text-muted-foreground py-4 text-center text-sm">No tags available yet.</p>
               {:else}
                 {#each availableTags as tagOption (tagOption.id)}
                   <Button
                     type="button"
                     variant={tags.includes(tagOption.text) ? 'secondary' : 'ghost'}
                     class={cn(
-                      'w-full justify-start gap-2 h-9',
+                      'h-9 w-full justify-start gap-2',
                       tags.includes(tagOption.text)
                         ? 'bg-secondary text-secondary-foreground'
                         : 'hover:bg-muted/80'
@@ -277,7 +280,12 @@
                       style={`background: ${tagOption.color || '#94a3b8'};`}
                       aria-hidden="true"
                     ></span>
-                    <Icon path={tagOption.icon} size="14" color="currentColor" className="shrink-0" />
+                    <Icon
+                      path={tagOption.icon}
+                      size="14"
+                      color="currentColor"
+                      className="shrink-0"
+                    />
                     <span class="text-sm">{tagOption.text}</span>
                     {#if tags.includes(tagOption.text)}
                       <Check class="text-muted-foreground ms-auto size-3.5" />

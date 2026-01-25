@@ -1,27 +1,29 @@
 import { callBackend } from '../utils/backend';
 import {
-  type AdvancedSettings,
   defaultAdvancedSettings,
-  type AppearanceSettings,
   defaultAppearanceSettings,
-  type AutofillSettings,
   defaultAutofillSettings,
-  type BackupSettings,
   defaultBackupSettings,
-  type ClipboardSettings,
   defaultClipboardSettings,
-  type GeneralSettings,
   defaultGeneralSettings,
-  type GeneratorSettings,
   defaultGeneratorSettings,
-  type SecuritySettings,
   defaultSecuritySettings,
-  type VaultSettingsMap,
   defaultVaultSettingsMap,
-  type PasswordPreset,
   defaultPasswordPresets,
-  type SiteRule,
   defaultSiteRules
+} from '../config/settings';
+import type {
+  AdvancedSettings,
+  AppearanceSettings,
+  AutofillSettings,
+  BackupSettings,
+  ClipboardSettings,
+  GeneralSettings,
+  GeneratorSettings,
+  SecuritySettings,
+  VaultSettingsMap,
+  PasswordPreset,
+  SiteRule
 } from '../config/settings';
 import { type Keybind, defaultKeybinds } from '../config/keybinds';
 
@@ -73,7 +75,7 @@ class SettingsManager {
       const storedSettings = await callBackend<string | null>('get_all_settings');
       if (storedSettings) {
         try {
-          let loadedSettings: any;
+          let loadedSettings: unknown;
           if (storedSettings.startsWith('"') && storedSettings.endsWith('"')) {
             loadedSettings = JSON.parse(JSON.parse(storedSettings));
           } else {
@@ -81,25 +83,29 @@ class SettingsManager {
           }
 
           if (typeof loadedSettings === 'object' && loadedSettings !== null) {
+            const settings = loadedSettings as Record<string, Record<string, unknown>>;
             this.#state = {
               ...defaultAllSettings,
-              ...loadedSettings,
-              advanced: { ...defaultAllSettings.advanced, ...(loadedSettings.advanced || {}) },
+              ...(loadedSettings as Record<string, unknown>),
+              advanced: {
+                ...defaultAllSettings.advanced,
+                ...(settings.advanced || {})
+              },
               appearance: {
                 ...defaultAllSettings.appearance,
-                ...(loadedSettings.appearance || {})
+                ...(settings.appearance || {})
               },
-              autofill: { ...defaultAllSettings.autofill, ...(loadedSettings.autofill || {}) },
-              backup: { ...defaultAllSettings.backup, ...(loadedSettings.backup || {}) },
-              clipboard: { ...defaultAllSettings.clipboard, ...(loadedSettings.clipboard || {}) },
-              general: { ...defaultAllSettings.general, ...(loadedSettings.general || {}) },
-              generator: { ...defaultAllSettings.generator, ...(loadedSettings.generator || {}) },
-              security: { ...defaultAllSettings.security, ...(loadedSettings.security || {}) },
+              autofill: { ...defaultAllSettings.autofill, ...(settings.autofill || {}) },
+              backup: { ...defaultAllSettings.backup, ...(settings.backup || {}) },
+              clipboard: { ...defaultAllSettings.clipboard, ...(settings.clipboard || {}) },
+              general: { ...defaultAllSettings.general, ...(settings.general || {}) },
+              generator: { ...defaultAllSettings.generator, ...(settings.generator || {}) },
+              security: { ...defaultAllSettings.security, ...(settings.security || {}) },
               vaultSettingsById: {
                 ...defaultAllSettings.vaultSettingsById,
-                ...(loadedSettings.vaultSettingsById || loadedSettings.vault || {})
+                ...(settings.vaultSettingsById || (settings.vault as Record<string, unknown>) || {})
               }
-            };
+            } as AllSettings;
           }
         } catch (e) {
           console.error('Failed to parse stored settings:', e);
@@ -114,8 +120,8 @@ class SettingsManager {
 
       $effect.root(() => {
         $effect(() => {
-          const currentState = this.#state;
           if (this.#isInitialized) {
+            void this.#state; // Subscribe
             this.scheduleSave();
           }
         });

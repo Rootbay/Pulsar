@@ -7,6 +7,13 @@
   import { iconPaths } from '$lib/icons';
   import Favicon from '../ui/Favicon.svelte';
 
+  interface TagOption {
+    id: number;
+    text: string;
+    icon: string;
+    color: string;
+  }
+
   const primaryTagName = $derived.by(() => {
     const raw = selectedPasswordItem?.tags ?? '';
     const first = raw
@@ -19,7 +26,7 @@
   const primaryTagIconPath = $derived.by(() => {
     const name = primaryTagName;
     if (!name) return iconPaths.default;
-    const btn = (buttons || []).find((b: any) => b.text === name);
+    const btn = (buttons || []).find((b: TagOption) => b.text === name);
     return btn?.icon || iconPaths.default;
   });
 
@@ -27,13 +34,12 @@
     selectedPasswordItem: PasswordItem | null;
     isEditing: boolean;
     displayColor: string;
-    buttons: any[];
+    buttons: TagOption[];
 
     onEnterEditMode?: () => void;
-    onHandleReset?: () => void;
     onSave?: () => void;
     onRemoveEntry?: (id: number | undefined) => void;
-    onTagsReorderedPending?: (detail: any) => void;
+    onTagsReorderedPending?: (detail: { items: unknown[] }) => void;
   }
 
   let {
@@ -42,7 +48,6 @@
     displayColor,
     buttons,
     onEnterEditMode,
-    onHandleReset,
     onSave,
     onRemoveEntry,
     onTagsReorderedPending
@@ -70,10 +75,6 @@
 
   function enterEditMode() {
     onEnterEditMode?.();
-  }
-
-  function handleReset() {
-    onHandleReset?.();
   }
 </script>
 

@@ -16,7 +16,7 @@
   import { Switch } from '$lib/components/ui/switch';
   import { cn } from '$lib/utils';
   import { Palette, Contrast, LayoutDashboard, Waves, Monitor } from '@lucide/svelte';
-  import { currentLocale } from '$lib/i18n';
+  import { currentLocale, t } from '$lib/i18n';
 
   type ThemeOption = AppearanceSettings['theme'];
   type DensityOption = AppearanceSettings['pageDensity'];
@@ -24,8 +24,7 @@
     [K in keyof AppearanceSettings]: AppearanceSettings[K] extends boolean ? K : never;
   }[keyof AppearanceSettings];
 
-  const t = (locale: 'en' | 'sv', en: string, sv: string) => (locale === 'sv' ? sv : en);
-  let locale = $derived($currentLocale as 'en' | 'sv');
+  const locale = $derived($currentLocale);
 
   const themeOptions: ThemeOption[] = ['system', 'light', 'dark'];
 
@@ -129,9 +128,9 @@
   }
 
   function getThemeLabel(value: ThemeOption, locale: 'en' | 'sv') {
-    if (value === 'system') return t(locale, 'System', 'System');
-    if (value === 'light') return t(locale, 'Light', 'Ljust');
-    if (value === 'dark') return t(locale, 'Dark', 'Mörkt');
+    if (value === 'system') return t(locale, 'System');
+    if (value === 'light') return t(locale, 'Light');
+    if (value === 'dark') return t(locale, 'Dark');
     return 'System';
   }
 </script>
@@ -145,7 +144,7 @@
         <Palette class="h-5 w-5" aria-hidden="true" />
       </div>
       <div>
-        <CardTitle>{t(locale, 'Theme & Display', 'Tema & visning')}</CardTitle>
+        <CardTitle>{t(locale, 'Theme & Display')}</CardTitle>
         <CardDescription>
           {t(
             locale,
@@ -159,7 +158,7 @@
       <div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
         <div class="space-y-2">
           <Label class="text-foreground text-sm font-medium">
-            {t(locale, 'Theme', 'Tema')}
+            {t(locale, 'Theme')}
           </Label>
           {#key locale}
             <Select type="single" value={theme} onValueChange={updateTheme}>
@@ -170,7 +169,7 @@
                 </span>
               </SelectTrigger>
               <SelectContent>
-                {#each themeOptions as option}
+                {#each themeOptions as option (option)}
                   <SelectItem value={option}>{getThemeLabel(option, locale)}</SelectItem>
                 {/each}
               </SelectContent>
@@ -183,10 +182,10 @@
         >
           <div class="space-y-1">
             <p class="text-foreground text-sm font-semibold">
-              {t(locale, 'Compact Mode', 'Kompakt läge')}
+              {t(locale, 'Compact Mode')}
             </p>
             <p class="text-muted-foreground text-sm">
-              {t(locale, 'Reduce spacing and padding.', 'Minska mellanrum och padding.')}
+              {t(locale, 'Reduce spacing and padding.')}
             </p>
           </div>
           <Switch
@@ -199,7 +198,7 @@
 
       <div class="space-y-2">
         <Label class="text-foreground text-sm font-medium">
-          {t(locale, 'Font Size', 'Textstorlek')}
+          {t(locale, 'Font Size')}
         </Label>
         <div class="flex items-center gap-4">
           <input
@@ -222,8 +221,8 @@
             <div class="space-y-1">
               <p class="text-foreground text-sm font-semibold">
                 {option.key === 'highContrast'
-                  ? t(locale, 'High Contrast', 'Hög kontrast')
-                  : t(locale, 'Reduced Motion', 'Minskad rörelse')}
+                  ? t(locale, 'High Contrast')
+                  : t(locale, 'Reduced Motion')}
               </p>
               <p class="text-muted-foreground text-sm">
                 {option.key === 'highContrast'
@@ -258,7 +257,7 @@
         <LayoutDashboard class="h-5 w-5" aria-hidden="true" />
       </div>
       <div>
-        <CardTitle>{t(locale, 'Page Density', 'Sidtäthet')}</CardTitle>
+        <CardTitle>{t(locale, 'Page Density')}</CardTitle>
         <CardDescription>
           {t(
             locale,
@@ -287,10 +286,10 @@
             <div>
               <p class="text-foreground text-sm font-semibold">
                 {option.value === 'comfortable'
-                  ? t(locale, 'Comfortable', 'Bekväm')
+                  ? t(locale, 'Comfortable')
                   : option.value === 'compact'
-                    ? t(locale, 'Compact', 'Kompakt')
-                    : t(locale, 'Dense', 'Tät')}
+                    ? t(locale, 'Compact')
+                    : t(locale, 'Dense')}
               </p>
             </div>
             <div

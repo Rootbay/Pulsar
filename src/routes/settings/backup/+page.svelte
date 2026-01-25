@@ -36,10 +36,9 @@
   import { quintOut } from 'svelte/easing';
   import { exportVaultBackup, importVaultBackup, notifyVaultRefresh } from '$lib/utils/backup';
   import type { ImportVaultProgressStage } from '$lib/utils/backup';
-  import { currentLocale } from '$lib/i18n';
+  import { currentLocale, t } from '$lib/i18n';
 
-  const t = (locale: 'en' | 'sv', en: string, sv: string) => (locale === 'sv' ? sv : en);
-  $: locale = $currentLocale as 'en' | 'sv';
+  const locale = $derived($currentLocale);
 
   const frequencies = [
     { value: 'daily', label: 'Daily (Default)' },
@@ -48,9 +47,9 @@
   ];
 
   function getFrequencyLabel(value: string, locale: 'en' | 'sv'): string {
-    if (value === 'daily') return t(locale, 'Daily (Default)', 'Dagligen (standard)');
-    if (value === 'weekly') return t(locale, 'Weekly', 'Veckovis');
-    if (value === 'custom') return t(locale, 'Custom interval', 'Anpassat intervall');
+    if (value === 'daily') return t(locale, 'Daily (Default)');
+    if (value === 'weekly') return t(locale, 'Weekly');
+    if (value === 'custom') return t(locale, 'Custom interval');
     return value;
   }
 
@@ -102,7 +101,8 @@
     }
   ];
 
-  const state = derived(backupSettings, ($settings) => ({ ...$settings }));
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const backupState = derived(backupSettings, ($settings) => ({ ...$settings }));
 
   let showModal = false;
   let modalTitle = '';
@@ -163,13 +163,13 @@
 
   async function handleManualBackup() {
     openModal({
-      title: t(locale, 'Create manual backup?', 'Skapa manuell säkerhetskopia?'),
+      title: t(locale, 'Create manual backup?'),
       description: t(
         locale,
         'This creates a fresh encrypted backup of your vault using the active settings.',
         'Detta skapar en ny krypterad säkerhetskopia av ditt valv baserat på aktuella inställningar.'
       ),
-      confirmLabel: t(locale, 'Export backup', 'Exportera säkerhetskopia'),
+      confirmLabel: t(locale, 'Export backup'),
       onConfirm: async (passphrase) => {
         const message = await exportVaultBackup(passphrase);
         feedback = { type: 'success', message };
@@ -179,13 +179,13 @@
 
   async function handleExportEncrypted() {
     openModal({
-      title: t(locale, 'Export encrypted data?', 'Exportera krypterad data?'),
+      title: t(locale, 'Export encrypted data?'),
       description: t(
         locale,
         'Export your vault in encrypted form. Keep the generated file secure.',
         'Exportera ditt valv i krypterad form. Förvara den skapade filen säkert.'
       ),
-      confirmLabel: t(locale, 'Export encrypted', 'Exportera krypterat'),
+      confirmLabel: t(locale, 'Export encrypted'),
       onConfirm: async (passphrase) => {
         const message = await exportVaultBackup(passphrase);
         feedback = { type: 'success', message };
@@ -195,13 +195,13 @@
 
   async function handleExportPlaintext() {
     openModal({
-      title: t(locale, 'Export plaintext data?', 'Exportera okrypterad data?'),
+      title: t(locale, 'Export plaintext data?'),
       description: t(
         locale,
         'WARNING: This exports all vault contents without encryption. Only proceed on trusted devices.',
         'VARNING: Detta exporterar allt innehåll i valvet utan kryptering. Fortsätt bara på betrodda enheter.'
       ),
-      confirmLabel: t(locale, 'Export plaintext', 'Exportera okrypterat'),
+      confirmLabel: t(locale, 'Export plaintext'),
       danger: true,
       onConfirm: async (passphrase) => {
         const message = await exportVaultBackup(passphrase, { plaintext: true });
@@ -212,13 +212,13 @@
 
   async function handleImport() {
     openModal({
-      title: t(locale, 'Start import process?', 'Starta importprocess?'),
+      title: t(locale, 'Start import process?'),
       description: t(
         locale,
         'Select a previous Pulsar backup and provide its passphrase to restore your vault contents.',
         'Välj en tidigare Pulsar-säkerhetskopia och ange dess lösenfras för att återställa ditt valv.'
       ),
-      confirmLabel: t(locale, 'Import backup', 'Importera säkerhetskopia'),
+      confirmLabel: t(locale, 'Import backup'),
       onConfirm: async (passphrase) => {
         const snapshot = await importVaultBackup(passphrase, {
           onProgress: (stage) => {
@@ -265,12 +265,8 @@
   function openProvider(provider: string) {
     backupSettings.update((current) => ({ ...current, selectedProvider: provider }));
     openModal({
-      title: t(locale, `Configure ${provider}`, `Konfigurera ${provider}`),
-      description: t(
-        locale,
-        `Provide credentials for your ${provider} connection.`,
-        `Ange uppgifter för din ${provider}-anslutning.`
-      ),
+      title: t(locale, 'Configure {provider}', { provider }),
+      description: t(locale, 'Provide credentials for your {provider} connection.', { provider }),
       onConfirm: () => {}
     });
   }
@@ -284,8 +280,8 @@
     >
       <AlertTitle>
         {feedback.type === 'error'
-          ? t(locale, 'Something went wrong', 'Något gick fel')
-          : t(locale, 'Action completed', 'Åtgärd slutförd')}
+          ? t(locale, 'Something went wrong')
+          : t(locale, 'Action completed')}
       </AlertTitle>
       <AlertDescription>{feedback.message}</AlertDescription>
     </Alert>
@@ -300,7 +296,7 @@
           <Archive class="size-5" aria-hidden="true" />
         </div>
         <div>
-          <CardTitle>{t(locale, 'Backups', 'Säkerhetskopior')}</CardTitle>
+          <CardTitle>{t(locale, 'Backups')}</CardTitle>
           <CardDescription>
             {t(
               locale,
@@ -311,9 +307,9 @@
         </div>
       </div>
       <Badge variant="secondary" class="w-fit">
-        {t(locale, 'Retaining', 'Behåller')}
+        {t(locale, 'Retaining')}
         {$state.retentionCount}
-        {t(locale, 'copies', 'kopior')}
+        {t(locale, 'copies')}
       </Badge>
     </CardHeader>
 
@@ -324,7 +320,7 @@
         >
           <div>
             <p class="text-foreground text-sm font-medium">
-              {t(locale, 'Automatic backups', 'Automatiska säkerhetskopior')}
+              {t(locale, 'Automatic backups')}
             </p>
             <p class="text-muted-foreground text-xs">
               {t(
@@ -344,18 +340,18 @@
         <div class="grid gap-4 md:grid-cols-2">
           <div class="space-y-2">
             <Label class="text-foreground text-sm font-medium">
-              {t(locale, 'Backup frequency', 'Frekvens för säkerhetskopior')}
+              {t(locale, 'Backup frequency')}
             </Label>
             {#key locale}
               <Select type="single" value={$state.backupFrequency} onValueChange={updateFrequency}>
                 <SelectTrigger aria-label="Select backup frequency" class="w-full">
                   <span data-slot="select-value" class="truncate text-sm">
                     {getFrequencyLabel($state.backupFrequency, locale) ??
-                      t(locale, 'Select frequency', 'Välj frekvens')}
+                      t(locale, 'Select frequency')}
                   </span>
                 </SelectTrigger>
                 <SelectContent>
-                  {#each frequencies as option}
+                  {#each frequencies as option (option.value)}
                     <SelectItem value={option.value}
                       >{getFrequencyLabel(option.value, locale)}</SelectItem
                     >
@@ -367,7 +363,7 @@
 
           <div class="space-y-2">
             <Label for="retention-count" class="text-foreground text-sm font-medium">
-              {t(locale, 'Retention count', 'Antal kopior')}
+              {t(locale, 'Retention count')}
             </Label>
             <Input
               id="retention-count"
@@ -391,11 +387,11 @@
       <div class="flex flex-wrap gap-2">
         <Button type="button" class="gap-2" onclick={handleManualBackup}>
           <Download class="size-4" aria-hidden="true" />
-          {t(locale, 'Create manual backup', 'Skapa manuell säkerhetskopia')}
+          {t(locale, 'Create manual backup')}
         </Button>
         <Button type="button" variant="outline" class="gap-2" onclick={handleImport}>
           <CloudUpload class="size-4" aria-hidden="true" />
-          {t(locale, 'Import data', 'Importera data')}
+          {t(locale, 'Import data')}
         </Button>
       </div>
     </CardContent>
@@ -409,7 +405,7 @@
         <Archive class="size-5" aria-hidden="true" />
       </div>
       <div>
-        <CardTitle>{t(locale, 'Export options', 'Exportalternativ')}</CardTitle>
+        <CardTitle>{t(locale, 'Export options')}</CardTitle>
         <CardDescription>
           {t(
             locale,
@@ -423,14 +419,14 @@
       <div class="grid gap-4 md:grid-cols-2">
         <div class="border-border/60 bg-muted/10 space-y-2 rounded-xl border p-4">
           <p class="text-foreground text-sm font-semibold">
-            {t(locale, 'Encrypted export', 'Krypterad export')}
+            {t(locale, 'Encrypted export')}
           </p>
           <p class="text-muted-foreground text-xs">
-            {t(locale, 'Secured with your export passphrase.', 'Skyddad med din exportlösenfras.')}
+            {t(locale, 'Secured with your export passphrase.')}
           </p>
           <Button type="button" class="gap-2" onclick={handleExportEncrypted}>
             <ShieldCheck class="size-4" aria-hidden="true" />
-            {t(locale, 'Export encrypted', 'Exportera krypterat')}
+            {t(locale, 'Export encrypted')}
           </Button>
         </div>
 
@@ -438,7 +434,7 @@
           <div class="flex items-center gap-2">
             <ShieldAlert class="text-destructive size-4" aria-hidden="true" />
             <p class="text-foreground text-sm font-semibold">
-              {t(locale, 'Plaintext export', 'Oskyddad export')}
+              {t(locale, 'Plaintext export')}
             </p>
           </div>
           <p class="text-muted-foreground text-xs">
@@ -462,7 +458,7 @@
               disabled={!$state.enablePlaintextExport}
             >
               <Shield class="size-4" aria-hidden="true" />
-              {t(locale, 'Export plaintext', 'Exportera okrypterat')}
+              {t(locale, 'Export plaintext')}
             </Button>
           </div>
         </div>
@@ -478,7 +474,7 @@
         <Cloud class="size-5" aria-hidden="true" />
       </div>
       <div>
-        <CardTitle>{t(locale, 'Sync', 'Synkronisering')}</CardTitle>
+        <CardTitle>{t(locale, 'Sync')}</CardTitle>
         <CardDescription>
           {t(
             locale,
@@ -506,10 +502,10 @@
             <div>
               <p class="text-foreground text-sm font-semibold">
                 {mode.id === 'off'
-                  ? t(locale, 'Turned off', 'Avstängd')
+                  ? t(locale, 'Turned off')
                   : mode.id === 'manual'
-                    ? t(locale, 'Manual sync', 'Manuell synkronisering')
-                    : t(locale, 'Automatic sync', 'Automatisk synkronisering')}
+                    ? t(locale, 'Manual sync')
+                    : t(locale, 'Automatic sync')}
               </p>
               <p class="text-muted-foreground text-xs">
                 {mode.id === 'off'
@@ -519,7 +515,7 @@
                       'Säkerhetskopior stannar lokalt på denna enhet.'
                     )
                   : mode.id === 'manual'
-                    ? t(locale, 'Trigger cloud sync on demand.', 'Starta molnsynk vid behov.')
+                    ? t(locale, 'Trigger cloud sync on demand.')
                     : t(
                         locale,
                         'Keep cloud copy in sync automatically.',
@@ -551,20 +547,12 @@
               <p class="text-foreground text-sm font-semibold">{provider.name}</p>
               <p class="text-muted-foreground text-xs">
                 {provider.id === 'webdav'
-                  ? t(locale, provider.description, 'Anslut till valfri WebDAV-kompatibel lagring.')
+                  ? t(locale, 'backupProviderWebdavDesc')
                   : provider.id === 'dropbox'
-                    ? t(locale, provider.description, 'Använd Dropbox som mål för säkerhetskopior.')
+                    ? t(locale, 'backupProviderDropboxDesc')
                     : provider.id === 's3'
-                      ? t(
-                          locale,
-                          provider.description,
-                          'Synkronisera säkerhetskopior till din S3-bucket.'
-                        )
-                      : t(
-                          locale,
-                          provider.description,
-                          'Ange egna inloggningsuppgifter för en annan leverantör.'
-                        )}
+                      ? t(locale, 'backupProviderS3Desc')
+                      : t(locale, 'backupProviderCustomDesc')}
               </p>
             </div>
           </button>
@@ -597,7 +585,7 @@
       {#if modalRequiresPassphrase}
         <div class="mt-6 space-y-2">
           <Label for="backup-passphrase" class="text-foreground text-sm font-medium">
-            {t(locale, 'Backup passphrase', 'Lösenfras för säkerhetskopia')}
+            {t(locale, 'Backup passphrase')}
           </Label>
           <Input
             id="backup-passphrase"
@@ -632,7 +620,7 @@
 
       <div class="mt-6 flex justify-end gap-2">
         <Button type="button" variant="ghost" onclick={closeModal}>
-          {t(locale, 'Cancel', 'Avbryt')}
+          {t(locale, 'Cancel')}
         </Button>
         <Button
           type="button"

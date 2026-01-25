@@ -156,7 +156,7 @@ pub async fn wipe_memory(state: State<'_, AppState>) -> Result<()> {
     {
         let mut pending_guard = state.pending_key.lock().await;
         if let Some(mut key) = pending_guard.take() {
-            key.zeroize();
+            key.key.zeroize();
         }
     }
 

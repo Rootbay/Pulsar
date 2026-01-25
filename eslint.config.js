@@ -18,6 +18,18 @@ export default [
   pluginJs.configs.recommended,
   ...tseslint.configs.recommended,
   {
+    rules: {
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        {
+          argsIgnorePattern: '^_',
+          varsIgnorePattern: '^_',
+          caughtErrorsIgnorePattern: '^_'
+        }
+      ]
+    }
+  },
+  {
     languageOptions: {
       globals: {
         ...globals.browser,
@@ -26,7 +38,7 @@ export default [
     }
   },
   {
-    files: ['**/*.ts'],
+    files: ['**/*.ts', '**/*.svelte.ts'],
     languageOptions: {
       parser: tseslint.parser,
       parserOptions: {
@@ -39,12 +51,15 @@ export default [
   },
   ...svelte.configs['flat/recommended'],
   {
-    files: ['**/*.svelte'],
+    files: ['**/*.svelte', '**/*.svelte.ts'],
     languageOptions: {
       parser: svelte.parser,
       parserOptions: {
         parser: tseslint.parser
       }
+    },
+    rules: {
+      'svelte/no-navigation-without-resolve': 'off'
     }
   },
   {

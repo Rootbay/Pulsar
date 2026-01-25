@@ -32,6 +32,8 @@
 
   function validateKeybinds() {
     const currentKeybinds = $keybinds;
+
+    // eslint-disable-next-line svelte/prefer-svelte-reactivity
     const keyMap = new Map<string, string[]>();
     let hasDuplicates = false;
     const newDuplicateState: Record<string, boolean> = {};

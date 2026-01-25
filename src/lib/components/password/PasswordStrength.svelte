@@ -43,7 +43,7 @@
   </div>
   <Progress
     value={progressValue}
-    class="h-1.5 w-full bg-muted/40"
+    class="bg-muted/40 h-1.5 w-full"
     indicatorClass={cn('transition-all duration-500', colorClass)}
   />
   {#if showDetails && score < 3 && result.feedback.suggestions.length > 0}

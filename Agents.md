@@ -9,6 +9,7 @@ A **desktop application** built with **Tauri v2**, **Svelte 5 runes mode**, **Ty
 # Setup / Build & Run
 
 Install dependencies:
+
 ```bash
 bun install
 ```

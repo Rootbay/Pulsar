@@ -3,7 +3,7 @@
   import { goto } from '$app/navigation';
   import { onDestroy, onMount } from 'svelte';
   import { callBackend } from '$lib/utils/backend';
-  import { writeText } from '@tauri-apps/plugin-clipboard-manager';
+  import { copyText } from '$lib/utils/copyHelper';
   import { Button } from '$lib/components/ui/button';
   import { Badge } from '$lib/components/ui/badge';
   import { Spinner } from '$lib/components/ui/spinner/index.js';
@@ -24,11 +24,10 @@
     totpRequired
   } from '$lib/stores';
   import { loginTotpSecret } from '$lib/stores/totp';
-  import { currentLocale } from '$lib/i18n';
+  import { currentLocale, t } from '$lib/i18n';
   import { ArrowLeft } from '@lucide/svelte';
 
-  const t = (locale: 'en' | 'sv', en: string, sv: string) => (locale === 'sv' ? sv : en);
-  let locale = $derived($currentLocale as 'en' | 'sv');
+  let locale = $derived($currentLocale);
 
   const CODE_LENGTH = 6;
   const TOKEN_PERIOD = 30;
@@ -93,8 +92,9 @@
   const toErrorMessage = (error: unknown): string => {
     if (typeof error === 'string') return error;
     if (error instanceof Error) return error.message;
-    if (error && typeof error === 'object' && 'message' in error) return (error as any).message;
-    return 'An unexpected error occurred. Please try again.';
+    if (error && typeof error === 'object' && 'message' in error)
+      return (error as { message: string }).message;
+    return t(locale, 'totpUnexpectedError');
   };
 
   function updateTimeRemaining() {
@@ -168,8 +168,8 @@
     if (!currentToken) return;
 
     try {
-      await writeText(currentToken);
-      setCopyFeedback('Code copied to clipboard.', 'success');
+      await copyText(currentToken);
+      setCopyFeedback(t(locale, 'totpCopySuccess'), 'success');
     } catch (error) {
       setCopyFeedback(toErrorMessage(error), 'error');
     }
@@ -183,7 +183,7 @@
     if (isVerifying) return;
 
     if (code.length !== CODE_LENGTH) {
-      verificationError = 'Enter the 6-digit code from your authenticator.';
+      verificationError = t(locale, 'totpEnterCodeError');
       return;
     }
 
@@ -199,8 +199,7 @@
     } catch (cause) {
       const message = toErrorMessage(cause);
       if (message.toLowerCase().includes('invalid')) {
-        verificationError =
-          'The code was invalid or expired. Wait for the next 30-second window and try again.';
+        verificationError = t(locale, 'totpInvalidCodeError');
       } else {
         verificationError = message;
       }
@@ -214,8 +213,7 @@
       activeSecret = value;
       if (!value) {
         currentToken = null;
-        tokenError =
-          'This device does not have the login authenticator secret. Use your enrolled authenticator app to generate the code.';
+        tokenError = t(locale, 'totpSecretMissing');
       } else {
         tokenError = null;
         void fetchToken(true);
@@ -265,7 +263,7 @@
     onclick={goBack}
   >
     <ArrowLeft class="h-4 w-4" />
-    {t(locale, 'Back', 'Tillbaka')}
+    {t(locale, 'back')}
   </button>
   <div
     class="bg-primary-glow pointer-events-none absolute top-1/2 left-1/2 h-[min(90vw,32rem)] w-[min(90vw,32rem)] -translate-x-1/2 -translate-y-1/2 rounded-full blur-3xl"
@@ -276,10 +274,8 @@
     class="border-border/60 bg-card/80 supports-backdrop-filter:bg-card/70 relative z-10 w-full max-w-md backdrop-blur"
   >
     <CardHeader class="space-y-2 text-center">
-      <CardTitle class="text-2xl font-semibold">Unlock Pulsar Pass</CardTitle>
-      <CardDescription
-        >Enter the 6-digit code from your authenticator to finish unlocking.</CardDescription
-      >
+      <CardTitle class="text-2xl font-semibold">{t(locale, 'totpTitle')}</CardTitle>
+      <CardDescription>{t(locale, 'totpSubtitle')}</CardDescription>
     </CardHeader>
 
     <CardContent class="space-y-6">
@@ -287,14 +283,14 @@
         class="border-border/60 bg-muted/20 hover:border-border relative flex gap-3 rounded-2xl border p-4 shadow-sm transition"
         role="button"
         tabindex="0"
-        aria-label="Enter TOTP code"
+        aria-label={t(locale, 'totpAriaEnterCode')}
         onclick={focusHiddenInput}
         onkeydown={handleKeyDown}
       >
         {#each Array.from({ length: 6 }) as _, i (i)}
           <div
             class="border-border/50 bg-background text-foreground flex h-16 w-14 items-center justify-center rounded-xl border text-2xl font-semibold tracking-widest shadow-sm sm:h-20 sm:w-16 sm:text-3xl"
-            aria-label={`Digit ${i + 1}`}
+            aria-label={t(locale, 'totpDigitLabel', { index: String(i + 1) })}
           >
             {code[i] ?? ''}
           </div>
@@ -316,11 +312,11 @@
       <section class="border-border/60 bg-muted/10 rounded-2xl border p-5">
         <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p class="text-foreground text-sm font-semibold">Authenticator code</p>
-            <p class="text-muted-foreground text-sm">Automatically refreshes every 30 seconds.</p>
+            <p class="text-foreground text-sm font-semibold">{t(locale, 'totpCodeLabel')}</p>
+            <p class="text-muted-foreground text-sm">{t(locale, 'totpCodeHint')}</p>
           </div>
           <Badge variant={activeSecret ? 'default' : 'secondary'}>
-            {activeSecret ? 'Local secret stored' : 'Secret unavailable'}
+            {activeSecret ? t(locale, 'totpSecretStored') : t(locale, 'totpSecretUnavailable')}
           </Badge>
         </div>
 
@@ -332,7 +328,11 @@
             {#if isFetchingToken}
               <Spinner class="h-4 w-4" aria-hidden="true" />
             {/if}
-            <span>Refreshes in {timeRemaining > 0 ? `${timeRemaining}s` : '—'}</span>
+            <span>
+              {t(locale, 'totpRefreshIn', {
+                seconds: timeRemaining > 0 ? `${timeRemaining}s` : '—'
+              })}
+            </span>
           </div>
         </div>
 
@@ -349,7 +349,7 @@
             disabled={!currentToken}
           >
             <Copy class="h-4 w-4" aria-hidden="true" />
-            Copy code
+            {t(locale, 'totpCopyCode')}
           </Button>
           <Button
             type="button"
@@ -362,7 +362,7 @@
               class={`h-4 w-4 ${isFetchingToken ? 'animate-spin' : ''}`}
               aria-hidden="true"
             />
-            Refresh
+            {t(locale, 'totpRefresh')}
           </Button>
         </div>
 
@@ -376,8 +376,7 @@
         {/if}
 
         <p class="text-muted-foreground mt-3 text-xs">
-          Keep a backup of your authenticator secret. If this device loses the stored secret, you
-          will still need your authenticator app to access the vault.
+          {t(locale, 'totpBackupNote')}
         </p>
       </section>
     </CardContent>
@@ -394,7 +393,7 @@
         onclick={handleContinue}
         disabled={isVerifying || code.length !== CODE_LENGTH}
       >
-        {isVerifying ? 'Verifying…' : 'Verify & Continue'}
+        {isVerifying ? t(locale, 'totpVerifying') : t(locale, 'totpVerifyButton')}
       </Button>
     </CardFooter>
   </Card>

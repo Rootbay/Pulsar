@@ -49,11 +49,11 @@
     MonitorSmartphone,
     HardDrive
   } from '@lucide/svelte';
-  import { currentLocale } from '$lib/i18n';
+  import { currentLocale, t } from '$lib/i18n';
   import type { SecuritySettings } from '$lib/config/settings';
   import { cn } from '$lib/utils';
   import { toast } from 'svelte-sonner';
-  import { writeText } from '@tauri-apps/plugin-clipboard-manager';
+  import { copyText } from '$lib/utils/copyHelper';
 
   interface Argon2Params {
     memoryKib: number;
@@ -82,8 +82,7 @@
   const TOTP_CODE_LENGTH = 6;
   const MIN_PASSWORD_LENGTH = 8;
 
-  const t = (locale: 'en' | 'sv', en: string, sv: string) => (locale === 'sv' ? sv : en);
-  let locale = $derived($currentLocale as 'en' | 'sv');
+  const locale = $derived($currentLocale);
 
   let currentSettings = $state<SecuritySettings>({ ...get(securitySettings) });
 
@@ -95,9 +94,7 @@
     $loginTotpSecret ? buildProvisioningUri($loginTotpSecret) : null
   );
   const generateButtonLabel = $derived(
-    $loginTotpSecret
-      ? t(locale, 'Regenerate Secret', 'Regenerera hemlighet')
-      : t(locale, 'Generate Secret', 'Generera hemlighet')
+    $loginTotpSecret ? t(locale, 'Regenerate Secret') : t(locale, 'Generate Secret')
   );
 
   let passwordModalOpen = $state(false);
@@ -111,9 +108,9 @@
   let kdfModalOpen = $state(false);
   let kdfCurrentPassword = $state('');
   let showKdfPassword = $state(false);
-  let kdfMemoryMb = $state(64);
-  let kdfTimeCost = $state(3);
-  let kdfParallelism = $state(4);
+  let kdfMemoryMb = $state('64');
+  let kdfTimeCost = $state('3');
+  let kdfParallelism = $state('4');
   let kdfError = $state('');
   let isUpdatingKdf = $state(false);
 
@@ -135,7 +132,9 @@
     'integrity-check': false
   });
 
-  let healthReport = $state<{ reusedPasswords: any[]; weakPasswordsCount: number } | null>(null);
+  let healthReport = $state<{ reusedPasswords: unknown[]; weakPasswordsCount: number } | null>(
+    null
+  );
   let healthLoading = $state(false);
   let healthError = $state<string | null>(null);
 
@@ -376,7 +375,7 @@
     if (!secret) return;
 
     try {
-      await writeText(secret);
+      await copyText(secret);
       setSecretCopyFeedback(context, 'Secret copied to clipboard.', 'success');
     } catch (error) {
       setSecretCopyFeedback(context, toErrorMessage(error), 'error');
@@ -387,7 +386,7 @@
     if (!uri) return;
 
     try {
-      await writeText(uri);
+      await copyText(uri);
       setUriCopyFeedback(context, 'Setup link copied to clipboard.', 'success');
     } catch (error) {
       setUriCopyFeedback(context, toErrorMessage(error), 'error');
@@ -473,7 +472,7 @@
 
   import { clipboardSettings } from '$lib/stores/clipboard';
   let currentClipboardSettings = $state(get(clipboardSettings));
-  const unsubClipboard = clipboardSettings.subscribe(s => currentClipboardSettings = s);
+  const unsubClipboard = clipboardSettings.subscribe((s) => (currentClipboardSettings = s));
 
   onDestroy(() => {
     unsubscribe();
@@ -501,7 +500,7 @@
     const seconds = parseInt(value);
     if (!isNaN(seconds)) {
       import('$lib/stores/clipboard').then(({ clipboardSettings }) => {
-        clipboardSettings.update(s => ({ ...s, clearAfterDuration: seconds }));
+        clipboardSettings.update((s) => ({ ...s, clearAfterDuration: seconds }));
       });
     }
   }
@@ -584,7 +583,7 @@
     showKdfPassword = !showKdfPassword;
   }
 
-  function getDeviceIcon(kind: string): any {
+  function getDeviceIcon(kind: string): typeof ShieldCheck {
     switch (kind) {
       case 'biometric':
         return FingerprintPattern;
@@ -833,7 +832,7 @@
       </div>
       <div class="flex w-full items-center justify-between">
         <div>
-          <CardTitle>{t(locale, 'Vault Health', 'Valvets hälsa')}</CardTitle>
+          <CardTitle>{t(locale, 'Vault Health')}</CardTitle>
           <CardDescription>
             {t(
               locale,
@@ -872,7 +871,7 @@
             )}
           >
             <p class="text-sm font-semibold">
-              {t(locale, 'Reused Passwords', 'Återanvända lösenord')}
+              {t(locale, 'Reused Passwords')}
             </p>
             <p
               class={cn(
@@ -889,7 +888,7 @@
                     'Multiple items share the same password.',
                     'Flera poster delar samma lösenord.'
                   )
-                : t(locale, 'No password reuse detected.', 'Inga återanvända lösenord upptäckta.')}
+                : t(locale, 'No password reuse detected.')}
             </p>
           </div>
 
@@ -899,7 +898,7 @@
               weakCount > 0 ? 'border-warning/40 bg-warning/5' : 'border-border/60 bg-muted/20'
             )}
           >
-            <p class="text-sm font-semibold">{t(locale, 'Weak Passwords', 'Svaga lösenord')}</p>
+            <p class="text-sm font-semibold">{t(locale, 'Weak Passwords')}</p>
             <p
               class={cn(
                 'mt-1 text-2xl font-bold',
@@ -910,8 +909,8 @@
             </p>
             <p class="text-muted-foreground mt-1 text-xs">
               {weakCount > 0
-                ? t(locale, 'Passwords shorter than 8 characters.', 'Lösenord kortare än 8 tecken.')
-                : t(locale, 'No weak passwords detected.', 'Inga svaga lösenord upptäckta.')}
+                ? t(locale, 'Passwords shorter than 8 characters.')
+                : t(locale, 'No weak passwords detected.')}
             </p>
           </div>
         </div>
@@ -934,7 +933,7 @@
             class="mt-4 flex items-start gap-3 rounded-lg border border-emerald-500/40 bg-emerald-500/10 p-3 text-sm text-emerald-600"
           >
             <Check class="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-            <p>{t(locale, 'Your vault health looks great!', 'Din valv hälsa ser utmärkt ut!')}</p>
+            <p>{t(locale, 'Your vault health looks great!')}</p>
           </div>
         {/if}
       {/if}
@@ -950,7 +949,7 @@
       </div>
       <div>
         <CardTitle>
-          {t(locale, 'Two-factor authentication', 'Tvåfaktorsautentisering')}
+          {t(locale, 'Two-factor authentication')}
         </CardTitle>
         <CardDescription>
           {t(
@@ -967,7 +966,7 @@
           <Check class="text-primary h-4 w-4" aria-hidden="true" />
           <div class="space-y-1">
             <AlertTitle>
-              {t(locale, 'Authenticator enabled', 'Autentiserare aktiverad')}
+              {t(locale, 'Authenticator enabled')}
             </AlertTitle>
             <AlertDescription>{totpSetupSuccess}</AlertDescription>
           </div>
@@ -979,7 +978,7 @@
           <ShieldCheck class="text-primary h-4 w-4" aria-hidden="true" />
           <div class="space-y-1">
             <AlertTitle>
-              {t(locale, 'Authenticator disabled', 'Autentiserare inaktiverad')}
+              {t(locale, 'Authenticator disabled')}
             </AlertTitle>
             <AlertDescription>{totpDisableSuccess}</AlertDescription>
           </div>
@@ -991,7 +990,7 @@
           <CircleAlert class="h-4 w-4" aria-hidden="true" />
           <div class="space-y-1">
             <AlertTitle>
-              {t(locale, 'Unable to load status', 'Det gick inte att läsa in status')}
+              {t(locale, 'Unable to load status')}
             </AlertTitle>
             <AlertDescription>{totpStatusError}</AlertDescription>
           </div>
@@ -1003,7 +1002,7 @@
           <CircleAlert class="h-4 w-4" aria-hidden="true" />
           <div class="space-y-1">
             <AlertTitle>
-              {t(locale, 'Unable to generate secret', 'Det gick inte att generera hemlighet')}
+              {t(locale, 'Unable to generate secret')}
             </AlertTitle>
             <AlertDescription>{totpGenerationError}</AlertDescription>
           </div>
@@ -1014,7 +1013,7 @@
         <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p class="text-foreground text-sm font-semibold">
-              {t(locale, 'Current status', 'Aktuell status')}
+              {t(locale, 'Current status')}
             </p>
             <p class="text-muted-foreground text-sm">
               {$loginTotpConfigured
@@ -1159,14 +1158,14 @@
 
           <div class="space-y-2">
             <Label for="totp-verification">
-              {t(locale, 'Step 2 — Confirm a code', 'Steg 2 — Bekräfta en kod')}
+              {t(locale, 'Step 2 — Confirm a code')}
             </Label>
             <Input
               id="totp-verification"
               type="number"
               maxlength={TOTP_CODE_LENGTH}
               autocomplete="one-time-code"
-              placeholder={t(locale, 'Enter 6-digit code', 'Ange sexsiffrig kod')}
+              placeholder={t(locale, 'Enter 6-digit code')}
               bind:inputValue={totpVerificationCode}
               oninput={sanitizeTotpCode}
               title="Verification Code"
@@ -1181,7 +1180,7 @@
               <CircleAlert class="h-4 w-4" aria-hidden="true" />
               <div class="space-y-1">
                 <AlertTitle>
-                  {t(locale, 'Unable to generate secret', 'Det gick inte att generera hemlighet')}
+                  {t(locale, 'Unable to generate secret')}
                 </AlertTitle>
                 <AlertDescription>{totpGenerationError}</AlertDescription>
               </div>
@@ -1200,9 +1199,7 @@
               {:else}
                 <Check class="h-4 w-4" aria-hidden="true" />
               {/if}
-              {isConfirmingTotp
-                ? t(locale, 'Verifying…', 'Verifierar…')
-                : t(locale, 'Verify & enable', 'Verifiera och aktivera')}
+              {isConfirmingTotp ? t(locale, 'Verifying…') : t(locale, 'Verify & enable')}
             </Button>
             <Button
               type="button"
@@ -1215,10 +1212,10 @@
                 class={`h-4 w-4 ${isGeneratingTotpSecret ? 'animate-spin' : ''}`}
                 aria-hidden="true"
               />
-              {t(locale, 'Generate another secret', 'Generera en ny hemlighet')}
+              {t(locale, 'Generate another secret')}
             </Button>
             <Button type="button" variant="ghost" onclick={cancelTotpSetup}>
-              {t(locale, 'Cancel', 'Avbryt')}
+              {t(locale, 'Cancel')}
             </Button>
           </div>
 
@@ -1271,7 +1268,7 @@
                   onclick={() => copySecret(storedSecret, 'stored')}
                 >
                   <Copy class="h-4 w-4" aria-hidden="true" />
-                  {t(locale, 'Copy secret', 'Kopiera hemlighet')}
+                  {t(locale, 'Copy secret')}
                 </Button>
                 <Button
                   type="button"
@@ -1281,7 +1278,7 @@
                   disabled={!currentProvisioningUri}
                 >
                   <Link2 class="h-4 w-4" aria-hidden="true" />
-                  {t(locale, 'Copy setup link', 'Kopiera installationslänk')}
+                  {t(locale, 'Copy setup link')}
                 </Button>
               </div>
               {#if secretCopyFeedback?.context === 'stored'}
@@ -1306,7 +1303,7 @@
               <CircleAlert class="h-4 w-4" aria-hidden="true" />
               <div class="space-y-1">
                 <AlertTitle>
-                  {t(locale, 'No local secret available', 'Ingen lokal hemlighet tillgänglig')}
+                  {t(locale, 'No local secret available')}
                 </AlertTitle>
                 <AlertDescription>
                   {t(
@@ -1332,7 +1329,7 @@
       </div>
       <div>
         <CardTitle>
-          {t(locale, 'Master Password & Encryption', 'Huvudlösenord & kryptering')}
+          {t(locale, 'Master Password & Encryption')}
         </CardTitle>
         <CardDescription>
           {t(
@@ -1349,7 +1346,7 @@
       >
         <div>
           <p class="text-foreground text-sm font-semibold">
-            {t(locale, 'Master Password', 'Huvudlösenord')}
+            {t(locale, 'Master Password')}
           </p>
           <p class="text-muted-foreground text-sm">
             {t(
@@ -1360,7 +1357,7 @@
           </p>
         </div>
         <Button variant="outline" onclick={openPasswordModal}>
-          {t(locale, 'Change Password', 'Ändra lösenord')}
+          {t(locale, 'Change Password')}
         </Button>
       </div>
 
@@ -1369,7 +1366,7 @@
       >
         <div>
           <p class="text-foreground text-sm font-semibold">
-            {t(locale, 'Key Derivation', 'Nyckelderivering')}
+            {t(locale, 'Key Derivation')}
           </p>
           <p class="text-muted-foreground text-sm">
             {argon2Loading
@@ -1382,7 +1379,7 @@
           </p>
         </div>
         <Button variant="outline" size="sm" onclick={openKdfModal}>
-          {t(locale, 'Reconfigure KDF', 'Konfigurera om KDF')}
+          {t(locale, 'Reconfigure KDF')}
         </Button>
       </div>
     </CardContent>
@@ -1397,7 +1394,7 @@
       </div>
       <div>
         <CardTitle>
-          {t(locale, 'Auto-lock Controls', 'Kontroller för autolåsning')}
+          {t(locale, 'Auto-lock Controls')}
         </CardTitle>
         <CardDescription>
           {t(
@@ -1414,7 +1411,7 @@
       >
         <div>
           <p class="text-foreground text-sm font-semibold">
-            {t(locale, 'Lock on Suspend', 'Lås vid viloläge')}
+            {t(locale, 'Lock on Suspend')}
           </p>
           <p class="text-muted-foreground text-sm">
             {t(
@@ -1436,7 +1433,7 @@
       >
         <div>
           <p class="text-foreground text-sm font-semibold">
-            {t(locale, 'Lock on Minimise', 'Lås vid minimering')}
+            {t(locale, 'Lock on Minimise')}
           </p>
           <p class="text-muted-foreground text-sm">
             {t(
@@ -1455,7 +1452,7 @@
 
       <div class="border-border/60 bg-muted/20 flex flex-col gap-2 rounded-lg border px-4 py-4">
         <Label class="text-foreground text-sm font-semibold">
-          {t(locale, 'Auto-lock After Inactivity', 'Autolåsning efter inaktivitet')}
+          {t(locale, 'Auto-lock After Inactivity')}
         </Label>
         <p class="text-muted-foreground text-sm">
           {t(
@@ -1471,8 +1468,7 @@
         >
           <SelectTrigger aria-label="Select auto-lock inactivity" class="w-full sm:w-56">
             <span data-slot="select-value" class="truncate text-sm">
-              {getAutoLockLabel(currentSettings.autoLockInactivity) ||
-                t(locale, 'Select duration', 'Välj tidslängd')}
+              {getAutoLockLabel(currentSettings.autoLockInactivity) || t(locale, 'Select duration')}
             </span>
           </SelectTrigger>
           <SelectContent>
@@ -1487,7 +1483,7 @@
 
       <div class="border-border/60 bg-muted/20 flex flex-col gap-2 rounded-lg border px-4 py-4">
         <Label class="text-foreground text-sm font-semibold">
-          {t(locale, 'Clipboard Clear Timeout', 'Rensa urklipp efter timeout')}
+          {t(locale, 'Clipboard Clear Timeout')}
         </Label>
         <p class="text-muted-foreground text-sm">
           {t(
@@ -1503,8 +1499,9 @@
         >
           <SelectTrigger aria-label="Select clipboard clear timeout" class="w-full sm:w-56">
             <span data-slot="select-value" class="truncate text-sm">
-              {clipboardClearOptions.find(o => o.value === currentClipboardSettings.clearAfterDuration.toString())?.label ||
-                t(locale, 'Select duration', 'Välj tidslängd')}
+              {clipboardClearOptions.find(
+                (o) => o.value === currentClipboardSettings.clearAfterDuration.toString()
+              )?.label || t(locale, 'Select duration')}
             </span>
           </SelectTrigger>
           <SelectContent>
@@ -1528,7 +1525,7 @@
       </div>
       <div>
         <CardTitle>
-          {t(locale, 'Biometric & Session', 'Biometrik & session')}
+          {t(locale, 'Biometric & Session')}
         </CardTitle>
         <CardDescription>
           {t(
@@ -1545,7 +1542,7 @@
       >
         <div>
           <p class="text-foreground text-sm font-semibold">
-            {t(locale, 'Biometric Unlock', 'Biometrisk upplåsning')}
+            {t(locale, 'Biometric Unlock')}
           </p>
           <p class="text-muted-foreground text-sm">
             {t(
@@ -1568,7 +1565,7 @@
       >
         <div>
           <p class="text-foreground text-sm font-semibold">
-            {t(locale, 'Session Persistence', 'Sessionsbeständighet')}
+            {t(locale, 'Session Persistence')}
           </p>
           <p class="text-muted-foreground text-sm">
             {t(
@@ -1597,7 +1594,7 @@
       <div class="flex w-full flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <CardTitle>
-            {t(locale, 'Paired Devices', 'Parkopplade enheter')}
+            {t(locale, 'Paired Devices')}
           </CardTitle>
           <CardDescription>
             {t(
@@ -1608,7 +1605,7 @@
           </CardDescription>
         </div>
         <Button variant="outline" size="sm" onclick={handlePairDevice} disabled={devicesLoading}>
-          {t(locale, 'Pair New Device', 'Parkoppla ny enhet')}
+          {t(locale, 'Pair New Device')}
         </Button>
       </div>
     </CardHeader>
@@ -1616,11 +1613,11 @@
       {#if devicesLoading}
         <div class="text-muted-foreground flex items-center gap-2 text-sm">
           <Spinner class="h-4 w-4" aria-hidden="true" />
-          <span>{t(locale, 'Loading devices…', 'Läser in enheter…')}</span>
+          <span>{t(locale, 'Loading devices…')}</span>
         </div>
       {:else if devices.length === 0}
         <p class="text-muted-foreground text-sm">
-          {t(locale, 'No devices have been paired yet.', 'Inga enheter har parkopplats ännu.')}
+          {t(locale, 'No devices have been paired yet.')}
         </p>
       {:else}
         {#each devices as device (device.id)}
@@ -1679,7 +1676,7 @@
             {#if isRevokingDevices}
               <Spinner class="mr-2 h-4 w-4" aria-hidden="true" />
             {/if}
-            {t(locale, 'Revoke All Devices', 'Återkalla alla enheter')}
+            {t(locale, 'Revoke All Devices')}
           </Button>
         </div>
       {/if}
@@ -1695,7 +1692,7 @@
       </div>
       <div>
         <CardTitle>
-          {t(locale, 'Privacy Controls', 'Integritetskontroller')}
+          {t(locale, 'Privacy Controls')}
         </CardTitle>
         <CardDescription>
           {t(
@@ -1715,10 +1712,10 @@
             <div>
               <p class="text-foreground text-sm font-semibold">
                 {toggle.key === 'externalBreachCheck'
-                  ? t(locale, 'External Breach Check', 'Extern intrångskontroll')
+                  ? t(locale, 'External Breach Check')
                   : toggle.key === 'localReuseDetection'
-                    ? t(locale, 'Local Reuse Detection', 'Lokal återanvändningsdetektering')
-                    : t(locale, 'Secure RAM Handling', 'Säkrare RAM-hantering')}
+                    ? t(locale, 'Local Reuse Detection')
+                    : t(locale, 'Secure RAM Handling')}
               </p>
               <p class="text-muted-foreground text-sm">
                 {toggle.key === 'externalBreachCheck'
@@ -1752,11 +1749,11 @@
       <div class="grid gap-3 sm:grid-cols-2">
         <Button variant="outline" class="justify-start gap-3" onclick={() => {}}>
           <HardDrive class="h-4 w-4" aria-hidden="true" />
-          {t(locale, 'Access Local Logs', 'Öppna lokala loggar')}
+          {t(locale, 'Access Local Logs')}
         </Button>
         <Button variant="outline" class="justify-start gap-3" onclick={() => {}}>
           <Trash2 class="h-4 w-4" aria-hidden="true" />
-          {t(locale, 'Clear Local Logs', 'Rensa lokala loggar')}
+          {t(locale, 'Clear Local Logs')}
         </Button>
       </div>
 
@@ -1780,7 +1777,7 @@
       </div>
       <div>
         <CardTitle>
-          {t(locale, 'Security Actions', 'Säkerhetsåtgärder')}
+          {t(locale, 'Security Actions')}
         </CardTitle>
         <CardDescription>
           {t(
@@ -1810,10 +1807,10 @@
             <div class="space-y-1">
               <p class="text-foreground text-sm font-semibold">
                 {action.id === 'rekey'
-                  ? t(locale, 'Re-key Vault', 'Byt valvnyckel')
+                  ? t(locale, 'Re-key Vault')
                   : action.id === 'wipe-memory'
-                    ? t(locale, 'Clear Memory', 'Rensa minne')
-                    : t(locale, 'Integrity Check', 'Integritetskontroll')}
+                    ? t(locale, 'Clear Memory')
+                    : t(locale, 'Integrity Check')}
               </p>
               <p class="text-muted-foreground text-xs wrap-break-word whitespace-normal">
                 {action.id === 'rekey'
@@ -1846,7 +1843,7 @@
   <DialogContent class="sm:max-w-lg">
     <DialogHeader>
       <DialogTitle>
-        {t(locale, 'Change Master Password', 'Byt huvudlösenord')}
+        {t(locale, 'Change Master Password')}
       </DialogTitle>
       <DialogDescription>
         {t(
@@ -1860,13 +1857,13 @@
     <div class="space-y-4">
       <div class="space-y-2">
         <Label for="current-password">
-          {t(locale, 'Current Password', 'Nuvarande lösenord')}
+          {t(locale, 'Current Password')}
         </Label>
         <div class="relative">
           <Input
             id="current-password"
             type={showCurrentPassword ? 'text' : 'password'}
-            placeholder={t(locale, 'Enter current password', 'Ange nuvarande lösenord')}
+            placeholder={t(locale, 'Enter current password')}
             bind:inputValue={currentPassword}
             title="Current Password"
           />
@@ -1876,8 +1873,8 @@
             size="icon"
             class="absolute top-1/2 right-1 -translate-y-1/2"
             aria-label={showCurrentPassword
-              ? t(locale, 'Hide current password', 'Dölj nuvarande lösenord')
-              : t(locale, 'Show current password', 'Visa nuvarande lösenord')}
+              ? t(locale, 'Hide current password')
+              : t(locale, 'Show current password')}
             onclick={togglePasswordVisibility}
           >
             {#if showCurrentPassword}
@@ -1890,11 +1887,11 @@
       </div>
 
       <div class="space-y-2">
-        <Label for="new-password">{t(locale, 'New Password', 'Nytt lösenord')}</Label>
+        <Label for="new-password">{t(locale, 'New Password')}</Label>
         <Input
           id="new-password"
           type="password"
-          placeholder={t(locale, 'Enter new password', 'Ange nytt lösenord')}
+          placeholder={t(locale, 'Enter new password')}
           bind:inputValue={newPassword}
           title="New Password"
         />
@@ -1902,12 +1899,12 @@
 
       <div class="space-y-2">
         <Label for="confirm-password">
-          {t(locale, 'Confirm New Password', 'Bekräfta nytt lösenord')}
+          {t(locale, 'Confirm New Password')}
         </Label>
         <Input
           id="confirm-password"
           type="password"
-          placeholder={t(locale, 'Confirm new password', 'Bekräfta nytt lösenord')}
+          placeholder={t(locale, 'Confirm new password')}
           bind:inputValue={confirmPassword}
           title="Confirm Password"
         />
@@ -1932,7 +1929,7 @@
 
     <DialogFooter class="gap-2">
       <Button type="button" variant="outline" onclick={closePasswordModal}>
-        {t(locale, 'Cancel', 'Avbryt')}
+        {t(locale, 'Cancel')}
       </Button>
       <Button
         type="button"
@@ -1944,7 +1941,7 @@
         {#if isChangingPassword}
           <Spinner class="mr-2 h-4 w-4" aria-hidden="true" />
         {/if}
-        {t(locale, 'Change Password', 'Byt lösenord')}
+        {t(locale, 'Change Password')}
       </Button>
     </DialogFooter>
   </DialogContent>
@@ -1954,7 +1951,7 @@
   <DialogContent class="sm:max-w-lg">
     <DialogHeader>
       <DialogTitle>
-        {t(locale, 'Reconfigure Key Derivation', 'Ändra nyckelderivering')}
+        {t(locale, 'Reconfigure Key Derivation')}
       </DialogTitle>
       <DialogDescription>
         {t(
@@ -1968,44 +1965,44 @@
     <div class="space-y-4">
       <div class="grid gap-3 sm:grid-cols-3">
         <div class="space-y-2">
-          <Label for="kdf-memory">{t(locale, 'Memory (MiB)', 'Minne (MiB)')}</Label>
+          <Label for="kdf-memory">{t(locale, 'Memory (MiB)')}</Label>
           <Input
             id="kdf-memory"
             type="number"
             min="8"
-            bind:inputValue={kdfMemoryMb as any}
+            bind:inputValue={kdfMemoryMb}
             title="Memory"
           />
         </div>
         <div class="space-y-2">
-          <Label for="kdf-time">{t(locale, 'Time Cost', 'Tidskostnad')}</Label>
+          <Label for="kdf-time">{t(locale, 'Time Cost')}</Label>
           <Input
             id="kdf-time"
             type="number"
             min="1"
-            bind:inputValue={kdfTimeCost as any}
+            bind:inputValue={kdfTimeCost}
             title="Time Cost"
           />
         </div>
         <div class="space-y-2">
-          <Label for="kdf-parallelism">{t(locale, 'Parallelism', 'Parallellism')}</Label>
+          <Label for="kdf-parallelism">{t(locale, 'Parallelism')}</Label>
           <Input
             id="kdf-parallelism"
             type="number"
             min="1"
-            bind:inputValue={kdfParallelism as any}
+            bind:inputValue={kdfParallelism}
             title="Parallelism"
           />
         </div>
       </div>
 
       <div class="space-y-2">
-        <Label for="kdf-password">{t(locale, 'Current Password', 'Nuvarande lösenord')}</Label>
+        <Label for="kdf-password">{t(locale, 'Current Password')}</Label>
         <div class="relative">
           <Input
             id="kdf-password"
             type={showKdfPassword ? 'text' : 'password'}
-            placeholder={t(locale, 'Enter current password', 'Ange nuvarande lösenord')}
+            placeholder={t(locale, 'Enter current password')}
             bind:inputValue={kdfCurrentPassword}
             title="Password"
           />
@@ -2015,8 +2012,8 @@
             size="icon"
             class="absolute top-1/2 right-1 -translate-y-1/2"
             aria-label={showKdfPassword
-              ? t(locale, 'Hide current password', 'Dölj nuvarande lösenord')
-              : t(locale, 'Show current password', 'Visa nuvarande lösenord')}
+              ? t(locale, 'Hide current password')
+              : t(locale, 'Show current password')}
             onclick={toggleKdfPasswordVisibility}
           >
             {#if showKdfPassword}
@@ -2048,7 +2045,7 @@
 
     <DialogFooter class="gap-2">
       <Button type="button" variant="outline" onclick={() => handleKdfDialogChange(false)}>
-        {t(locale, 'Cancel', 'Avbryt')}
+        {t(locale, 'Cancel')}
       </Button>
       <Button
         type="button"
@@ -2059,7 +2056,7 @@
         {#if isUpdatingKdf}
           <Spinner class="mr-2 h-4 w-4" aria-hidden="true" />
         {/if}
-        {t(locale, 'Apply Changes', 'Verkställ ändringar')}
+        {t(locale, 'Apply Changes')}
       </Button>
     </DialogFooter>
   </DialogContent>

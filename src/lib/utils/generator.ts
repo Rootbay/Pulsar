@@ -10,7 +10,9 @@ export interface GeneratorOptions {
 
 export const SYMBOL_CHARSET = '!@#$%^&*()_+-=[]{}|;:,.<>?';
 export const AMBIGUOUS_CHARS = new Set(['i', 'I', '1', 'L', 'o', 'O', '0']);
-export const SIMILAR_CHARS = new Set('oO0l1IvVwWsScCpPkKxXzZbBdDgGqQeEfFtTuUjJmMnrRhHaAyY'.split(''));
+export const SIMILAR_CHARS = new Set(
+  'oO0l1IvVwWsScCpPkKxXzZbBdDgGqQeEfFtTuUjJmMnrRhHaAyY'.split('')
+);
 
 export class GeneratorService {
   static generate(length: number, options: Partial<GeneratorOptions> = {}): string {
@@ -96,7 +98,7 @@ export class GeneratorService {
       similar: false,
       ...options
     };
-    
+
     let size = 0;
     if (opts.uppercase) size += 26;
     if (opts.lowercase) size += 26;

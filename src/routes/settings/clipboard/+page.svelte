@@ -16,7 +16,7 @@
   import { clipboardSettings } from '$lib/stores/clipboard';
   import { cn } from '$lib/utils';
   import type { ClipboardSettings } from '$lib/config/settings';
-  import { currentLocale } from '$lib/i18n';
+  import { currentLocale, t } from '$lib/i18n';
   import {
     clearClipboardNow,
     clipboardIntegrationState,
@@ -33,8 +33,7 @@
   } from '@lucide/svelte';
   import { toast } from 'svelte-sonner';
 
-  const t = (locale: 'en' | 'sv', en: string, sv: string) => (locale === 'sv' ? sv : en);
-  let locale = $derived($currentLocale as 'en' | 'sv');
+  const locale = $derived($currentLocale);
 
   let currentSettings = $state<ClipboardSettings>({} as ClipboardSettings);
   let clearAfterDuration = $state(12);
@@ -151,7 +150,7 @@
         <ClipboardCheck class="h-5 w-5" aria-hidden="true" />
       </div>
       <div>
-        <CardTitle>{t(locale, 'Core Integration', 'Grundläggande integration')}</CardTitle>
+        <CardTitle>{t(locale, 'Core Integration')}</CardTitle>
         <CardDescription>
           {t(
             locale,
@@ -165,7 +164,7 @@
       <div class="flex items-start justify-between gap-4">
         <div class="space-y-1">
           <p class="text-foreground text-sm font-medium">
-            {t(locale, 'Clipboard integration', 'Urklippsintegration')}
+            {t(locale, 'Clipboard integration')}
           </p>
           <p class="text-muted-foreground text-sm">
             {t(
@@ -255,7 +254,7 @@
         <Shield class="h-5 w-5" aria-hidden="true" />
       </div>
       <div>
-        <CardTitle>{t(locale, 'Access control', 'Åtkomstkontroll')}</CardTitle>
+        <CardTitle>{t(locale, 'Access control')}</CardTitle>
         <CardDescription>
           {t(
             locale,
@@ -270,7 +269,7 @@
         <div class="space-y-1">
           <div class="flex items-center gap-2">
             <p class="text-foreground text-sm font-medium">
-              {t(locale, 'Block clipboard history', 'Blockera urklippshistorik')}
+              {t(locale, 'Block clipboard history')}
             </p>
             <Badge
               variant={$clipboardIntegrationState.historyBlockingActive ? 'secondary' : 'outline'}
@@ -310,7 +309,7 @@
       <div class="flex items-start justify-between gap-4">
         <div class="space-y-1">
           <p class="text-foreground text-sm font-medium">
-            {t(locale, 'Only allow on unlocked session', 'Tillåt endast när Pulsar är upplåst')}
+            {t(locale, 'Only allow on unlocked session')}
           </p>
           <p class="text-muted-foreground text-sm">
             {t(
@@ -338,7 +337,7 @@
           </div>
           <div class="space-y-1">
             <p class="text-foreground text-sm font-medium">
-              {t(locale, 'Per-item clipboard permissions', 'Behörigheter per post för urklipp')}
+              {t(locale, 'Per-item clipboard permissions')}
             </p>
             <p class="text-muted-foreground text-sm">
               {t(
@@ -363,7 +362,7 @@
                 await handleRadioChange();
               }}
             >
-              {t(locale, 'Allow once (ask each time)', 'Tillåt en gång (fråga varje gång)')}
+              {t(locale, 'Allow once (ask each time)')}
             </Button>
             <Button
               type="button"
@@ -376,7 +375,7 @@
                 await handleRadioChange();
               }}
             >
-              {t(locale, 'Always allow (remember choice)', 'Tillåt alltid (kom ihåg valet)')}
+              {t(locale, 'Always allow (remember choice)')}
             </Button>
           </div>
         </div>
@@ -387,7 +386,7 @@
   <Card class="border-border/60 bg-card/80 supports-backdrop-filter:bg-card/70 backdrop-blur">
     <CardHeader>
       <CardTitle>
-        {t(locale, 'Actions & monitoring', 'Åtgärder & övervakning')}
+        {t(locale, 'Actions & monitoring')}
       </CardTitle>
       <CardDescription>
         {t(
@@ -408,7 +407,7 @@
           onclick={handleClearClipboard}
         >
           <Trash2 class="size-4" />
-          {t(locale, 'Clear clipboard now', 'Töm urklipp nu')}
+          {t(locale, 'Clear clipboard now')}
         </Button>
         <Button
           type="button"
@@ -417,9 +416,7 @@
           onclick={toggleAuditLog}
         >
           <History class="size-4" />
-          {showAuditLog
-            ? t(locale, 'Hide audit log', 'Dölj aktivitetslogg')
-            : t(locale, 'View audit log', 'Visa aktivitetslogg')}
+          {showAuditLog ? t(locale, 'Hide audit log') : t(locale, 'View audit log')}
         </Button>
       </div>
 
@@ -428,10 +425,10 @@
           <Separator class="bg-border/60" />
           <div>
             <h4 class="text-foreground text-sm font-semibold">
-              {t(locale, 'Recent clipboard activity', 'Senaste urklippsaktivitet')}
+              {t(locale, 'Recent clipboard activity')}
             </h4>
             <p class="text-muted-foreground text-sm">
-              {t(locale, 'Local activity log (not synced)', 'Lokal aktivitetslogg (inte synkad)')}
+              {t(locale, 'Local activity log (not synced)')}
             </p>
           </div>
           <div class="max-h-64 space-y-2 overflow-y-auto pr-1">

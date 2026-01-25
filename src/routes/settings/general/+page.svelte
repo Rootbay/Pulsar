@@ -14,13 +14,7 @@
   import { Select, SelectContent, SelectItem, SelectTrigger } from '$lib/components/ui/select';
   import { Switch } from '$lib/components/ui/switch';
   import { Smartphone, Key, Lock, Settings } from '@lucide/svelte';
-  import { currentLocale } from '$lib/i18n';
-
-  interface Props {
-    onclose?: () => void;
-  }
-
-  let { onclose }: Props = $props();
+  import { currentLocale, t } from '$lib/i18n';
 
   type BooleanSettingKey = {
     [K in keyof GeneralSettings]: GeneralSettings[K] extends boolean ? K : never;
@@ -29,8 +23,7 @@
   type SelectSettingKey = Exclude<keyof GeneralSettings, BooleanSettingKey>;
 
   let currentGeneralSettings = $state<GeneralSettings>({} as GeneralSettings);
-  let locale = $derived($currentLocale as 'en' | 'sv');
-  const t = (en: string, sv: string) => (locale === 'sv' ? sv : en);
+  const locale = $derived($currentLocale);
 
   $effect(() => {
     return generalSettings.subscribe((value) => {
@@ -123,12 +116,9 @@
           <Settings size={20} color="currentColor" aria-hidden="true" />
         </div>
         <div>
-          <CardTitle>{t('General Settings', 'Allmänna inställningar')}</CardTitle>
+          <CardTitle>{t(locale, 'General Settings')}</CardTitle>
           <CardDescription>
-            {t(
-              'Manage default language, startup behaviour, and layout.',
-              'Hantera standardspråk, uppstart och layout.'
-            )}
+            {t(locale, 'Manage default language, startup behaviour, and layout.')}
           </CardDescription>
         </div>
       </div>
@@ -137,7 +127,7 @@
       <div class="grid gap-6 md:grid-cols-2">
         <div class="space-y-2">
           <Label class="text-foreground text-sm font-medium">
-            {t('App Language', 'Språk')}
+            {t(locale, 'App Language')}
           </Label>
           {#each [locale] as l (l)}
             <Select
@@ -161,7 +151,7 @@
 
         <div class="space-y-2">
           <Label class="text-foreground text-sm font-medium">
-            {t('Default Vault on Startup', 'Standardvalv vid uppstart')}
+            {t(locale, 'Default Vault on Startup')}
           </Label>
           <Select
             type="single"
@@ -214,7 +204,7 @@
 
       <div class="space-y-2">
         <Label class="text-foreground text-sm font-medium">
-          {t('Default View on Open', 'Standardvy vid öppning')}
+          {t(locale, 'Default View on Open')}
         </Label>
         <Select
           type="single"
@@ -248,13 +238,10 @@
         </div>
         <div>
           <CardTitle>
-            {t('Two-Factor Authentication', 'Tvåfaktorsautentisering')}
+            {t(locale, 'Two-Factor Authentication')}
           </CardTitle>
           <CardDescription>
-            {t(
-              'Add extra layers of protection to vault access.',
-              'Lägg till extra skyddslager för valvåtkomst.'
-            )}
+            {t(locale, 'Add extra layers of protection to vault access.')}
           </CardDescription>
         </div>
       </div>
@@ -271,10 +258,10 @@
         >
           <div class="space-y-1">
             <p class="text-foreground text-sm font-medium">
-              {t('TOTP (Time-based)', 'TOTP (tidsbaserad)')}
+              {t(locale, 'TOTP (Time-based)')}
             </p>
             <p class="text-muted-foreground text-sm">
-              {t('Built-in authenticator support.', 'Inbyggt stöd för autentiserare.')}
+              {t(locale, 'Built-in authenticator support.')}
             </p>
           </div>
           <Switch
@@ -303,13 +290,10 @@
         </div>
         <div>
           <CardTitle>
-            {t('Keyboard Shortcuts', 'Tangentbordsgenvägar')}
+            {t(locale, 'Keyboard Shortcuts')}
           </CardTitle>
           <CardDescription>
-            {t(
-              'Customize shortcuts for frequently used actions.',
-              'Anpassa genvägar för vanliga åtgärder.'
-            )}
+            {t(locale, 'Customize shortcuts for frequently used actions.')}
           </CardDescription>
         </div>
       </div>
@@ -319,15 +303,12 @@
         class="mt-3 sm:mt-0"
         onclick={() => (showKeyboardShortcutsPopup = true)}
       >
-        {t('Configure Shortcuts', 'Konfigurera genvägar')}
+        {t(locale, 'Configure Shortcuts')}
       </Button>
     </CardHeader>
     <CardContent class="pt-4">
       <p class="text-muted-foreground text-sm">
-        {t(
-          'Personalize key combinations to match your workflow and speed up navigation.',
-          'Anpassa tangentkombinationer efter ditt arbetssätt och snabba upp navigeringen.'
-        )}
+        {t(locale, 'Personalize key combinations to match your workflow and speed up navigation.')}
       </p>
     </CardContent>
   </Card>

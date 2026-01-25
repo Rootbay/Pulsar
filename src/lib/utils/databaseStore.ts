@@ -1,7 +1,7 @@
 import { writable, derived, type Writable, type Readable, get } from 'svelte/store';
 import { invoke } from '@tauri-apps/api/core';
 import * as fastDeepEqual from 'fast-deep-equal';
-// @ts-ignore
+// @ts-expect-error - fast-deep-equal ESM/CJS compatibility
 const deepEqual = fastDeepEqual.default || fastDeepEqual;
 import { settingsStore } from '../stores/settingsStore';
 

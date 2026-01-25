@@ -21,7 +21,7 @@
     totpVerified,
     totpRequired
   } from '$lib/stores';
-  import { currentLocale } from '$lib/i18n';
+  import { currentLocale, t } from '$lib/i18n';
   import { ArrowLeft } from '@lucide/svelte';
 
   import { SecurityService } from '$lib/utils/security';
@@ -34,7 +34,13 @@
   let strengthResult = $derived(SecurityService.checkStrength(newMasterPassword));
   let strengthScore = $derived(newMasterPassword ? (strengthResult.score + 1) * 20 : 0);
 
-  const STRENGTH_LABELS = ['Very Weak', 'Weak', 'Fair', 'Strong', 'Very Strong'];
+  const STRENGTH_LABEL_KEYS = [
+    'setupStrengthVeryWeak',
+    'setupStrengthWeak',
+    'setupStrengthFair',
+    'setupStrengthStrong',
+    'setupStrengthVeryStrong'
+  ] as const;
   const STRENGTH_COLORS = [
     'text-destructive',
     'text-orange-500',
@@ -50,11 +56,12 @@
     '[&_[data-slot=progress-indicator]]:bg-[color:var(--color-chart-4)]'
   ];
 
-  const t = (locale: 'en' | 'sv', en: string, sv: string) => (locale === 'sv' ? sv : en);
-  const locale = $derived($currentLocale as 'en' | 'sv');
+  const locale = $derived($currentLocale);
 
   const strengthLabelText = $derived(
-    newMasterPassword ? STRENGTH_LABELS[strengthResult.score] : 'None'
+    newMasterPassword
+      ? t(locale, STRENGTH_LABEL_KEYS[strengthResult.score])
+      : t(locale, 'setupStrengthNone')
   );
   const strengthColorClass = $derived(
     newMasterPassword ? STRENGTH_COLORS[strengthResult.score] : 'text-muted-foreground'
@@ -77,15 +84,11 @@
 
   async function handleSetMasterPassword() {
     if (!newMasterPassword.trim() || !confirmMasterPassword.trim()) {
-      loginError = t(
-        locale,
-        'Please fill in both password fields.',
-        'Fyll i båda lösenordsfälten.'
-      );
+      loginError = t(locale, 'setupPasswordFieldsRequired');
       return;
     }
     if (newMasterPassword !== confirmMasterPassword) {
-      loginError = t(locale, 'Passwords do not match.', 'Lösenorden matchar inte.');
+      loginError = t(locale, 'setupPasswordMismatch');
       return;
     }
 
@@ -99,10 +102,7 @@
       totpRequired.set(false);
     } catch (cause) {
       console.error('Set master password failed:', cause);
-      loginError =
-        typeof cause === 'string'
-          ? cause
-          : t(locale, 'An unknown error occurred.', 'Ett okänt fel inträffade.');
+      loginError = typeof cause === 'string' ? cause : t(locale, 'setupUnknownError');
     } finally {
       isSetting = false;
     }
@@ -144,7 +144,7 @@
     onclick={goBack}
   >
     <ArrowLeft class="h-4 w-4" />
-    {t(locale, 'Back', 'Tillbaka')}
+    {t(locale, 'back')}
   </button>
   <div
     class="bg-primary-glow pointer-events-none absolute top-1/2 left-1/2 h-[min(90vw,32rem)] w-[min(90vw,32rem)] -translate-x-1/2 -translate-y-1/2 rounded-full blur-3xl"
@@ -157,26 +157,22 @@
     <form class="flex flex-col gap-6" onsubmit={handleSubmit}>
       <CardHeader class="space-y-2 text-center">
         <CardTitle class="text-2xl font-semibold">
-          {t(locale, 'Secure your vault', 'Säkra ditt valv')}
+          {t(locale, 'setupTitle')}
         </CardTitle>
         <CardDescription>
-          {t(
-            locale,
-            'Create a strong master password to protect every secret in Pulsar.',
-            'Skapa ett starkt huvudlösenord för att skydda alla hemligheter i Pulsar.'
-          )}
+          {t(locale, 'setupSubtitle')}
         </CardDescription>
       </CardHeader>
 
       <CardContent class="space-y-5">
         <div class="space-y-2">
           <Label for="new-password">
-            {t(locale, 'New master password', 'Nytt huvudlösenord')}
+            {t(locale, 'setupNewMasterPassword')}
           </Label>
           <Input
             id="new-password"
             type="password"
-            placeholder={t(locale, 'New master password', 'Nytt huvudlösenord')}
+            placeholder={t(locale, 'setupNewMasterPassword')}
             bind:value={newMasterPassword}
             autocomplete="new-password"
             disabled={isSetting}
@@ -185,12 +181,12 @@
 
         <div class="space-y-2">
           <Label for="confirm-password">
-            {t(locale, 'Confirm master password', 'Bekräfta huvudlösenord')}
+            {t(locale, 'setupConfirmMasterPassword')}
           </Label>
           <Input
             id="confirm-password"
             type="password"
-            placeholder={t(locale, 'Confirm master password', 'Bekräfta huvudlösenord')}
+            placeholder={t(locale, 'setupConfirmMasterPassword')}
             bind:value={confirmMasterPassword}
             autocomplete="new-password"
             disabled={isSetting}
@@ -201,7 +197,7 @@
           <div class="border-border/60 bg-muted/20 space-y-3 rounded-xl border p-4">
             <div class="text-muted-foreground flex items-center justify-between text-sm">
               <span class="font-medium">
-                {t(locale, 'Strength', 'Styrka')}
+                {t(locale, 'setupStrength')}
               </span>
               <span class={`font-semibold ${strengthColorClass}`}>{strengthLabelText}</span>
             </div>
@@ -213,11 +209,7 @@
               </p>
             {:else}
               <p class="text-muted-foreground text-xs">
-                {t(
-                  locale,
-                  'Longer is better. Mix uppercase, lowercase, numbers, and symbols.',
-                  'Längre är bättre. Blanda stora och små bokstäver, siffror och symboler.'
-                )}
+                {t(locale, 'setupPasswordTip')}
               </p>
             {/if}
           </div>
@@ -225,7 +217,7 @@
 
         {#if confirmMasterPassword && newMasterPassword !== confirmMasterPassword}
           <p class="text-destructive text-xs font-medium">
-            {t(locale, 'Passwords do not match.', 'Lösenorden matchar inte.')}
+            {t(locale, 'setupPasswordMismatch')}
           </p>
         {/if}
 
@@ -246,16 +238,10 @@
             !newMasterPassword.trim() ||
             newMasterPassword !== confirmMasterPassword}
         >
-          {isSetting
-            ? t(locale, 'Setting...', 'Sparar...')
-            : t(locale, 'Set password', 'Sätt lösenord')}
+          {isSetting ? t(locale, 'setupSetting') : t(locale, 'setupSetPassword')}
         </Button>
         <p class="text-muted-foreground text-center text-xs">
-          {t(
-            locale,
-            'This password stays on this device. Store it somewhere safe.',
-            'Detta lösenord stannar på den här enheten. Förvara det på ett säkert ställe.'
-          )}
+          {t(locale, 'setupPasswordLocalNote')}
         </p>
       </CardFooter>
     </form>

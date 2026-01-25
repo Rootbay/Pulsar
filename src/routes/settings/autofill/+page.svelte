@@ -12,10 +12,9 @@
   } from '$lib/components/ui/card';
   import { Switch } from '$lib/components/ui/switch';
   import { TriangleAlert, CircleCheck, Play, CircleX } from '@lucide/svelte';
-  import { currentLocale } from '$lib/i18n';
+  import { currentLocale, t } from '$lib/i18n';
 
-  const t = (locale: 'en' | 'sv', en: string, sv: string) => (locale === 'sv' ? sv : en);
-  $: locale = $currentLocale as 'en' | 'sv';
+  const locale = $derived($currentLocale);
 
   let browserAutofill = false;
   let globalAutotype = false;
@@ -60,7 +59,7 @@
 <div class="min-h-0 flex-1 space-y-6 px-6 py-8">
   <Card class="border-border/60 bg-card/80 supports-backdrop-filter:bg-card/70 backdrop-blur">
     <CardHeader>
-      <CardTitle>{t(locale, 'Browser Auto-fill', 'Autofyll i webbläsare')}</CardTitle>
+      <CardTitle>{t(locale, 'Browser Auto-fill')}</CardTitle>
       <CardDescription>
         {t(
           locale,
@@ -73,7 +72,7 @@
       <div class="flex items-center justify-between gap-4">
         <div class="space-y-1">
           <p class="text-foreground text-sm font-medium">
-            {t(locale, 'Enable Auto-fill for Browsers', 'Aktivera autofyll för webbläsare')}
+            {t(locale, 'Enable Auto-fill for Browsers')}
           </p>
           <p class="text-muted-foreground text-sm">
             {t(
@@ -94,7 +93,7 @@
 
   <Card class="border-border/60 bg-card/80 supports-backdrop-filter:bg-card/70 backdrop-blur">
     <CardHeader>
-      <CardTitle>{t(locale, 'Global Auto-type', 'Global autotypning')}</CardTitle>
+      <CardTitle>{t(locale, 'Global Auto-type')}</CardTitle>
       <CardDescription>
         {t(
           locale,
@@ -107,7 +106,7 @@
       <div class="flex items-center justify-between gap-4">
         <div class="space-y-1">
           <p class="text-foreground text-sm font-medium">
-            {t(locale, 'Enable Global Auto-type', 'Aktivera global autotypning')}
+            {t(locale, 'Enable Global Auto-type')}
           </p>
           <p class="text-muted-foreground text-sm">
             {t(
@@ -128,7 +127,7 @@
 
   <Card class="border-border/60 bg-card/80 supports-backdrop-filter:bg-card/70 backdrop-blur">
     <CardHeader>
-      <CardTitle>{t(locale, 'Safety Checks', 'Säkerhetskontroller')}</CardTitle>
+      <CardTitle>{t(locale, 'Safety Checks')}</CardTitle>
       <CardDescription>
         {t(
           locale,
@@ -141,7 +140,7 @@
       <div class="flex items-center justify-between gap-4">
         <div class="space-y-1">
           <p class="text-foreground text-sm font-medium">
-            {t(locale, 'Require OS-level Unlock for Auto-fill', 'Kräv OS-upplåsning för autofyll')}
+            {t(locale, 'Require OS-level Unlock for Auto-fill')}
           </p>
           <p class="text-muted-foreground text-sm">
             {t(
@@ -160,7 +159,7 @@
       <div class="flex items-center justify-between gap-4">
         <div class="space-y-1">
           <p class="text-foreground text-sm font-medium">
-            {t(locale, 'Require Per-site Confirmation', 'Kräv bekräftelse per webbplats')}
+            {t(locale, 'Require Per-site Confirmation')}
           </p>
           <p class="text-muted-foreground text-sm">
             {t(
@@ -181,7 +180,7 @@
 
   <Card class="border-border/60 bg-card/80 supports-backdrop-filter:bg-card/70 backdrop-blur">
     <CardHeader>
-      <CardTitle>{t(locale, 'Test Auto-type', 'Testa autotypning')}</CardTitle>
+      <CardTitle>{t(locale, 'Test Auto-type')}</CardTitle>
       <CardDescription>
         {t(
           locale,
@@ -196,7 +195,7 @@
       >
         <Button type="button" class="w-full sm:w-auto">
           <Play class="mr-2 size-4" />
-          {t(locale, 'Simulate Auto-type', 'Simulera autotypning')}
+          {t(locale, 'Simulate Auto-type')}
         </Button>
         <div
           class="border-chart-warning-soft bg-chart-warning-soft text-chart-warning flex items-start gap-3 rounded-md border px-3 py-2 text-sm"
@@ -214,7 +213,7 @@
 
       <div class="border-border/60 bg-muted/10 space-y-4 rounded-lg border p-4">
         <h3 class="text-foreground text-sm font-semibold">
-          {t(locale, 'Test results', 'Testresultat')}
+          {t(locale, 'Test results')}
         </h3>
         <div class="space-y-3">
           {#each testResults as result (result.message)}

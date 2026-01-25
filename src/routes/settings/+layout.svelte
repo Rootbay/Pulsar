@@ -18,25 +18,25 @@
     WandSparkles,
     Globe
   } from '@lucide/svelte';
-  import { currentLocale } from '$lib/i18n';
+  import { currentLocale, t } from '$lib/i18n';
+  import type { I18nKey } from '$lib/i18n';
 
   let { children } = $props();
 
-  const t = (locale: 'en' | 'sv', en: string, sv: string) => (locale === 'sv' ? sv : en);
-  let locale = $derived($currentLocale as 'en' | 'sv');
+  const locale = $derived($currentLocale);
 
-  type NavItem = { href: string; label: (locale: 'en' | 'sv') => string; Icon: typeof Settings };
+  type NavItem = { href: string; labelKey: I18nKey; Icon: typeof Settings };
   const navItems: NavItem[] = [
-    { href: '/settings/general', label: (l) => t(l, 'General', 'Allmänt'), Icon: Settings },
-    { href: '/settings/appearance', label: (l) => t(l, 'Appearance', 'Utseende'), Icon: Palette },
-    { href: '/settings/security', label: (l) => t(l, 'Security', 'Säkerhet'), Icon: ShieldCheck },
-    { href: '/settings/clipboard', label: (l) => t(l, 'Clipboard', 'Urklipp'), Icon: Clipboard },
-    { href: '/settings/autofill', label: (l) => t(l, 'Autofill', 'Autofyll'), Icon: Globe },
-    { href: '/settings/generator', label: (l) => t(l, 'Generator', 'Generator'), Icon: WandSparkles },
-    { href: '/settings/vault', label: (l) => t(l, 'Vault', 'Valv'), Icon: Database },
-    { href: '/settings/backup', label: (l) => t(l, 'Backup', 'Säkerhetskopior'), Icon: Database },
-    { href: '/settings/advanced', label: (l) => t(l, 'Advanced', 'Avancerat'), Icon: SlidersHorizontal },
-    { href: '/settings/about', label: (l) => t(l, 'About', 'Om Pulsar'), Icon: Info }
+    { href: '/settings/general', labelKey: 'General', Icon: Settings },
+    { href: '/settings/appearance', labelKey: 'Appearance', Icon: Palette },
+    { href: '/settings/security', labelKey: 'Security', Icon: ShieldCheck },
+    { href: '/settings/clipboard', labelKey: 'Clipboard', Icon: Clipboard },
+    { href: '/settings/autofill', labelKey: 'Autofill', Icon: Globe },
+    { href: '/settings/generator', labelKey: 'Generator', Icon: WandSparkles },
+    { href: '/settings/vault', labelKey: 'Vault', Icon: Database },
+    { href: '/settings/backup', labelKey: 'Backup', Icon: Database },
+    { href: '/settings/advanced', labelKey: 'Advanced', Icon: SlidersHorizontal },
+    { href: '/settings/about', labelKey: 'About', Icon: Info }
   ];
 
   let currentPath = $derived($page.url.pathname.replace(/\/$/, ''));
@@ -47,7 +47,7 @@
     class="border-border/60 bg-card/50 hidden h-screen w-64 shrink-0 overflow-y-auto border-r p-4 md:block"
   >
     <nav class="space-y-1">
-      {#each navItems as { href, label, Icon }}
+      {#each navItems as { href, labelKey, Icon } (href)}
         <a
           {href}
           class={`flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm transition ${
@@ -57,21 +57,21 @@
           }`}
         >
           <Icon class="size-4" />
-          <span>{label(locale)}</span>
+          <span>{t(locale, labelKey)}</span>
         </a>
       {/each}
     </nav>
 
     <div class="border-border/60 mt-6 border-t pt-4">
       <p class="text-muted-foreground px-3 text-xs font-medium">
-        {locale === 'sv' ? 'Mer' : 'More'}
+        {t(locale, 'More')}
       </p>
       <a
         href="/settings/security"
         class="text-muted-foreground hover:bg-muted/60 mt-2 flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm"
       >
         <ShieldCheck class="size-4" />
-        <span>{locale === 'sv' ? 'Sessioner' : 'Sessions'}</span>
+        <span>{t(locale, 'Sessions')}</span>
       </a>
     </div>
   </aside>
@@ -83,20 +83,20 @@
       <div class="mx-auto flex h-14 max-w-400 items-center gap-3 px-4">
         <button
           class="text-muted-foreground hover:bg-muted inline-flex items-center justify-center rounded-md p-2 md:hidden"
-          aria-label="Open menu"
+          aria-label={t(locale, 'Open menu')}
         >
           <Menu class="size-4" />
         </button>
 
         <div class="relative ml-1 hidden w-95 items-center md:flex">
           <Search class="text-muted-foreground pointer-events-none absolute left-2 size-4" />
-          <Input class="w-full pl-8 text-sm" placeholder="Search settings" />
+          <Input class="w-full pl-8 text-sm" placeholder={t(locale, 'Search settings')} />
         </div>
 
         <div class="ml-auto flex items-center gap-2">
           <button
             class="text-muted-foreground hover:bg-muted rounded-md p-2"
-            aria-label="Notifications"
+            aria-label={t(locale, 'Notifications')}
           >
             <Bell class="size-4" />
           </button>
@@ -104,12 +104,12 @@
             variant="ghost"
             class="h-8 px-2 disabled:opacity-50"
             onclick={() => settingsStore.resetAll()}
-            disabled={!$settingsStore}>Reset</Button
+            disabled={!$settingsStore}>{t(locale, 'Reset')}</Button
           >
           <Button
             class="h-8 px-3 disabled:opacity-50"
             onclick={() => settingsStore.saveAll()}
-            disabled={!$settingsStore}>Save</Button
+            disabled={!$settingsStore}>{t(locale, 'Save')}</Button
           >
           <Avatar class="h-8 w-8">
             <AvatarImage src="/svelte.svg" alt="Avatar" />

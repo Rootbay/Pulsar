@@ -2,7 +2,7 @@
 
 <script lang="ts">
   import type { PasswordItem, Attachment } from '$lib/types/password';
-  import type { DisplayField, TotpDisplayField } from '$lib/types/password-fields';
+  import type { DisplayField } from '$lib/types/password-fields';
   import { isTotpDisplayField } from '$lib/types/password-fields';
   import { iconPaths } from '$lib/icons';
   import { callBackend } from '$lib/utils/backend';
@@ -49,10 +49,17 @@
     };
   }
 
+  interface TagOption {
+    id: number;
+    text: string;
+    icon: string;
+    color: string;
+  }
+
   interface Props {
     selectedPasswordItem: PasswordItem | null;
     displayColor: string;
-    buttons: any[];
+    buttons: TagOption[];
     onremoveEntry?: (item: PasswordItem) => void;
     ontagsSaved?: (detail: { id: number; tags: string }) => void;
     children?: Snippet;
@@ -122,7 +129,7 @@
   let pendingTagOrder = $state<string | null>(null);
   let dndItems = $state<DisplayField[]>([]);
   let showSkeletonDetail = $state(false);
-  let skeletonTimerDetail: any = null;
+  let skeletonTimerDetail: ReturnType<typeof setTimeout> | null = null;
   let totpSecondsRemaining = $state(0);
   let totpCode = $state<string | null>(null);
   let totpCodeError = $state<string | null>(null);
@@ -143,6 +150,14 @@
 
   let attachments = $state<Attachment[]>([]);
   let isAttachmentLoading = $state(false);
+
+  const displayFields = $derived(buildDisplayFields(selectedPasswordItem, iconPaths));
+  const filteredDisplayFields = $derived(
+    displayFields.filter((field) => !isTotpDisplayField(field))
+  );
+  const currentTotpField = $derived(displayFields.find(isTotpDisplayField));
+  const totpSecret = $derived(currentTotpField?.meta.secret ?? null);
+  let formattedTotpCode = $state('------');
 
   function formatFileSize(bytes: number): string {
     if (bytes === 0) return '0 B';
@@ -263,16 +278,6 @@
     stopTotpTimer();
   });
 
-  let displayFields = $state<DisplayField[]>([]);
-  let filteredDisplayFields = $state<DisplayField[]>([]);
-  let totpSecret = $state<string | null>(null);
-  let formattedTotpCode = $state('------');
-  let currentTotpField: TotpDisplayField | undefined;
-
-  $effect(() => {
-    displayFields = buildDisplayFields(selectedPasswordItem, iconPaths);
-  });
-
   $effect(() => {
     const currentId = selectedPasswordItem?.id ?? null;
     if (currentId !== lastSelectedItemId) {
@@ -284,12 +289,6 @@
       totpCodeError = null;
       loadAttachments();
     }
-  });
-
-  $effect(() => {
-    filteredDisplayFields = displayFields.filter((field) => !isTotpDisplayField(field));
-    currentTotpField = displayFields.find(isTotpDisplayField);
-    totpSecret = currentTotpField?.meta.secret ?? null;
   });
 
   $effect(() => {
@@ -547,7 +546,7 @@
           id: item.id,
           tags: pendingTagOrder
         });
-        const updatedItem = { ...item, tags: pendingTagOrder } as any;
+        const updatedItem = { ...item, tags: pendingTagOrder } as PasswordItem;
         selectedPasswordItem = updatedItem;
         handleTagsSaved({ id: updatedItem.id, tags: pendingTagOrder });
       } catch (error) {
@@ -609,7 +608,6 @@
       };
 
       selectedPasswordItem = updatedItem;
-      displayFields = buildDisplayFields(updatedItem, iconPaths);
       dndItems = [
         ...dndItems,
         {
@@ -882,7 +880,7 @@
                   </span>
                 </SelectTrigger>
                 <SelectContent>
-                  {#each fieldTypeOptions as option}
+                  {#each fieldTypeOptions as option (option.value)}
                     <SelectItem value={option.value}>{option.label}</SelectItem>
                   {/each}
                 </SelectContent>
@@ -1172,13 +1170,13 @@
           </div>
         </div>
         <div class="flex flex-wrap gap-3">
-          {#each createTagPlaceholders(selectedPasswordItem?.tags) as _}
+          {#each createTagPlaceholders(selectedPasswordItem?.tags) as _, i (i)}
             <Skeleton class="h-6 w-16 rounded-full" />
           {/each}
         </div>
       </div>
       <div class="flex flex-col gap-4">
-        {#each createPlaceholders(isEditing ? dndItems.length : filteredDisplayFields.length) as _}
+        {#each createPlaceholders(isEditing ? dndItems.length : filteredDisplayFields.length) as _, i (i)}
           <div class="flex items-center gap-4">
             <Skeleton class="h-5 w-5 rounded-md" />
             <div class="flex flex-1 flex-col gap-2">

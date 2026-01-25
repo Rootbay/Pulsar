@@ -2,15 +2,28 @@ import { derived } from 'svelte/store';
 import { generalSettings } from '$lib/stores/general';
 import en from './i18n/en.json';
 import sv from './i18n/sv.json';
+import es from './i18n/es.json';
+import fr from './i18n/fr.json';
+import de from './i18n/de.json';
+import ptBr from './i18n/pt-BR.json';
+import zh from './i18n/zh.json';
+import ru from './i18n/ru.json';
+import ja from './i18n/ja.json';
+import hi from './i18n/hi.json';
+import ko from './i18n/ko.json';
+import ar from './i18n/ar.json';
+import it from './i18n/it.json';
 
-export type Locale = 'en' | 'sv';
+export type Locale = 'en' | 'sv' | 'es' | 'fr' | 'de' | 'pt-BR' | 'zh' | 'ru' | 'ja' | 'hi' | 'ko' | 'ar' | 'it';
 type Messages = typeof en;
 export type I18nKey = keyof Messages;
 
-const dictionaries: Record<Locale, Messages> = { en, sv };
+const dictionaries: Record<Locale, Messages> = { en, sv, es, fr, de, 'pt-BR': ptBr, zh, ru, ja, hi, ko, ar, it };
+const supportedLocales = new Set<Locale>(Object.keys(dictionaries) as Locale[]);
 
 export const currentLocale = derived(generalSettings, ($general): Locale => {
-  return $general.appLanguage === 'sv' ? 'sv' : 'en';
+  const preferred = $general.appLanguage as Locale;
+  return supportedLocales.has(preferred) ? preferred : 'en';
 });
 
 export function t(

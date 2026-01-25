@@ -47,7 +47,7 @@
     buttons: TagButton[];
     selectedId: number | null;
     disableEdit?: boolean;
-    onselect?: (item: PasswordItem) => void;
+    onselect?: (item: PasswordItem | null) => void;
     oncreateEntry?: () => void;
     oneditEntry?: (item: PasswordItem) => void;
     onremoveEntry?: (item: PasswordItem) => void;
@@ -145,7 +145,15 @@
 
     Promise.resolve().then(() => {
       selectedItemId = desiredId;
-      if (desiredId != null && lastDispatchedId !== desiredId) {
+      if (desiredId == null) {
+        if (lastDispatchedId !== null) {
+          onselect?.(null);
+          lastDispatchedId = null;
+        }
+        return;
+      }
+
+      if (lastDispatchedId !== desiredId) {
         const item = filteredItems.find((i) => i.id === desiredId);
         if (item) {
           onselect?.(item);

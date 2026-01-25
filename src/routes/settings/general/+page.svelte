@@ -36,6 +36,11 @@
   const selectOptions: Record<SelectSettingKey, { value: string; label: string }[]> = {
     appLanguage: [
       { value: 'en', label: 'English' },
+      { value: 'es', label: 'Español' },
+      { value: 'fr', label: 'Français' },
+      { value: 'de', label: 'Deutsch' },
+      { value: 'pt-BR', label: 'Português (Brasil)' },
+      { value: 'zh', label: '简体中文' },
       { value: 'sv', label: 'Svenska' }
     ],
     defaultVaultOnStartup: [

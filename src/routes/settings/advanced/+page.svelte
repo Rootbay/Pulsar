@@ -1,7 +1,7 @@
 <script lang="ts">
   import { get } from 'svelte/store';
   import { callBackend } from '$lib/utils/backend';
-  import { toast } from 'svelte-sonner';
+  import { toast } from '$lib/components/ui/sonner';
   import { advancedSettings } from '$lib/stores/advanced';
   import type { AdvancedSettings } from '$lib/config/settings';
   import { Button } from '$lib/components/ui/button';
@@ -354,3 +354,7 @@
     </CardContent>
   </Card>
 </div>
+
+
+
+

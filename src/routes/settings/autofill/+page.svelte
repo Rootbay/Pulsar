@@ -12,7 +12,7 @@
   } from '$lib/components/ui/card';
   import { Switch } from '$lib/components/ui/switch';
   import { TriangleAlert, CircleCheck, Play, CircleX } from '@lucide/svelte';
-  import { currentLocale, t } from '$lib/i18n';
+  import { currentLocale, t, type Locale } from '$lib/i18n';
 
   const locale = $derived($currentLocale);
 
@@ -43,7 +43,7 @@
     { message: 'Browser focus detection: Failed', status: 'failure' }
   ] satisfies Array<{ message: string; status: 'success' | 'failure' }>;
 
-  function translateTestMessage(message: string, locale: 'en' | 'sv'): string {
+  function translateTestMessage(message: string, locale: Locale): string {
     if (locale === 'sv') {
       if (message === 'Hotkey registration: Success')
         return 'Registrering av snabbtangent: Lyckades';

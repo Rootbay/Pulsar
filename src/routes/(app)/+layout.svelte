@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { isLocked, showSettingsPopup } from '$lib/stores';
+  import { isLocked, showSettingsPopup, selectedTag } from '$lib/stores';
+  import { tagStore, type TagInput, type TagButton } from '$lib/stores/tags';
   import AppSidebar from '$lib/components/layout/sidebar.svelte';
   import PasswordList from '$lib/components/layout/passwordList.svelte';
   import PasswordDetail from '$lib/components/layout/passwordDetail.svelte';
@@ -10,14 +11,10 @@
   import { callBackend } from '$lib/utils/backend';
   import type { PasswordItem } from '../+layout.ts';
   import { onMount, tick } from 'svelte';
+  import { toast } from '$lib/components/ui/sonner';
   import { profileSettings } from '$lib/stores/profile';
 
-  interface Button {
-    id: number;
-    text: string;
-    icon: string;
-    color: string;
-  }
+  type Button = TagInput;
 
   let { children } = $props();
 
@@ -30,7 +27,7 @@
   let showPopup = $state(false);
   let popupMode = $state<'create' | 'edit'>('create');
   let popupTag = $state<Button | null>(null);
-  let buttons = $state<Button[]>([]);
+  const buttons = $derived($tagStore);
   let displayColor = $state('#94a3b8');
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let passwordListRef = $state<any>(null);
@@ -55,7 +52,7 @@
 
     try {
       passwordItems = await callBackend('get_password_items');
-      buttons = await callBackend('get_buttons');
+      await tagStore.refresh();
     } catch (error) {
       console.error('Failed to load vault items:', error);
     }
@@ -94,39 +91,37 @@
     showPopup = false;
   }
 
-  async function handleSave(detail: { mode: 'create' | 'edit'; updatedTag?: Button }) {
-    const { mode, updatedTag } = detail;
+  async function handleSave(detail: { mode: 'create' | 'edit'; tag: Button }) {
+    const { mode, tag } = detail;
 
-    if (mode === 'create') {
-      buttons = await callBackend('get_buttons');
-    } else if (mode === 'edit' && updatedTag) {
+    try {
+      if (mode === 'create') {
+        await tagStore.create(tag);
+        toast.success('Tag created.');
+        return;
+      }
+
+      if (!tag.id) {
+        return;
+      }
+
+      await tagStore.updateTag(tag as TagButton);
+      toast.success('Tag updated.');
+
+      const updatedTag = tag as TagButton;
       const oldTag = popupTag;
-      buttons = buttons.map((b) => (b.id === updatedTag.id ? updatedTag : b));
-
       if (oldTag && oldTag.text !== updatedTag.text) {
-        const itemsToUpdate = passwordItems.filter(
-          (item) =>
-            item.tags &&
-            item.tags
-              .split(',')
-              .map((t) => t.trim())
-              .includes(oldTag.text)
-        );
+        await tagStore.renameTagAcrossItems(oldTag.text, updatedTag.text);
+        toast.success('Tag updated across items.');
 
-        for (const item of itemsToUpdate) {
-          try {
-            await callBackend('update_password_tags', {
-              id: item.id,
-              tags: item.tags
-                ?.split(',')
-                .map((tag) => (tag.trim() === oldTag.text ? updatedTag.text : tag.trim()))
-                .join(', ')
-            });
-          } catch (error) {
-            console.error('Failed to update password tags:', error);
-          }
+        if ($selectedTag === oldTag.text) {
+          selectedTag.set(updatedTag.text);
         }
       }
+    } catch (error) {
+      console.error('Failed to save tag:', error);
+      toast.error('Failed to save tag.');
+      return;
     }
 
     passwordItems = await callBackend('get_password_items');
@@ -137,19 +132,31 @@
     }
   }
 
-  function handleTagDeleted(detail: { id: number; text: string }) {
-    buttons = buttons.filter((b) => b.id !== detail.id);
+  async function handleTagDeleteRequested(detail: Button) {
+    if (!detail.id) {
+      return;
+    }
 
-    passwordItems = passwordItems.map((item) => {
-      if (!item.tags) return item;
+    try {
+      await tagStore.remove(detail.id);
+      await tagStore.removeTagAcrossItems(detail.text);
+      toast.success('Tag deleted.');
+    } catch (error) {
+      console.error('Failed to delete tag:', error);
+      toast.error('Failed to delete tag.');
+      return;
+    }
 
-      const filteredTags = item.tags
-        .split(',')
-        .map((tag) => tag.trim())
-        .filter((tag) => tag !== detail.text);
+    if ($selectedTag === detail.text) {
+      selectedTag.set(null);
+    }
 
-      return { ...item, tags: filteredTags.join(', ') || null };
-    });
+    passwordItems = await callBackend('get_password_items');
+
+    if (selectedPasswordItem) {
+      const refreshedItem = passwordItems.find((item) => item.id === selectedPasswordItem?.id);
+      selectedPasswordItem = refreshedItem ?? null;
+    }
   }
 
   function handleCreateEntry() {
@@ -183,11 +190,7 @@
     showCreatePasswordPopup = false;
   }
 
-  function handleTagCreated() {
-    loadPasswordItems();
-  }
-
-  function handlePasswordSelected(item: PasswordItem) {
+  function handlePasswordSelected(item: PasswordItem | null) {
     selectedPasswordItem = item;
   }
 
@@ -225,7 +228,11 @@
   <div class="main-app-view">
     <div class="layout" style={SIDEBAR_STYLE}>
       <SidebarProvider class="min-h-full w-auto" style={SIDEBAR_STYLE}>
-        <AppSidebar {buttons} onopenPopup={openPopup} ontagDeleted={handleTagDeleted} />
+        <AppSidebar
+          {buttons}
+          onopenPopup={openPopup}
+          ontagDeleteRequested={handleTagDeleteRequested}
+        />
       </SidebarProvider>
 
       <PasswordList
@@ -272,7 +279,6 @@
   <CreatePasswordPopup
     onpasswordSaved={handlePasswordSaved}
     onclose={handleCloseCreatePasswordPopup}
-    ontagCreated={handleTagCreated}
   />
 {/if}
 
@@ -418,3 +424,7 @@
     box-shadow: 0 0 0 2px var(--focus-ring-color);
   }
 </style>
+
+
+
+

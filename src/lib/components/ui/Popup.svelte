@@ -1,22 +1,16 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { callBackend } from '$lib/utils/backend';
   import Input from './Input.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
   import { iconPaths } from '$lib/icons';
 
-  interface Tag {
-    id: number;
-    text: string;
-    icon: string;
-    color: string;
-  }
+  import type { TagInput } from '$lib/stores/tags';
 
   interface Props {
     mode?: 'create' | 'edit';
-    tag?: Tag | null;
+    tag?: TagInput | null;
     onclose?: () => void;
-    onsave?: (detail: { mode: 'create' | 'edit'; updatedTag?: any }) => void;
+    onsave?: (detail: { mode: 'create' | 'edit'; tag: TagInput }) => void | Promise<void>;
   }
 
   let { mode = 'create', tag = null, onclose, onsave }: Props = $props();
@@ -87,26 +81,23 @@
       onclose?.();
     } else if (e.key === 'Enter') {
       if (inputValue && selectedIcon && selectedColor) {
-        const buttonData = {
+        const buttonData: TagInput = {
           id: tag?.id,
           text: inputValue,
           icon: selectedIcon.path,
           color: selectedColor
         };
 
-        if (mode === 'create') {
-          await callBackend('save_button', {
-            text: buttonData.text,
-            icon: buttonData.icon,
-            color: buttonData.color
-          });
-          onsave?.({ mode: 'create' });
-        } else if (mode === 'edit' && buttonData.id) {
-          await callBackend('update_button', buttonData);
-          onsave?.({ mode: 'edit', updatedTag: buttonData });
+        if (mode === 'edit' && !buttonData.id) {
+          return;
         }
 
-        onclose?.();
+        try {
+          await onsave?.({ mode, tag: buttonData });
+          onclose?.();
+        } catch (error) {
+          console.error('Failed to save tag:', error);
+        }
       }
     }
   }

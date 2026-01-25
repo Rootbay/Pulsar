@@ -14,7 +14,7 @@
   import type { PasswordItem } from '$lib/types/password';
   import { securityDashboard } from '$lib/stores/security-dashboard';
   import { copyPassword, copyText, copyUrl, copyUsername } from '$lib/utils/copyHelper';
-  import { toast } from 'svelte-sonner';
+  import { toast } from '$lib/components/ui/sonner';
 
   import { GeneratorService } from '$lib/utils/generator';
   import PasswordStrength from '$lib/components/password/PasswordStrength.svelte';
@@ -453,3 +453,7 @@
     </div>
   {/if}
 </div>
+
+
+
+

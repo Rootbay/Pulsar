@@ -31,7 +31,7 @@
     Timer,
     Trash2
   } from '@lucide/svelte';
-  import { toast } from 'svelte-sonner';
+  import { toast } from '$lib/components/ui/sonner';
 
   const locale = $derived($currentLocale);
 
@@ -453,3 +453,7 @@
     </CardContent>
   </Card>
 </div>
+
+
+
+

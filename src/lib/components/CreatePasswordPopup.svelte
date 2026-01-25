@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { callBackend } from '$lib/utils/backend';
+  import { tagStore } from '$lib/stores/tags';
   import {
     Dialog,
     DialogContent,
@@ -19,13 +20,6 @@
   import { cn } from '$lib/utils';
   import { GeneratorService } from '$lib/utils/generator';
   import PasswordStrength from './password/PasswordStrength.svelte';
-
-  interface TagOption {
-    id: number;
-    text: string;
-    icon: string;
-    color: string;
-  }
 
   interface Props {
     onclose?: () => void;
@@ -49,7 +43,7 @@
   let showPassword = $state(false);
   let selectedCategory = $state<CategoryId>('login');
   let tags = $state<string[]>([]);
-  let availableTags = $state<TagOption[]>([]);
+  const availableTags = $derived($tagStore);
   let dialogOpen = $state(true);
 
   const canSave = $derived(title.trim().length > 0);
@@ -73,12 +67,8 @@
     }
   };
 
-  onMount(async () => {
-    try {
-      availableTags = await callBackend<TagOption[]>('get_buttons');
-    } catch (error) {
-      console.error('Error fetching tags:', error);
-    }
+  onMount(() => {
+    void tagStore.refresh();
   });
 
   function handleOpenChange(open: boolean) {

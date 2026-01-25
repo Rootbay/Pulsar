@@ -29,7 +29,7 @@
   } from '@lucide/svelte';
   import { buildDisplayFields } from '$lib/utils/passwordFields';
   import { copyText } from '$lib/utils/copyHelper';
-  import { toast } from 'svelte-sonner';
+  import { toast } from '$lib/components/ui/sonner';
   import type { Snippet } from 'svelte';
 
   function modernFade(node: Element, { duration = 400 } = {}) {
@@ -1197,3 +1197,7 @@
     <UnsavedChangesPopup onsave={handleSave} onreset={handleReset} />
   {/if}
 </main>
+
+
+
+

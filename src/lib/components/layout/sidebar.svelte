@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { callBackend } from '$lib/utils/backend';
   import { iconPaths } from '$lib/icons';
   import { filterCategory, selectedTag } from '$lib/stores';
   import { goto } from '$app/navigation';
@@ -35,10 +34,10 @@
   interface Props {
     buttons?: ButtonOption[];
     onopenPopup?: (detail: { mode: 'create' | 'edit'; tag?: ButtonOption }) => void;
-    ontagDeleted?: (detail: { id: number; text: string }) => void;
+    ontagDeleteRequested?: (button: ButtonOption) => void;
   }
 
-  let { buttons = [], onopenPopup, ontagDeleted }: Props = $props();
+  let { buttons = [], onopenPopup, ontagDeleteRequested }: Props = $props();
 
   function handleOpenPopup() {
     onopenPopup?.({ mode: 'create' });
@@ -58,15 +57,7 @@
   }
 
   async function handleRemove(button: ButtonOption) {
-    try {
-      await callBackend('delete_button', { id: button.id });
-      ontagDeleted?.({
-        id: button.id,
-        text: button.text
-      });
-    } catch (error) {
-      console.error('Failed to delete tag:', error);
-    }
+    ontagDeleteRequested?.(button);
   }
 </script>
 

@@ -52,7 +52,7 @@
   import { currentLocale, t } from '$lib/i18n';
   import type { SecuritySettings } from '$lib/config/settings';
   import { cn } from '$lib/utils';
-  import { toast } from 'svelte-sonner';
+  import { toast } from '$lib/components/ui/sonner';
   import { copyText } from '$lib/utils/copyHelper';
 
   interface Argon2Params {
@@ -2112,3 +2112,7 @@
     </DialogFooter>
   </DialogContent>
 </Dialog>
+
+
+
+

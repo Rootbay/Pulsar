@@ -15,12 +15,23 @@ export interface VaultBackupRecipientKey {
   private_key: string;
 }
 
+export interface VaultBackupAttachment {
+  id: number;
+  itemId: number;
+  fileName: string;
+  fileSize: number;
+  mimeType: string;
+  createdAt: string;
+  dataB64: string;
+}
+
 export interface VaultBackupSnapshot {
   version: number;
   exportedAt: string;
   passwordItems: PasswordItem[];
   buttons: VaultBackupButton[];
   recipientKeys: VaultBackupRecipientKey[];
+  attachments: VaultBackupAttachment[];
 }
 
 export type ImportVaultProgressStage = 'decrypting' | 'restoring';

@@ -13,7 +13,7 @@
   import { cn } from '$lib/utils';
   import { Check } from '@lucide/svelte';
   import { open } from '@tauri-apps/plugin-dialog';
-  import { currentLocale } from '$lib/i18n';
+  import { currentLocale, type Locale } from '$lib/i18n';
 
   interface PasswordManager {
     id: string;
@@ -32,8 +32,8 @@
 
   let { show = $bindable(false), onimportSelected, onclose }: Props = $props();
 
-  const t = (locale: 'en' | 'sv', en: string, sv: string) => (locale === 'sv' ? sv : en);
-  let locale = $derived($currentLocale as 'en' | 'sv');
+  const t = (locale: Locale, en: string, sv: string) => (locale === 'sv' ? sv : en);
+  let locale = $derived($currentLocale);
 
   const passwordManagers: PasswordManager[] = [
     { id: 'lastpass', name: 'LastPass' },

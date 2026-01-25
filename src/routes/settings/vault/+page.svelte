@@ -2,7 +2,7 @@
   import { onDestroy, onMount } from 'svelte';
   import { derived, get, writable, type Readable } from 'svelte/store';
   import { invoke } from '@tauri-apps/api/core';
-  import { toast } from 'svelte-sonner';
+  import { toast } from '$lib/components/ui/sonner';
   import { vaultSettings } from '$lib/stores/vault';
   import { recentDatabases } from '$lib/stores/recentDatabases';
   import type { VaultSettings } from '$lib/config/settings';
@@ -30,7 +30,7 @@
     Trash2
   } from '@lucide/svelte';
   import { exportVaultBackup, importVaultBackup, notifyVaultRefresh } from '$lib/utils/backup';
-  import { currentLocale, t } from '$lib/i18n';
+  import { currentLocale, t, type Locale } from '$lib/i18n';
 
   interface BackendVault {
     id: string;
@@ -145,7 +145,7 @@
     return t(locale, 'settingsVaultJustNow');
   }
 
-  function formatItemBadge(count: number | undefined, locale: 'en' | 'sv'): string {
+  function formatItemBadge(count: number | undefined, locale: Locale): string {
     if (typeof count === 'number') {
       const label = count === 1 ? t(locale, 'itemSingular') : t(locale, 'itemPlural');
       return `${count} ${label}`;
@@ -154,7 +154,7 @@
     return t(locale, 'settingsVaultItemsUnavailable');
   }
 
-  function formatStatusLabel(status: Vault['status'], locale: 'en' | 'sv'): string {
+  function formatStatusLabel(status: Vault['status'], locale: Locale): string {
     if (status === 'unlocked') return t(locale, 'settingsVaultStatusUnlocked');
     if (status === 'locked') return t(locale, 'settingsVaultStatusLocked');
     if (status === 'available') return t(locale, 'settingsVaultStatusAvailable');
@@ -724,3 +724,7 @@
     </CardContent>
   </Card>
 </div>
+
+
+
+

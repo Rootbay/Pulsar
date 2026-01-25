@@ -1,7 +1,7 @@
 <script lang="ts">
   import Input from './Input.svelte';
   import Switch from './Switch.svelte';
-  import { currentLocale } from '$lib/i18n';
+  import { currentLocale, type Locale } from '$lib/i18n';
   import { X } from '@lucide/svelte';
 
   interface Props {
@@ -15,8 +15,8 @@
   let { show, item, type, onsave, onclose }: Props = $props();
 
   let editedItem = $state<any>(null);
-  const t = (locale: 'en' | 'sv', en: string, sv: string) => (locale === 'sv' ? sv : en);
-  let locale = $derived($currentLocale as 'en' | 'sv');
+  const t = (locale: Locale, en: string, sv: string) => (locale === 'sv' ? sv : en);
+  let locale = $derived($currentLocale);
 
   $effect(() => {
     if (item) {

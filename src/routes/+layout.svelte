@@ -13,6 +13,7 @@
   } from '$lib/stores';
   import { appearanceSettings } from '$lib/stores/appearance';
   import { initClipboardService } from '$lib/utils/clipboardService';
+  import SecurityManager from '$lib/components/SecurityManager.svelte';
 
   let { children } = $props();
 
@@ -70,5 +71,7 @@
     }
   });
 </script>
+
+<SecurityManager />
 
 {@render children()}

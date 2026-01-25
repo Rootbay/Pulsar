@@ -22,7 +22,7 @@
     totpRequired
   } from '$lib/stores';
   import { currentLocale } from '$lib/i18n';
-  import { Lock, Eye, EyeOff, ArrowLeft, FingerprintPattern } from '@lucide/svelte';
+  import { Lock, Eye, EyeOff, ArrowLeft, FingerprintPattern, TriangleAlert } from '@lucide/svelte';
   import { onMount } from 'svelte';
 
   const t = (locale: 'en' | 'sv', en: string, sv: string) => (locale === 'sv' ? sv : en);
@@ -34,6 +34,15 @@
   let showPassword = $state(false);
   let isBiometricsAvailable = $state(false);
   let isBiometricUnlocking = $state(false);
+  let isCapsLockOn = $state(false);
+
+  function handleKeydown(event: KeyboardEvent) {
+    if (event.getModifierState && event.getModifierState('CapsLock')) {
+      isCapsLockOn = true;
+    } else {
+      isCapsLockOn = false;
+    }
+  }
 
   onMount(() => {
     checkBiometrics();
@@ -209,6 +218,7 @@
                 bind:value={password}
                 autocomplete="current-password"
                 disabled={isUnlocking}
+                onkeydown={handleKeydown}
                 class="pr-10"
               />
               <button
@@ -227,6 +237,12 @@
                 {/if}
               </button>
             </div>
+            {#if isCapsLockOn}
+              <p class="text-warning-foreground flex items-center gap-1.5 pt-1 text-[11px] font-medium animate-pulse">
+                <TriangleAlert class="size-3" />
+                {t(locale, 'Caps Lock is ON', 'Caps Lock är PÅ')}
+              </p>
+            {/if}
           </div>
 
           {#if loginError}

@@ -37,6 +37,18 @@ async fn get_active_db_path(app_state: State<'_, AppState>) -> Result<Option<Str
 
 #[tauri::command]
 async fn switch_database(db_path: PathBuf, app_state: State<'_, AppState>) -> Result<()> {
+    {
+        let path_guard = app_state.db_path.lock().await;
+        if let Some(active_path) = path_guard.as_ref() {
+            if active_path == &db_path {
+                let db_guard = app_state.db.lock().await;
+                if db_guard.is_some() {
+                    return Ok(());
+                }
+            }
+        }
+    }
+
     let key_opt = {
         let guard = app_state.key.lock().await;
         guard.clone()
@@ -44,9 +56,26 @@ async fn switch_database(db_path: PathBuf, app_state: State<'_, AppState>) -> Re
     let key_slice_opt: Option<&[u8]> = key_opt.as_ref().map(|z| z.as_slice());
     let _rekey_lock = app_state.rekey.lock().await;
 
-    let new_pool = match crate::db::init_db(&db_path, key_slice_opt).await {
-        Ok(pool) => pool,
-        Err(e) => {
+    let mut last_err = None;
+    let mut new_pool_opt = None;
+    for _ in 0..5 {
+        match crate::db::init_db(&db_path, key_slice_opt).await {
+            Ok(pool) => {
+                new_pool_opt = Some(pool);
+                last_err = None;
+                break;
+            }
+            Err(e) => {
+                last_err = Some(e);
+                tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
+            }
+        }
+    }
+
+    let new_pool = match new_pool_opt {
+        Some(pool) => pool,
+        None => {
+            let e = last_err.unwrap_or_else(|| "Unknown error".to_string());
             eprintln!(
                 "Failed to initialize database at {}: {}",
                 db_path.display(),
@@ -206,8 +235,10 @@ async fn get_all_settings(app_handle: tauri::AppHandle) -> Result<Option<String>
     if let Some(encrypted_val) = store.get("settings_encrypted") {
         let encrypted_str = encrypted_val.as_str().ok_or_else(|| Error::Internal("Invalid encrypted settings format".to_string()))?;
         let key = get_or_create_settings_key()?;
-        let decrypted = decrypt(encrypted_str, &key)?;
-        return Ok(Some(decrypted));
+        match decrypt(encrypted_str, &key) {
+            Ok(decrypted) => return Ok(Some(decrypted)),
+            Err(_e) => {}
+        }
     }
 
     Ok(store.get("settings").and_then(|v| {

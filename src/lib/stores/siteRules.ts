@@ -1,5 +1,5 @@
 import { derived } from 'svelte/store';
-import { appSettings } from './appSettings';
+import { appSettings } from './appSettings.svelte';
 import { type SiteRule, defaultSiteRules } from '../config/settings';
 
 function createSiteRulesStore() {

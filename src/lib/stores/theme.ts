@@ -2,7 +2,7 @@ import { derived, writable } from 'svelte/store';
 import * as fastDeepEqual from 'fast-deep-equal';
 const deepEqual = fastDeepEqual.default;
 import { settingsStore } from './settingsStore';
-import { appSettings } from './appSettings';
+import { appSettings } from './appSettings.svelte';
 
 export const theme = derived(appSettings, ($appSettings) => {
   return $appSettings?.appearance?.theme || 'dark';

@@ -471,8 +471,13 @@
     refreshTotpStatus();
   });
 
+  import { clipboardSettings } from '$lib/stores/clipboard';
+  let currentClipboardSettings = $state(get(clipboardSettings));
+  const unsubClipboard = clipboardSettings.subscribe(s => currentClipboardSettings = s);
+
   onDestroy(() => {
     unsubscribe();
+    unsubClipboard();
     clearCopyTimeouts();
   });
 
@@ -490,6 +495,15 @@
 
   function updateAutoLock(value: SecuritySettings['autoLockInactivity']) {
     applyChanges({ autoLockInactivity: value });
+  }
+
+  function updateClipboardClear(value: string) {
+    const seconds = parseInt(value);
+    if (!isNaN(seconds)) {
+      import('$lib/stores/clipboard').then(({ clipboardSettings }) => {
+        clipboardSettings.update(s => ({ ...s, clearAfterDuration: seconds }));
+      });
+    }
   }
 
   function parseError(error: unknown): string {
@@ -791,6 +805,16 @@
     { value: '30 minutes', label: '30 minutes' },
     { value: '1 hour', label: '1 hour' },
     { value: 'Never', label: 'Never' }
+  ];
+
+  const clipboardClearOptions = [
+    { value: '5', label: '5 seconds' },
+    { value: '10', label: '10 seconds' },
+    { value: '15', label: '15 seconds' },
+    { value: '30', label: '30 seconds' },
+    { value: '60', label: '1 minute' },
+    { value: '120', label: '2 minutes' },
+    { value: '0', label: 'Never' }
   ];
 
   function getAutoLockLabel(value: string): string {
@@ -1455,6 +1479,38 @@
             {#each autoLockOptions as option (option.value)}
               <SelectItem value={option.value}>
                 {getAutoLockLabel(option.value)}
+              </SelectItem>
+            {/each}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div class="border-border/60 bg-muted/20 flex flex-col gap-2 rounded-lg border px-4 py-4">
+        <Label class="text-foreground text-sm font-semibold">
+          {t(locale, 'Clipboard Clear Timeout', 'Rensa urklipp efter timeout')}
+        </Label>
+        <p class="text-muted-foreground text-sm">
+          {t(
+            locale,
+            'Automatically clear sensitive data from your clipboard after the selected duration.',
+            'Rensa automatiskt känslig data från ditt urklipp efter den valda tidsperioden.'
+          )}
+        </p>
+        <Select
+          type="single"
+          value={currentClipboardSettings.clearAfterDuration.toString()}
+          onValueChange={updateClipboardClear}
+        >
+          <SelectTrigger aria-label="Select clipboard clear timeout" class="w-full sm:w-56">
+            <span data-slot="select-value" class="truncate text-sm">
+              {clipboardClearOptions.find(o => o.value === currentClipboardSettings.clearAfterDuration.toString())?.label ||
+                t(locale, 'Select duration', 'Välj tidslängd')}
+            </span>
+          </SelectTrigger>
+          <SelectContent>
+            {#each clipboardClearOptions as option (option.value)}
+              <SelectItem value={option.value}>
+                {option.label}
               </SelectItem>
             {/each}
           </SelectContent>

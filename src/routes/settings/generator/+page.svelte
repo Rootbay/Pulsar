@@ -33,12 +33,10 @@
   import { currentLocale } from '$lib/i18n';
   import { copyText } from '$lib/utils/copyHelper';
 
+  import { GeneratorService, AMBIGUOUS_CHARS, SIMILAR_CHARS, SYMBOL_CHARSET } from '$lib/utils/generator';
+
   type GeneratorOptions = GeneratorSettings['options'];
   type GeneratorOptionKey = keyof GeneratorOptions;
-
-  const SYMBOL_CHARSET = '!@#$%^&*()_+-=[]{}|;:,.<>?';
-  const AMBIGUOUS_CHARS = new Set(['i', 'I', '1', 'L', 'o', 'O', '0']);
-  const SIMILAR_CHARS = new Set('oO0l1IvVwWsScCpPkKxXzZbBdDgGqQeEfFtTuUjJmMnrRhHaAyY'.split(''));
 
   const LENGTH_MIN = 6;
   const LENGTH_MAX = 64;
@@ -148,26 +146,8 @@
   let strengthEntropy = $state(0);
   let strengthLevel = $state<StrengthLevel>('weak');
 
-  function calculateEntropy(length: number, poolSize: number): number {
-    if (poolSize <= 0) return 0;
-    return Math.floor(length * Math.log2(poolSize));
-  }
-
-  function getPoolSize(): number {
-    let size = 0;
-    if (options.uppercase) size += 26;
-    if (options.lowercase) size += 26;
-    if (options.digits) size += 10;
-    if (options.symbols) size += SYMBOL_CHARSET.length;
-
-    if (options.ambiguous) {
-      size = Math.max(0, size - 7);
-    }
-    return size;
-  }
-
   function refreshPassword() {
-    const poolSize = getPoolSize();
+    const poolSize = GeneratorService.getPoolSize(options);
     hasCharacterPool = poolSize > 0;
 
     if (hasCharacterPool) {
@@ -180,64 +160,12 @@
   }
 
   function handleGenerate() {
-    const poolSize = getPoolSize();
-    if (poolSize <= 0) return;
-
-    let charset = '';
-    if (options.uppercase) charset += 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-    if (options.lowercase) charset += 'abcdefghijklmnopqrstuvwxyz';
-    if (options.digits) charset += '0123456789';
-    if (options.symbols) charset += SYMBOL_CHARSET;
-
-    if (options.ambiguous) {
-      charset = charset
-        .split('')
-        .filter((c) => !AMBIGUOUS_CHARS.has(c))
-        .join('');
-    }
-
-    if (options.similar) {
-      charset = charset
-        .split('')
-        .filter((c) => !SIMILAR_CHARS.has(c))
-        .join('');
-    }
-
-    if (charset.length === 0) return;
-
-    let password = '';
-    const array = new Uint32Array(passwordLength);
-    crypto.getRandomValues(array);
-
-    if (options.pronounceable) {
-      const vowels = 'aeiou';
-      const consonants = charset
-        .split('')
-        .filter((c) => !vowels.includes(c.toLowerCase()))
-        .join('');
-      const actualVowels = charset
-        .split('')
-        .filter((c) => vowels.includes(c.toLowerCase()))
-        .join('');
-
-      if (actualVowels.length > 0 && consonants.length > 0) {
-        for (let i = 0; i < passwordLength; i++) {
-          const source = i % 2 === 0 ? consonants : actualVowels;
-          password += source[array[i] % source.length];
-        }
-      } else {
-        for (let i = 0; i < passwordLength; i++) {
-          password += charset[array[i] % charset.length];
-        }
-      }
-    } else {
-      for (let i = 0; i < passwordLength; i++) {
-        password += charset[array[i] % charset.length];
-      }
-    }
+    const password = GeneratorService.generate(passwordLength, options);
+    if (!password) return;
 
     generatedPassword = password;
-    strengthEntropy = calculateEntropy(passwordLength, charset.length);
+    const poolSize = GeneratorService.getPoolSize(options);
+    strengthEntropy = GeneratorService.calculateEntropy(passwordLength, poolSize);
 
     if (strengthEntropy < ENTROPY_WEAK_THRESHOLD) {
       strengthLevel = 'weak';

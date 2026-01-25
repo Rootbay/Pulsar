@@ -114,7 +114,15 @@
 
       const title = item.title?.toLowerCase() ?? '';
       const username = item.username?.toLowerCase() ?? '';
-      return title.includes(normalizedSearchTerm) || username.includes(normalizedSearchTerm);
+      const tags = item.tags?.toLowerCase() ?? '';
+      const url = item.url?.toLowerCase() ?? '';
+
+      return (
+        title.includes(normalizedSearchTerm) ||
+        username.includes(normalizedSearchTerm) ||
+        tags.includes(normalizedSearchTerm) ||
+        url.includes(normalizedSearchTerm)
+      );
     });
   });
 

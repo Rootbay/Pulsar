@@ -1,6 +1,6 @@
 import { derived, get } from 'svelte/store';
 import { invoke } from '@tauri-apps/api/core';
-import { appSettings } from './appSettings';
+import { appSettings } from './appSettings.svelte';
 
 async function filterNonExistentDatabases(paths: string[]): Promise<string[]> {
   const existentPaths: string[] = [];
@@ -57,7 +57,7 @@ function createRecentDatabasesStore() {
         };
       });
       try {
-        await invoke('set_all_settings', { settings: JSON.stringify(get(appSettings)) });
+        await invoke('set_all_settings', { settings: JSON.stringify(appSettings.get()) });
       } catch (e) {
         console.error('Failed to persist recent databases immediately:', e);
       }
@@ -69,7 +69,7 @@ function createRecentDatabasesStore() {
       }));
       void (async () => {
         try {
-          await invoke('set_all_settings', { settings: JSON.stringify(get(appSettings)) });
+          await invoke('set_all_settings', { settings: JSON.stringify(appSettings.get()) });
         } catch (e) {
           console.error('Failed to persist recent databases after remove:', e);
         }
@@ -82,7 +82,7 @@ function createRecentDatabasesStore() {
       }));
       void (async () => {
         try {
-          await invoke('set_all_settings', { settings: JSON.stringify(get(appSettings)) });
+          await invoke('set_all_settings', { settings: JSON.stringify(appSettings.get()) });
         } catch (e) {
           console.error('Failed to persist recent databases after clear:', e);
         }
@@ -94,7 +94,7 @@ function createRecentDatabasesStore() {
 export const recentDatabases = createRecentDatabasesStore();
 
 export async function pruneRecentDatabases() {
-  const currentSettings = get(appSettings);
+  const currentSettings = appSettings.get();
   const filtered = await filterNonExistentDatabases(currentSettings.recentDatabases);
   appSettings.update((settings) => ({
     ...settings,

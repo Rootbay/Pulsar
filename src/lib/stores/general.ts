@@ -1,5 +1,5 @@
 import { derived } from 'svelte/store';
-import { appSettings } from './appSettings';
+import { appSettings } from './appSettings.svelte';
 import type { GeneralSettings } from '../config/settings';
 
 function createGeneralSettingsStore() {

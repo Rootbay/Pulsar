@@ -1,5 +1,5 @@
 import { derived, writable } from 'svelte/store';
-import { appSettings } from './appSettings';
+import { appSettings } from './appSettings.svelte';
 import { defaultVaultSettings, type VaultSettings } from '../config/settings';
 
 function createVaultSettingsStore() {

@@ -16,6 +16,10 @@
   import { copyPassword, copyText, copyUrl, copyUsername } from '$lib/utils/copyHelper';
   import { toast } from 'svelte-sonner';
 
+  import { GeneratorService } from '$lib/utils/generator';
+  import PasswordStrength from '$lib/components/password/PasswordStrength.svelte';
+  import { Wand2 } from '@lucide/svelte';
+
   interface Props {
     isEditing: boolean;
     displayFields: DisplayField[];
@@ -73,6 +77,15 @@
       if (breachCheckTimeout) clearTimeout(breachCheckTimeout);
     };
   });
+
+  function generatePassword() {
+    const newPass = GeneratorService.generate(20);
+    const passField = editingFields.find((f) => f.id === 'password');
+    if (passField) {
+      passField.value = newPass;
+      showPassword = true;
+    }
+  }
 
   function handleConsider(event: CustomEvent<{ items: DisplayField[] }>) {
     editingFields = event.detail.items;
@@ -351,6 +364,20 @@
 
               {#if showControls}
                 <div class="flex items-center gap-2">
+                  {#if field.id === 'password'}
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      class="text-muted-foreground hover:text-foreground h-6 w-6 p-0"
+                      aria-label="Generate password"
+                      title="Generate password"
+                      onclick={generatePassword}
+                    >
+                      <Wand2 class="h-4.5 w-4.5" />
+                    </Button>
+                  {/if}
+
                   {#if field.id === 'password' && passwordItem}
                     {@const health = securityHealth[passwordItem.id]}
                     {#if health}
@@ -415,6 +442,11 @@
               {/if}
             {/snippet}
           </Input>
+          {#if isEditing && field.id === 'password'}
+            <div class="mt-2 px-3 pb-2">
+              <PasswordStrength password={field.value ?? ''} showDetails={true} />
+            </div>
+          {/if}
         </div>
       {/each}
     </div>

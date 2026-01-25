@@ -1,5 +1,5 @@
 import { derived, readable } from 'svelte/store';
-import { appSettings } from './appSettings';
+import { appSettings } from './appSettings.svelte';
 import { defaultAppearanceSettings, type AppearanceSettings } from '../config/settings';
 
 function createAppearanceSettingsStore() {

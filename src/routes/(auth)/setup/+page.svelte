@@ -24,48 +24,44 @@
   import { currentLocale } from '$lib/i18n';
   import { ArrowLeft } from '@lucide/svelte';
 
+  import { SecurityService } from '$lib/utils/security';
+
   let newMasterPassword = $state('');
   let confirmMasterPassword = $state('');
   let loginError = $state<string | null>(null);
   let isSetting = $state(false);
-  let strengthScore = $state(0);
 
-  type StrengthKey = 'Weak' | 'Medium' | 'Strong';
-  let strengthLabel = $state<StrengthKey>('Weak');
+  let strengthResult = $derived(SecurityService.checkStrength(newMasterPassword));
+  let strengthScore = $derived(newMasterPassword ? (strengthResult.score + 1) * 20 : 0);
+
+  const STRENGTH_LABELS = ['Very Weak', 'Weak', 'Fair', 'Strong', 'Very Strong'];
+  const STRENGTH_COLORS = [
+    'text-destructive',
+    'text-orange-500',
+    'text-yellow-500',
+    'text-emerald-500',
+    'text-chart-success'
+  ];
+  const BAR_COLORS = [
+    '[&_[data-slot=progress-indicator]]:bg-destructive',
+    '[&_[data-slot=progress-indicator]]:bg-orange-500',
+    '[&_[data-slot=progress-indicator]]:bg-yellow-500',
+    '[&_[data-slot=progress-indicator]]:bg-emerald-500',
+    '[&_[data-slot=progress-indicator]]:bg-[color:var(--color-chart-4)]'
+  ];
+
   const t = (locale: 'en' | 'sv', en: string, sv: string) => (locale === 'sv' ? sv : en);
   const locale = $derived($currentLocale as 'en' | 'sv');
+
   const strengthLabelText = $derived(
-    strengthLabel === 'Strong'
-      ? t(locale, 'Strong', 'Starkt')
-      : strengthLabel === 'Medium'
-        ? t(locale, 'Medium', 'Medel')
-        : t(locale, 'Weak', 'Svagt')
+    newMasterPassword ? STRENGTH_LABELS[strengthResult.score] : 'None'
   );
-
-  const STRENGTH_META: Record<StrengthKey, { textClass: string; barClass: string }> = {
-    Weak: {
-      textClass: 'text-destructive',
-      barClass: '[&_[data-slot=progress-indicator]]:bg-destructive'
-    },
-    Medium: {
-      textClass: 'text-chart-warning',
-      barClass: '[&_[data-slot=progress-indicator]]:bg-[color:var(--color-chart-5)]'
-    },
-    Strong: {
-      textClass: 'text-chart-success',
-      barClass: '[&_[data-slot=progress-indicator]]:bg-[color:var(--color-chart-4)]'
-    }
-  };
-
-  let strengthMeta = $state(STRENGTH_META['Weak']);
-
-  $effect(() => {
-    strengthMeta = STRENGTH_META[strengthLabel];
-  });
-
-  $effect(() => {
-    calculateStrength(newMasterPassword);
-  });
+  const strengthColorClass = $derived(
+    newMasterPassword ? STRENGTH_COLORS[strengthResult.score] : 'text-muted-foreground'
+  );
+  const strengthBarClass = $derived(
+    newMasterPassword ? BAR_COLORS[strengthResult.score] : 'bg-muted'
+  );
 
   $effect(() => {
     if (!browser) {
@@ -78,27 +74,6 @@
       goto($isLocked ? '/login' : '/', { replaceState: true });
     }
   });
-
-  function calculateStrength(password: string) {
-    let score = 0;
-    if (password.length >= 12) score += 25;
-    else if (password.length >= 8) score += 10;
-    if (/[a-z]/.test(password)) score += 15;
-    if (/[A-Z]/.test(password)) score += 15;
-    if (/[0-9]/.test(password)) score += 15;
-    if (/[^a-zA-Z0-9]/.test(password)) score += 20;
-    if (password.length >= 16) score += 20;
-
-    strengthScore = Math.min(100, score);
-
-    if (strengthScore >= 75) {
-      strengthLabel = 'Strong';
-    } else if (strengthScore >= 40) {
-      strengthLabel = 'Medium';
-    } else {
-      strengthLabel = 'Weak';
-    }
-  }
 
   async function handleSetMasterPassword() {
     if (!newMasterPassword.trim() || !confirmMasterPassword.trim()) {
@@ -228,17 +203,30 @@
               <span class="font-medium">
                 {t(locale, 'Strength', 'Styrka')}
               </span>
-              <span class={`font-semibold ${strengthMeta.textClass}`}>{strengthLabelText}</span>
+              <span class={`font-semibold ${strengthColorClass}`}>{strengthLabelText}</span>
             </div>
-            <Progress value={strengthScore} class={`h-2 ${strengthMeta.barClass}`} />
-            <p class="text-muted-foreground text-xs">
-              {t(
-                locale,
-                'Longer is better. Mix uppercase, lowercase, numbers, and symbols.',
-                'Längre är bättre. Blanda stora och små bokstäver, siffror och symboler.'
-              )}
-            </p>
+            <Progress value={strengthScore} class={`h-2 ${strengthBarClass}`} />
+            {#if strengthResult.feedback.warning || strengthResult.feedback.suggestions.length > 0}
+              <p class="text-muted-foreground text-xs leading-relaxed">
+                {strengthResult.feedback.warning ? strengthResult.feedback.warning + '. ' : ''}
+                {strengthResult.feedback.suggestions[0] || ''}
+              </p>
+            {:else}
+              <p class="text-muted-foreground text-xs">
+                {t(
+                  locale,
+                  'Longer is better. Mix uppercase, lowercase, numbers, and symbols.',
+                  'Längre är bättre. Blanda stora och små bokstäver, siffror och symboler.'
+                )}
+              </p>
+            {/if}
           </div>
+        {/if}
+
+        {#if confirmMasterPassword && newMasterPassword !== confirmMasterPassword}
+          <p class="text-destructive text-xs font-medium">
+            {t(locale, 'Passwords do not match.', 'Lösenorden matchar inte.')}
+          </p>
         {/if}
 
         {#if loginError}

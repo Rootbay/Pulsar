@@ -145,7 +145,11 @@ class SettingsManager {
 export const settingsManager = new SettingsManager();
 
 export const appSettings = {
+  get(): AllSettings {
+    return settingsManager.current;
+  },
   subscribe(fn: (value: AllSettings) => void) {
+    fn(settingsManager.current);
     return $effect.root(() => {
       $effect(() => fn(settingsManager.current));
     });

@@ -1,7 +1,7 @@
 import { callBackend } from '$lib/utils/backend';
 import { get } from 'svelte/store';
 import { recentDatabases, pruneRecentDatabases } from '$lib/stores/recentDatabases';
-import { initAppSettings } from '$lib/stores/appSettings';
+import { initAppSettings } from '$lib/stores/appSettings.svelte';
 import type { PasswordItem } from '$lib/types/password';
 
 export const ssr = false;

@@ -1,5 +1,5 @@
 import { derived } from 'svelte/store';
-import { appSettings } from './appSettings';
+import { appSettings } from './appSettings.svelte';
 import { defaultKeybinds } from '../config/keybinds';
 
 function createKeybindsStore() {

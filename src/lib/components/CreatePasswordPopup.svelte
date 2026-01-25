@@ -14,10 +14,11 @@
   import { Label } from '$lib/components/ui/label';
   import { Badge } from '$lib/components/ui/badge';
   import { ScrollArea } from '$lib/components/ui/scroll-area';
-  import { Check, X, Key, CreditCard, User, StickyNote } from '@lucide/svelte';
+  import { Check, X, Key, CreditCard, User, StickyNote, Wand2, Eye, EyeOff } from '@lucide/svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
   import { cn } from '$lib/utils';
-  import { ChartColumnStacked } from '@lucide/svelte';
+  import { GeneratorService } from '$lib/utils/generator';
+  import PasswordStrength from './password/PasswordStrength.svelte';
 
   interface TagOption {
     id: number;
@@ -34,8 +35,6 @@
 
   let { onclose, onpasswordSaved, ontagCreated }: Props = $props();
 
-  const PLACEHOLDER_PASSWORD = '';
-
   const categories = [
     { id: 'login', label: 'Login', icon: Key },
     { id: 'card', label: 'Credit Card', icon: CreditCard },
@@ -46,12 +45,20 @@
   type CategoryId = (typeof categories)[number]['id'];
 
   let title = $state('');
+  let username = $state('');
+  let password = $state('');
+  let showPassword = $state(false);
   let selectedCategory = $state<CategoryId>('login');
   let tags = $state<string[]>([]);
   let availableTags = $state<TagOption[]>([]);
   let dialogOpen = $state(true);
 
   const canSave = $derived(title.trim().length > 0);
+
+  function generatePassword() {
+    password = GeneratorService.generate(20);
+    showPassword = true;
+  }
 
   const toggleTag = (tag: string) => {
     tags = tags.includes(tag) ? tags.filter((t) => t !== tag) : [...tags, tag];
@@ -100,10 +107,10 @@
           id: 0,
           category: selectedCategory,
           title: trimmedTitle,
-          username: null,
+          username: username.trim() || null,
           url: null,
           notes: null,
-          password: PLACEHOLDER_PASSWORD,
+          password: password,
           description: null,
           img: null,
           tags: tags.length ? tags.join(',') : null,
@@ -129,115 +136,160 @@
     <DialogHeader>
       <DialogTitle>New item</DialogTitle>
       <DialogDescription>
-        Store a placeholder entry now and fill in more details whenever you are ready.
+        Add a new credential to your secure vault.
       </DialogDescription>
     </DialogHeader>
 
-    <form id="create-password-form" class="grid gap-6" onsubmit={savePassword}>
-      <div class="grid gap-3">
-        <Label>Category</Label>
-        <div class="grid grid-cols-2 gap-2 sm:grid-cols-4">
-          {#each categories as category (category.id)}
-            <Button
-              type="button"
-              variant={selectedCategory === category.id ? 'secondary' : 'outline'}
-              class={cn(
-                'h-auto flex-col items-center justify-center gap-2 py-3 transition-all',
-                selectedCategory === category.id
-                  ? 'border-primary/50 bg-primary/10 ring-primary/30 ring-1'
-                  : 'hover:border-primary/30 hover:bg-primary/5'
-              )}
-              onclick={() => (selectedCategory = category.id)}
-            >
-              <div
-                class="bg-background flex size-8 items-center justify-center rounded-lg shadow-xs"
+    <ScrollArea class="max-h-[70vh] pr-4">
+      <form id="create-password-form" class="grid gap-6 pb-4" onsubmit={savePassword}>
+        <div class="grid gap-3">
+          <Label>Category</Label>
+          <div class="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {#each categories as category (category.id)}
+              <button
+                type="button"
+                class={cn(
+                  'flex flex-col items-center justify-center gap-2 rounded-lg border py-3 transition-all',
+                  selectedCategory === category.id
+                    ? 'border-primary/50 bg-primary/10 ring-primary/30 ring-1'
+                    : 'border-border/60 hover:border-primary/30 hover:bg-primary/5'
+                )}
+                onclick={() => (selectedCategory = category.id)}
               >
-                <ChartColumnStacked class="size-4.5 text-current" />
-              </div>
-              <span class="text-[10px] font-bold tracking-wider uppercase">{category.label}</span>
-            </Button>
-          {/each}
+                <div
+                  class="bg-background flex size-8 items-center justify-center rounded-lg shadow-xs"
+                >
+                  <category.icon class="size-4.5 text-current" />
+                </div>
+                <span class="text-[10px] font-bold tracking-wider uppercase">{category.label}</span>
+              </button>
+            {/each}
+          </div>
         </div>
-      </div>
 
-      <div class="grid gap-2">
-        <Label for="title">Title</Label>
-        <Input id="title" placeholder="Enter title" bind:value={title} required autofocus />
-      </div>
+        <div class="grid gap-2">
+          <Label for="title">Title</Label>
+          <Input id="title" placeholder="e.g. GitHub, Netflix" bind:value={title} required autofocus />
+        </div>
 
-      <div class="grid gap-3">
-        <div class="flex items-center justify-between">
-          <span class="text-foreground text-sm font-medium">Tags</span>
-          {#if tags.length}
+        <div class="grid gap-2">
+          <Label for="username">Username / Email</Label>
+          <Input id="username" placeholder="Enter username" bind:value={username} />
+        </div>
+
+        <div class="grid gap-2">
+          <div class="flex items-center justify-between">
+            <Label for="password">Password</Label>
             <Button
               type="button"
               variant="ghost"
               size="sm"
-              class="h-8 px-2 text-xs"
-              onclick={clearTags}
+              class="h-7 px-2 text-xs"
+              onclick={generatePassword}
             >
-              Clear selection
+              <Wand2 class="mr-1.5 size-3" />
+              Generate
             </Button>
-          {/if}
-        </div>
-
-        <div class="flex flex-wrap items-center gap-2">
-          {#if !tags.length}
-            <p class="text-muted-foreground text-sm">No tags selected yet.</p>
-          {/if}
-
-          {#each tags as tag (tag)}
-            <Badge
-              variant="secondary"
-              class="flex items-center gap-1 rounded-full px-3 py-1 text-xs"
+          </div>
+          <div class="relative">
+            <Input
+              id="password"
+              type={showPassword ? 'text' : 'password'}
+              placeholder="Enter password"
+              bind:value={password}
+              class="pr-10"
+            />
+            <button
+              type="button"
+              class="text-muted-foreground hover:text-foreground absolute right-3 top-1/2 -translate-y-1/2"
+              onclick={() => (showPassword = !showPassword)}
             >
-              <span>{tag}</span>
-              <button
-                type="button"
-                class="text-muted-foreground hover:bg-foreground/10 hover:text-foreground focus-visible:ring-ring/50 rounded-full p-0.5 text-xs transition focus-visible:ring-2 focus-visible:outline-none"
-                onclick={() => removeTag(tag)}
-                aria-label={`Remove ${tag}`}
-              >
-                <X class="size-3" />
-              </button>
-            </Badge>
-          {/each}
+              {#if showPassword}
+                <EyeOff class="size-4" />
+              {:else}
+                <Eye class="size-4" />
+              {/if}
+            </button>
+          </div>
+          {#if password}
+            <PasswordStrength {password} showDetails={true} className="mt-1" />
+          {/if}
         </div>
 
-        <ScrollArea class="border-border/60 bg-muted/40 max-h-48 rounded-md border p-2">
-          <div class="grid gap-2">
-            {#if !availableTags.length}
-              <p class="text-muted-foreground text-sm">No tags available yet.</p>
-            {:else}
-              {#each availableTags as tagOption (tagOption.id)}
-                <Button
-                  type="button"
-                  variant={tags.includes(tagOption.text) ? 'secondary' : 'ghost'}
-                  class={cn(
-                    'w-full justify-start gap-2',
-                    tags.includes(tagOption.text)
-                      ? 'bg-secondary text-secondary-foreground'
-                      : 'hover:bg-muted/80'
-                  )}
-                  onclick={() => toggleTag(tagOption.text)}
-                >
-                  <span
-                    class="size-2.5 rounded-full"
-                    style={`background: ${tagOption.color || '#94a3b8'};`}
-                    aria-hidden="true"
-                  ></span>
-                  <Icon path={tagOption.icon} size="16" color="currentColor" className="shrink-0" />
-                  <span class="text-sm">{tagOption.text}</span>
-                  {#if tags.includes(tagOption.text)}
-                    <Check class="text-muted-foreground ms-auto size-4" />
-                  {/if}
-                </Button>
-              {/each}
+        <div class="grid gap-3">
+          <div class="flex items-center justify-between">
+            <span class="text-foreground text-sm font-medium">Tags</span>
+            {#if tags.length}
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                class="h-8 px-2 text-xs"
+                onclick={clearTags}
+              >
+                Clear selection
+              </Button>
             {/if}
           </div>
-        </ScrollArea>
-      </div>
-    </form>
+
+          <div class="flex flex-wrap items-center gap-2">
+            {#if !tags.length}
+              <p class="text-muted-foreground text-sm">No tags selected yet.</p>
+            {/if}
+
+            {#each tags as tag (tag)}
+              <Badge
+                variant="secondary"
+                class="flex items-center gap-1 rounded-full px-3 py-1 text-xs"
+              >
+                <span>{tag}</span>
+                <button
+                  type="button"
+                  class="text-muted-foreground hover:bg-foreground/10 hover:text-foreground focus-visible:ring-ring/50 rounded-full p-0.5 text-xs transition focus-visible:ring-2 focus-visible:outline-none"
+                  onclick={() => removeTag(tag)}
+                  aria-label={`Remove ${tag}`}
+                >
+                  <X class="size-3" />
+                </button>
+              </Badge>
+            {/each}
+          </div>
+
+          <ScrollArea class="border-border/60 bg-muted/40 max-h-40 rounded-md border p-2">
+            <div class="grid gap-2">
+              {#if !availableTags.length}
+                <p class="text-muted-foreground text-sm text-center py-4">No tags available yet.</p>
+              {:else}
+                {#each availableTags as tagOption (tagOption.id)}
+                  <Button
+                    type="button"
+                    variant={tags.includes(tagOption.text) ? 'secondary' : 'ghost'}
+                    class={cn(
+                      'w-full justify-start gap-2 h-9',
+                      tags.includes(tagOption.text)
+                        ? 'bg-secondary text-secondary-foreground'
+                        : 'hover:bg-muted/80'
+                    )}
+                    onclick={() => toggleTag(tagOption.text)}
+                  >
+                    <span
+                      class="size-2.5 rounded-full"
+                      style={`background: ${tagOption.color || '#94a3b8'};`}
+                      aria-hidden="true"
+                    ></span>
+                    <Icon path={tagOption.icon} size="14" color="currentColor" className="shrink-0" />
+                    <span class="text-sm">{tagOption.text}</span>
+                    {#if tags.includes(tagOption.text)}
+                      <Check class="text-muted-foreground ms-auto size-3.5" />
+                    {/if}
+                  </Button>
+                {/each}
+              {/if}
+            </div>
+          </ScrollArea>
+        </div>
+      </form>
+    </ScrollArea>
 
     <DialogFooter>
       <Button type="button" variant="outline" onclick={closeDialog}>Cancel</Button>

@@ -19,6 +19,7 @@ use std::path::{Path, PathBuf};
 use tauri::State;
 use tauri_plugin_clipboard_manager::ClipboardExt;
 use tokio::fs;
+use tokio::time::Duration;
 use totp_rs::{Algorithm as TotpAlgorithm, Secret, TOTP};
 use zeroize::{Zeroize, Zeroizing};
 
@@ -135,82 +136,6 @@ async fn write_password_metadata(db_path: &Path, meta: &PasswordMetadata) -> Res
     Ok(())
 }
 
-async fn persist_metadata_to_db(
-    db_pool: &sqlx::SqlitePool,
-    meta: &PasswordMetadata,
-) -> Result<()> {
-    let mut tx = db_pool.begin().await?;
-
-    sqlx::query("INSERT OR REPLACE INTO configuration (key, value) VALUES (?, ?)")
-        .bind("password_salt")
-        .bind(&meta.salt_b64)
-        .execute(&mut *tx)
-        .await?;
-
-    sqlx::query("INSERT OR REPLACE INTO configuration (key, value) VALUES (?, ?)")
-        .bind("password_check_nonce")
-        .bind(&meta.nonce_b64)
-        .execute(&mut *tx)
-        .await?;
-
-    sqlx::query("INSERT OR REPLACE INTO configuration (key, value) VALUES (?, ?)")
-        .bind("password_check_ciphertext")
-        .bind(&meta.ciphertext_b64)
-        .execute(&mut *tx)
-        .await?;
-
-    match meta.argon2_memory_kib {
-        Some(value) => {
-            sqlx::query("INSERT OR REPLACE INTO configuration (key, value) VALUES (?, ?)")
-                .bind("argon2_memory_kib")
-                .bind(value.to_string())
-                .execute(&mut *tx)
-                .await?;
-        }
-        None => {
-            sqlx::query("DELETE FROM configuration WHERE key = ?")
-                .bind("argon2_memory_kib")
-                .execute(&mut *tx)
-                .await?;
-        }
-    }
-
-    match meta.argon2_time_cost {
-        Some(value) => {
-            sqlx::query("INSERT OR REPLACE INTO configuration (key, value) VALUES (?, ?)")
-                .bind("argon2_time_cost")
-                .bind(value.to_string())
-                .execute(&mut *tx)
-                .await?;
-        }
-        None => {
-            sqlx::query("DELETE FROM configuration WHERE key = ?")
-                .bind("argon2_time_cost")
-                .execute(&mut *tx)
-                .await?;
-        }
-    }
-
-    match meta.argon2_parallelism {
-        Some(value) => {
-            sqlx::query("INSERT OR REPLACE INTO configuration (key, value) VALUES (?, ?)")
-                .bind("argon2_parallelism")
-                .bind(value.to_string())
-                .execute(&mut *tx)
-                .await?;
-        }
-        None => {
-            sqlx::query("DELETE FROM configuration WHERE key = ?")
-                .bind("argon2_parallelism")
-                .execute(&mut *tx)
-                .await?;
-        }
-    }
-
-    tx.commit().await?;
-    Ok(())
-}
-
 fn decode_metadata(meta: &PasswordMetadata) -> Result<(Vec<u8>, Vec<u8>, Vec<u8>)> {
     let salt = general_purpose::STANDARD
         .decode(&meta.salt_b64)
@@ -312,58 +237,230 @@ async fn get_db_path(state: &State<'_, AppState>) -> Result<PathBuf> {
         .ok_or(Error::Internal("Database path is not set. Select a vault first.".to_string()))
 }
 
-async fn apply_key_to_conn(conn: &mut SqliteConnection, key_bytes: &[u8]) -> Result<()> {
-    let param_try = sqlx::query("PRAGMA key = ?;")
-        .bind(key_bytes)
-        .execute(&mut *conn)
-        .await;
+async fn connect_with_key(db_path: &Path, key_bytes: &[u8]) -> Result<SqliteConnection> {
+    let hex_key = hex::encode(key_bytes);
+    let connect_options = SqliteConnectOptions::new()
+        .filename(db_path)
+        .create_if_missing(false)
+        .busy_timeout(Duration::from_secs(10))
+        .pragma("key", format!("\"x'{}'\"", hex_key));
 
-    if let Err(e) = param_try {
-        let msg = e.to_string();
-        if msg.contains("near \"?\": syntax error") || msg.contains("syntax error") {
-            let hex_key: String = key_bytes.iter().map(|b| format!("{:02x}", b)).collect();
-            let pragma_unquoted = format!("PRAGMA key = x'{}';", hex_key);
-            let unq_try = sqlx::query(&pragma_unquoted).execute(&mut *conn).await;
-            if unq_try.is_err() {
-                let pragma_quoted = format!("PRAGMA key = \"x'{}'\";", hex_key);
-                sqlx::query(&pragma_quoted)
-                    .execute(&mut *conn)
-                    .await
-                    .map_err(|_| Error::Internal("Failed to apply pragma key using fallback method.".to_string()))?;
+    SqliteConnection::connect_with(&connect_options).await.map_err(Error::Database)
+}
+
+async fn connect_plaintext(db_path: &Path) -> Result<SqliteConnection> {
+    let connect_options = SqliteConnectOptions::new()
+        .filename(db_path)
+        .create_if_missing(false)
+        .busy_timeout(Duration::from_secs(10))
+        .pragma("key", "''");
+
+    SqliteConnection::connect_with(&connect_options).await.map_err(Error::Database)
+}
+
+async fn connect_plaintext_raw(db_path: &Path) -> Result<SqliteConnection> {
+    let connect_options = SqliteConnectOptions::new()
+        .filename(db_path)
+        .create_if_missing(false)
+        .busy_timeout(Duration::from_secs(10));
+
+    SqliteConnection::connect_with(&connect_options).await.map_err(Error::Database)
+}
+
+fn is_not_a_database_error(err: &sqlx::Error) -> bool {
+    let msg = err.to_string().to_lowercase();
+    msg.contains("file is not a database") || msg.contains("code 26")
+}
+
+fn is_unable_to_open_db_error(err: &sqlx::Error) -> bool {
+    let msg = err.to_string().to_lowercase();
+    msg.contains("unable to open database") || msg.contains("code 14") || msg.contains("code: 14")
+}
+
+fn build_attach_cmd(path: &Path, hex_key: &str) -> String {
+    let raw = path.to_string_lossy().replace('\\', "/");
+    let raw_sql = raw.replace("'", "''");
+    format!(
+        "ATTACH DATABASE '{}' AS encrypted KEY \"x'{}'\"",
+        raw_sql, hex_key
+    )
+}
+
+async fn attach_encrypted_db(
+    conn: &mut SqliteConnection,
+    path: &Path,
+    hex_key: &str,
+) -> Result<()> {
+    let attach_cmd = build_attach_cmd(path, hex_key);
+    match sqlx::query(&attach_cmd).execute(&mut *conn).await {
+        Ok(_) => Ok(()),
+        Err(err) => {
+            if is_unable_to_open_db_error(&err) {
+                if let Some(parent) = path.parent() {
+                    fs::create_dir_all(parent).await.map_err(Error::Io)?;
+                }
+                let _ = fs::OpenOptions::new()
+                    .create(true)
+                    .write(true)
+                    .open(path)
+                    .await;
+                sqlx::query(&attach_cmd).execute(&mut *conn).await?;
+                Ok(())
+            } else {
+                Err(Error::Database(err))
             }
+        }
+    }
+}
+
+async fn is_plaintext_sqlite(db_path: &Path) -> Result<bool> {
+    for use_empty_key in [true, false] {
+        let conn_result = if use_empty_key {
+            connect_plaintext(db_path).await
         } else {
-            return Err(Error::Internal(format!("Failed to apply pragma key: {}", e)));
+            connect_plaintext_raw(db_path).await
+        };
+
+        let mut conn = match conn_result {
+            Ok(conn) => conn,
+            Err(err) => {
+                if let Error::Database(db_err) = &err {
+                    if is_not_a_database_error(db_err) {
+                        continue;
+                    }
+                }
+                return Err(err);
+            }
+        };
+
+        let result = sqlx::query("SELECT count(*) FROM sqlite_master")
+            .execute(&mut conn)
+            .await;
+        conn.close().await?;
+
+        match result {
+            Ok(_) => return Ok(true),
+            Err(err) => {
+                if is_not_a_database_error(&err) {
+                    continue;
+                }
+                return Err(Error::Database(err));
+            }
         }
     }
 
+    Ok(false)
+}
+
+async fn close_pool_with_timeout(pool: sqlx::SqlitePool, timeout: Duration) -> Result<()> {
+    tokio::time::timeout(timeout, pool.close())
+        .await
+        .map_err(|_| {
+            Error::Internal(
+                "Timed out while closing the database. Please try again.".to_string(),
+            )
+        })?;
     Ok(())
 }
 
-async fn apply_rekey(conn: &mut SqliteConnection, key_bytes: &[u8]) -> Result<()> {
-    let rekey_try = sqlx::query("PRAGMA rekey = ?;")
-        .bind(key_bytes)
-        .execute(&mut *conn)
+async fn log_cipher_version(conn: &mut SqliteConnection, context: &str) {
+    match sqlx::query_scalar::<_, String>("PRAGMA cipher_version")
+        .fetch_optional(&mut *conn)
+        .await
+    {
+        Ok(Some(version)) => eprintln!("[{}] cipher_version={}", context, version),
+        Ok(None) => eprintln!("[{}] cipher_version=<none>", context),
+        Err(err) => eprintln!("[{}] cipher_version query failed: {}", context, err),
+    }
+}
+
+async fn validate_encrypted_db(db_path: &Path, key_bytes: &[u8]) -> Result<()> {
+    match connect_with_key(db_path, key_bytes).await {
+        Ok(mut conn) => {
+            let result = sqlx::query("SELECT count(*) FROM sqlite_master")
+                .execute(&mut conn)
+                .await;
+            let _ = conn.close().await;
+            match result {
+                Ok(_) => Ok(()),
+                Err(err) => Err(Error::Database(err)),
+            }
+        }
+        Err(err) => Err(err),
+    }
+}
+
+async fn rekey_plaintext_db(db_path: &Path, key_bytes: &[u8]) -> Result<()> {
+    let temp_db_path = db_path.with_extension("tmp_rekey_psec");
+    if let Some(parent) = db_path.parent() {
+        fs::create_dir_all(parent).await.map_err(Error::Io)?;
+    }
+    let hex_key = hex::encode(key_bytes);
+
+    let mut last_err: Option<Error> = None;
+    for _ in 0..10 {
+        if temp_db_path.exists() {
+            let _ = fs::remove_file(&temp_db_path).await;
+        }
+
+        let mut conn = match connect_plaintext_raw(db_path).await {
+            Ok(conn) => conn,
+            Err(err) => match connect_plaintext(db_path).await {
+                Ok(conn) => conn,
+                Err(_) => {
+                    last_err = Some(err);
+                    tokio::time::sleep(Duration::from_millis(750)).await;
+                    continue;
+                }
+            },
+        };
+
+        log_cipher_version(&mut conn, "rekey/plaintext").await;
+
+        let export_result: Result<()> = async {
+            attach_encrypted_db(&mut conn, &temp_db_path, &hex_key).await?;
+            sqlx::query("SELECT sqlcipher_export('encrypted')")
+                .execute(&mut conn)
+                .await?;
+            sqlx::query("DETACH DATABASE encrypted").execute(&mut conn).await?;
+            Ok(())
+        }
         .await;
 
-    if let Err(e) = rekey_try {
-        let msg = e.to_string();
-        if msg.contains("near \"?\": syntax error") || msg.contains("syntax error") {
-            let hex_key: String = key_bytes.iter().map(|b| format!("{:02x}", b)).collect();
-            let pragma_unquoted = format!("PRAGMA rekey = x'{}';", hex_key);
-            let unq_try = sqlx::query(&pragma_unquoted).execute(&mut *conn).await;
-            if unq_try.is_err() {
-                let pragma_quoted = format!("PRAGMA rekey = \"x'{}'\";", hex_key);
-                sqlx::query(&pragma_quoted)
-                    .execute(&mut *conn)
-                    .await
-                    .map_err(|_| Error::Internal("Failed to rekey database using fallback method.".to_string()))?;
+        let _ = conn.close().await;
+
+        match export_result {
+            Ok(()) => {
+                tokio::time::sleep(Duration::from_millis(500)).await;
+                if let Err(err) = fs::remove_file(db_path).await {
+                    last_err = Some(Error::Io(err));
+                } else if let Err(err) = fs::rename(&temp_db_path, db_path).await {
+                    last_err = Some(Error::Io(err));
+                } else if let Err(err) = validate_encrypted_db(db_path, key_bytes).await {
+                    last_err = Some(err);
+                } else {
+                    return Ok(());
+                }
             }
-        } else {
-            return Err(Error::Internal(format!("Failed to rekey database: {}", e)));
+            Err(err) => last_err = Some(err),
         }
+
+        tokio::time::sleep(Duration::from_millis(750)).await;
     }
 
-    Ok(())
+    Err(last_err.unwrap_or_else(|| {
+        Error::Internal("Failed to encrypt database after multiple attempts.".to_string())
+    }))
+}
+
+async fn connect_with_timeout(
+    connect_options: &SqliteConnectOptions,
+    timeout: Duration,
+) -> std::result::Result<SqliteConnection, sqlx::Error> {
+    match tokio::time::timeout(timeout, SqliteConnection::connect_with(connect_options)).await {
+        Ok(result) => result,
+        Err(_) => Err(sqlx::Error::PoolTimedOut),
+    }
 }
 
 async fn finalize_unlock(
@@ -373,13 +470,17 @@ async fn finalize_unlock(
     let db_path = get_db_path(state).await?;
 
     {
-        if let Some(pool) = state.db.lock().await.take() {
+        let mut db_guard = state.db.lock().await;
+        if let Some(pool) = db_guard.take() {
             pool.close().await;
         }
     }
 
-    let new_pool = crate::db::init_db(db_path.as_path(), Some(key_z.as_slice())).await
-        .map_err(|e| Error::Internal(e))?;
+    tokio::time::sleep(Duration::from_millis(2000)).await;
+
+    let new_pool = crate::db::init_db_lazy(db_path.as_path(), Some(key_z.as_slice()))
+        .await
+        .map_err(Error::Internal)?;
 
     {
         let mut db_guard = state.db.lock().await;
@@ -396,8 +497,14 @@ async fn finalize_unlock(
         *pending_guard = None;
     }
 
-    if let Err(e) = register_device(state).await {
-        eprintln!("Failed to register device: {}", e);
+    match tokio::time::timeout(Duration::from_secs(5), register_device(state)).await {
+        Ok(Ok(())) => {}
+        Ok(Err(e)) => {
+            eprintln!("Failed to register device: {}", e);
+        }
+        Err(_) => {
+            eprintln!("Failed to register device: timed out");
+        }
     }
 
     Ok(())
@@ -408,7 +515,9 @@ pub async fn set_master_password(
     state: State<'_, AppState>,
     password: String,
 ) -> Result<()> {
-    let db_pool = get_db_pool(&state).await?;
+    let _rekey_lock = tokio::time::timeout(Duration::from_secs(15), state.rekey.lock())
+        .await
+        .map_err(|_| Error::Internal("Vault is busy. Please try again.".to_string()))?;
     let db_path = get_db_path(&state).await?;
 
     let mut salt = [0u8; 16];
@@ -441,31 +550,99 @@ pub async fn set_master_password(
         argon2_parallelism: Some(argon_params.parallelism),
     };
 
-    persist_metadata_to_db(&db_pool, &metadata).await?;
-    write_password_metadata(db_path.as_path(), &metadata).await?;
-
-    {
-        let mut path_guard = state.db_path.lock().await;
-        *path_guard = Some(db_path.clone());
+    if let Some(pool) = { state.db.lock().await.take() } {
+        close_pool_with_timeout(pool, Duration::from_secs(15)).await?;
     }
 
-    {
-        let mut key_guard = state.key.lock().await;
-        *key_guard = Some(key_z.clone());
+    tokio::time::sleep(Duration::from_millis(1500)).await;
+
+    let hex_key = hex::encode(key_z.as_slice());
+
+    let temp_db_path = db_path.with_extension("tmp_psec");
+    if temp_db_path.exists() {
+        let _ = fs::remove_file(&temp_db_path).await;
     }
 
-    let _rekey_lock = state.rekey.lock().await;
     let connect_options = SqliteConnectOptions::new()
         .filename(&db_path)
-        .create_if_missing(false);
-    let mut conn = SqliteConnection::connect_with(&connect_options)
-        .await?;
+        .create_if_missing(false)
+        .busy_timeout(Duration::from_secs(30));
+    
+    let mut last_err = None;
+    for _ in 0..10 {
+        match connect_with_timeout(&connect_options, Duration::from_secs(15)).await {
+            Ok(mut conn) => {
+                sqlx::query("BEGIN").execute(&mut conn).await?;
+                
+                sqlx::query("INSERT OR REPLACE INTO configuration (key, value) VALUES (?, ?)")
+                    .bind("password_salt")
+                    .bind(&metadata.salt_b64)
+                    .execute(&mut conn)
+                    .await?;
 
-    apply_key_to_conn(&mut conn, key_z.as_slice()).await?;
+                sqlx::query("INSERT OR REPLACE INTO configuration (key, value) VALUES (?, ?)")
+                    .bind("password_check_nonce")
+                    .bind(&metadata.nonce_b64)
+                    .execute(&mut conn)
+                    .await?;
 
-    apply_rekey(&mut conn, key_z.as_slice()).await?;
+                sqlx::query("INSERT OR REPLACE INTO configuration (key, value) VALUES (?, ?)")
+                    .bind("password_check_ciphertext")
+                    .bind(&metadata.ciphertext_b64)
+                    .execute(&mut conn)
+                    .await?;
 
-    drop(conn);
+                if let Some(val) = metadata.argon2_memory_kib {
+                    sqlx::query("INSERT OR REPLACE INTO configuration (key, value) VALUES (?, ?)")
+                        .bind("argon2_memory_kib")
+                        .bind(val.to_string())
+                        .execute(&mut conn)
+                        .await?;
+                }
+                
+                if let Some(val) = metadata.argon2_time_cost {
+                    sqlx::query("INSERT OR REPLACE INTO configuration (key, value) VALUES (?, ?)")
+                        .bind("argon2_time_cost")
+                        .bind(val.to_string())
+                        .execute(&mut conn)
+                        .await?;
+                }
+
+                if let Some(val) = metadata.argon2_parallelism {
+                    sqlx::query("INSERT OR REPLACE INTO configuration (key, value) VALUES (?, ?)")
+                        .bind("argon2_parallelism")
+                        .bind(val.to_string())
+                        .execute(&mut conn)
+                        .await?;
+                }
+
+                sqlx::query("COMMIT").execute(&mut conn).await?;
+
+                let temp_path_str = temp_db_path.to_string_lossy().replace('\\', "/");
+                attach_encrypted_db(&mut conn, &temp_db_path, &hex_key).await?;
+                sqlx::query("SELECT sqlcipher_export('encrypted')").execute(&mut conn).await?;
+                sqlx::query("DETACH DATABASE encrypted").execute(&mut conn).await?;
+
+                conn.close().await?;
+                
+                tokio::time::sleep(Duration::from_millis(1000)).await;
+                fs::remove_file(&db_path).await?;
+                fs::rename(&temp_db_path, &db_path).await?;
+                
+                write_password_metadata(db_path.as_path(), &metadata).await?;
+                last_err = None;
+                break;
+            }
+            Err(e) => {
+                last_err = Some(e);
+                tokio::time::sleep(Duration::from_millis(1500)).await;
+            }
+        }
+    }
+    
+    if let Some(e) = last_err {
+        return Err(Error::Internal(format!("Failed to connect for rekeying after retries: {}", e)));
+    }
 
     finalize_unlock(&state, key_z.clone()).await?;
     derived_key.zeroize();
@@ -478,7 +655,6 @@ pub async fn unlock(
     state: State<'_, AppState>,
     password: String,
 ) -> Result<UnlockResponse> {
-    let _rekey_lock = state.rekey.lock().await;
     let db_path = get_db_path(&state).await?;
 
     let metadata = match read_password_metadata(db_path.as_path()).await? {
@@ -523,20 +699,80 @@ pub async fn unlock(
         .await?;
     }
 
-    let connect_options = SqliteConnectOptions::new()
-        .filename(&db_path)
-        .create_if_missing(false);
-    let mut conn = SqliteConnection::connect_with(&connect_options)
-        .await?;
+    let is_plaintext = is_plaintext_sqlite(db_path.as_path()).await?;
+    if is_plaintext {
+        if let Some(pool) = { state.db.lock().await.take() } {
+            if let Err(err) = close_pool_with_timeout(pool, Duration::from_secs(15)).await {
+                let _ = err;
+            }
+        }
+        tokio::time::sleep(Duration::from_millis(1500)).await;
+        rekey_plaintext_db(db_path.as_path(), key_z.as_slice()).await?;
+    }
 
-    apply_key_to_conn(&mut conn, key_z.as_slice()).await?;
+    let mut conn = match connect_with_key(db_path.as_path(), key_z.as_slice()).await {
+        Ok(conn) => conn,
+        Err(err) => {
+            if let Error::Database(sqlx_err) = &err {
+                let _ = sqlx_err;
+                if is_not_a_database_error(sqlx_err) {
+                    let is_plaintext_retry = is_plaintext_sqlite(db_path.as_path()).await?;
+                    if is_plaintext_retry {
+                        if let Some(pool) = { state.db.lock().await.take() } {
+                            if let Err(err) = close_pool_with_timeout(pool, Duration::from_secs(15)).await {
+                                let _ = err;
+                            }
+                        }
+                        tokio::time::sleep(Duration::from_millis(1500)).await;
+                        rekey_plaintext_db(db_path.as_path(), key_z.as_slice()).await?;
+                        connect_with_key(db_path.as_path(), key_z.as_slice()).await?
+                    } else {
+                        return Err(err);
+                    }
+                } else {
+                    return Err(err);
+                }
+            } else {
+                return Err(err);
+            }
+        }
+    };
 
+    let totp_query =
+        "SELECT COUNT(*) FROM configuration WHERE key = 'login_totp_secret'";
     let totp_configured: i64 =
-        sqlx::query_scalar("SELECT COUNT(*) FROM configuration WHERE key = 'login_totp_secret'")
-            .fetch_one(&mut conn)
-            .await?;
+        match sqlx::query_scalar(totp_query).fetch_one(&mut conn).await {
+            Ok(value) => value,
+            Err(err) => {
+                if is_not_a_database_error(&err) {
+                    let _ = err;
+                    conn.close().await?;
+                    let is_plaintext_retry = is_plaintext_sqlite(db_path.as_path()).await?;
+                    if is_plaintext_retry {
+                        if let Some(pool) = { state.db.lock().await.take() } {
+                            if let Err(err) = close_pool_with_timeout(pool, Duration::from_secs(15)).await {
+                                let _ = err;
+                            }
+                        }
+                        tokio::time::sleep(Duration::from_millis(1500)).await;
+                        rekey_plaintext_db(db_path.as_path(), key_z.as_slice()).await?;
+                        let mut retry_conn =
+                            connect_with_key(db_path.as_path(), key_z.as_slice()).await?;
+                        let value = sqlx::query_scalar(totp_query)
+                            .fetch_one(&mut retry_conn)
+                            .await?;
+                        conn = retry_conn;
+                        value
+                    } else {
+                        return Err(Error::Database(err));
+                    }
+                } else {
+                    return Err(Error::Database(err));
+                }
+            }
+        };
 
-    drop(conn);
+    conn.close().await?;
 
     let totp_required = totp_configured > 0;
 
@@ -572,13 +808,7 @@ pub async fn verify_login_totp(state: State<'_, AppState>, token: String) -> Res
     }
 
     let db_path = get_db_path(&state).await?;
-    let connect_options = SqliteConnectOptions::new()
-        .filename(&db_path)
-        .create_if_missing(false);
-    let mut conn = SqliteConnection::connect_with(&connect_options)
-        .await?;
-
-    apply_key_to_conn(&mut conn, pending_key.as_slice()).await?;
+    let mut conn = connect_with_key(db_path.as_path(), pending_key.as_slice()).await?;
 
     let secret_enc: Option<String> =
         sqlx::query_scalar("SELECT value FROM configuration WHERE key = 'login_totp_secret'")
@@ -607,7 +837,7 @@ pub async fn verify_login_totp(state: State<'_, AppState>, token: String) -> Res
         return Err(Error::Validation("Invalid TOTP token".to_string()));
     }
 
-    drop(conn);
+    conn.close().await?;
     finalize_unlock(&state, pending_key.clone()).await?;
     Ok(())
 }
@@ -714,21 +944,77 @@ pub async fn rotate_master_password(
     metadata.nonce_b64 = general_purpose::STANDARD.encode(&new_nonce);
     metadata.ciphertext_b64 = general_purpose::STANDARD.encode(&new_ciphertext);
     metadata.argon2_memory_kib = Some(argon_params.memory_kib);
-    metadata.argon2_time_cost = Some(argon_params.time_cost);
-    metadata.argon2_parallelism = Some(argon_params.parallelism);
 
-    persist_metadata_to_db(&db_pool, &metadata).await?;
-    write_password_metadata(db_path.as_path(), &metadata).await?;
+    if let Some(pool) = { state.db.lock().await.take() } {
+        close_pool_with_timeout(pool, Duration::from_secs(15)).await?;
+    }
+
+    tokio::time::sleep(Duration::from_millis(1500)).await;
+
+    let hex_old_key = hex::encode(current_key_z.as_slice());
+    let hex_new_key = hex::encode(new_key_z.as_slice());
+
+    let temp_db_path = db_path.with_extension("tmp_rotate_psec");
+    if temp_db_path.exists() {
+        let _ = fs::remove_file(&temp_db_path).await;
+    }
 
     let connect_options = SqliteConnectOptions::new()
         .filename(&db_path)
-        .create_if_missing(false);
-    let mut conn = SqliteConnection::connect_with(&connect_options)
-        .await?;
+        .create_if_missing(false)
+        .busy_timeout(Duration::from_secs(30))
+        .pragma("key", format!("\"x'{}'\"", hex_old_key));
+    
+    let mut last_err = None;
+    for _ in 0..10 {
+        match connect_with_timeout(&connect_options, Duration::from_secs(15)).await {
+            Ok(mut conn) => {
+                sqlx::query("BEGIN").execute(&mut conn).await?;
+                
+                sqlx::query("INSERT OR REPLACE INTO configuration (key, value) VALUES (?, ?)")
+                    .bind("password_salt")
+                    .bind(&metadata.salt_b64)
+                    .execute(&mut conn)
+                    .await?;
 
-    apply_key_to_conn(&mut conn, current_key_z.as_slice()).await?;
-    apply_rekey(&mut conn, new_key_z.as_slice()).await?;
-    drop(conn);
+                sqlx::query("INSERT OR REPLACE INTO configuration (key, value) VALUES (?, ?)")
+                    .bind("password_check_nonce")
+                    .bind(&metadata.nonce_b64)
+                    .execute(&mut conn)
+                    .await?;
+
+                sqlx::query("INSERT OR REPLACE INTO configuration (key, value) VALUES (?, ?)")
+                    .bind("password_check_ciphertext")
+                    .bind(&metadata.ciphertext_b64)
+                    .execute(&mut conn)
+                    .await?;
+
+                sqlx::query("COMMIT").execute(&mut conn).await?;
+
+                attach_encrypted_db(&mut conn, &temp_db_path, &hex_new_key).await?;
+                sqlx::query("SELECT sqlcipher_export('encrypted')").execute(&mut conn).await?;
+                sqlx::query("DETACH DATABASE encrypted").execute(&mut conn).await?;
+
+                conn.close().await?;
+                
+                tokio::time::sleep(Duration::from_millis(1000)).await;
+                fs::remove_file(&db_path).await?;
+                fs::rename(&temp_db_path, &db_path).await?;
+                
+                write_password_metadata(db_path.as_path(), &metadata).await?;
+                last_err = None;
+                break;
+            }
+            Err(e) => {
+                last_err = Some(e);
+                tokio::time::sleep(Duration::from_millis(1500)).await;
+            }
+        }
+    }
+    
+    if let Some(e) = last_err {
+        return Err(Error::Internal(format!("Failed to connect for master password rotation: {}", e)));
+    }
 
     finalize_unlock(&state, new_key_z.clone()).await?;
 
@@ -793,18 +1079,92 @@ pub async fn update_argon2_params(
     metadata.argon2_time_cost = Some(new_params.time_cost);
     metadata.argon2_parallelism = Some(new_params.parallelism);
 
-    persist_metadata_to_db(&db_pool, &metadata).await?;
-    write_password_metadata(db_path.as_path(), &metadata).await?;
+    if let Some(pool) = { state.db.lock().await.take() } {
+        close_pool_with_timeout(pool, Duration::from_secs(15)).await?;
+    }
+
+    let hex_old_key = hex::encode(current_key_z.as_slice());
+    let hex_new_key = hex::encode(new_key_z.as_slice());
+
+    let temp_db_path = db_path.with_extension("tmp_argon_psec");
+    if temp_db_path.exists() {
+        let _ = fs::remove_file(&temp_db_path).await;
+    }
 
     let connect_options = SqliteConnectOptions::new()
         .filename(&db_path)
-        .create_if_missing(false);
-    let mut conn = SqliteConnection::connect_with(&connect_options)
-        .await?;
+        .create_if_missing(false)
+        .busy_timeout(Duration::from_secs(30))
+        .pragma("key", format!("\"x'{}'\"", hex_old_key));
+    
+    let mut last_err = None;
+    for _ in 0..10 {
+        match connect_with_timeout(&connect_options, Duration::from_secs(15)).await {
+            Ok(mut conn) => {
+                sqlx::query("BEGIN").execute(&mut conn).await?;
+                
+                sqlx::query("INSERT OR REPLACE INTO configuration (key, value) VALUES (?, ?)")
+                    .bind("password_salt")
+                    .bind(&metadata.salt_b64)
+                    .execute(&mut conn)
+                    .await?;
 
-    apply_key_to_conn(&mut conn, current_key_z.as_slice()).await?;
-    apply_rekey(&mut conn, new_key_z.as_slice()).await?;
-    drop(conn);
+                sqlx::query("INSERT OR REPLACE INTO configuration (key, value) VALUES (?, ?)")
+                    .bind("password_check_nonce")
+                    .bind(&metadata.nonce_b64)
+                    .execute(&mut conn)
+                    .await?;
+
+                sqlx::query("INSERT OR REPLACE INTO configuration (key, value) VALUES (?, ?)")
+                    .bind("password_check_ciphertext")
+                    .bind(&metadata.ciphertext_b64)
+                    .execute(&mut conn)
+                    .await?;
+
+                sqlx::query("INSERT OR REPLACE INTO configuration (key, value) VALUES (?, ?)")
+                    .bind("argon2_memory_kib")
+                    .bind(new_params.memory_kib.to_string())
+                    .execute(&mut conn)
+                    .await?;
+
+                sqlx::query("INSERT OR REPLACE INTO configuration (key, value) VALUES (?, ?)")
+                    .bind("argon2_time_cost")
+                    .bind(new_params.time_cost.to_string())
+                    .execute(&mut conn)
+                    .await?;
+
+                sqlx::query("INSERT OR REPLACE INTO configuration (key, value) VALUES (?, ?)")
+                    .bind("argon2_parallelism")
+                    .bind(new_params.parallelism.to_string())
+                    .execute(&mut conn)
+                    .await?;
+
+                sqlx::query("COMMIT").execute(&mut conn).await?;
+
+                attach_encrypted_db(&mut conn, &temp_db_path, &hex_new_key).await?;
+                sqlx::query("SELECT sqlcipher_export('encrypted')").execute(&mut conn).await?;
+                sqlx::query("DETACH DATABASE encrypted").execute(&mut conn).await?;
+
+                conn.close().await?;
+                
+                tokio::time::sleep(Duration::from_millis(1000)).await;
+                fs::remove_file(&db_path).await?;
+                fs::rename(&temp_db_path, &db_path).await?;
+                
+                write_password_metadata(db_path.as_path(), &metadata).await?;
+                last_err = None;
+                break;
+            }
+            Err(e) => {
+                last_err = Some(e);
+                tokio::time::sleep(Duration::from_millis(1500)).await;
+            }
+        }
+    }
+    
+    if let Some(e) = last_err {
+        return Err(Error::Internal(format!("Failed to connect for Argon2 parameter update: {}", e)));
+    }
 
     finalize_unlock(&state, new_key_z.clone()).await?;
 

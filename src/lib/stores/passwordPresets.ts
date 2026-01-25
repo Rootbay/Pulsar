@@ -1,5 +1,5 @@
 import { derived } from 'svelte/store';
-import { appSettings } from './appSettings';
+import { appSettings } from './appSettings.svelte';
 import { type PasswordPreset, defaultPasswordPresets } from '../config/settings';
 
 function createPasswordPresetsStore() {

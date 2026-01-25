@@ -1,5 +1,5 @@
 import { writable, derived, type Readable } from 'svelte/store';
-import { initAppSettings } from './appSettings';
+import { initAppSettings } from './appSettings.svelte';
 
 interface SettingsModule {
   save: () => void;

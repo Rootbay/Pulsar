@@ -290,7 +290,12 @@
   function handleSaveEdit(updatedItem: PasswordPreset | SiteRule) {
     if (editModalType === 'preset' && itemToEdit && isPreset(itemToEdit) && isPreset(updatedItem)) {
       passwordPresets.updatePreset(itemToEdit.name, updatedItem);
-    } else if (editModalType === 'rule' && itemToEdit && isRule(itemToEdit) && isRule(updatedItem)) {
+    } else if (
+      editModalType === 'rule' &&
+      itemToEdit &&
+      isRule(itemToEdit) &&
+      isRule(updatedItem)
+    ) {
       siteRules.updateRule(itemToEdit.url, updatedItem);
     }
     closeModal();

@@ -424,7 +424,3 @@
     box-shadow: 0 0 0 2px var(--focus-ring-color);
   }
 </style>
-
-
-
-

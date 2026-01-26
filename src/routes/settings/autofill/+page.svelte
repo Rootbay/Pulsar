@@ -16,10 +16,10 @@
 
   const locale = $derived($currentLocale);
 
-  let browserAutofill = false;
-  let globalAutotype = false;
-  let osUnlock = false;
-  let perSiteConfirmation = false;
+  let browserAutofill = $state(false);
+  let globalAutotype = $state(false);
+  let osUnlock = $state(false);
+  let perSiteConfirmation = $state(false);
 
   const unsubscribe = autofillSettings.subscribe((value) => {
     browserAutofill = value.browserAutofill;

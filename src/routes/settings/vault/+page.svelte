@@ -78,8 +78,8 @@
 
   const locale = $derived($currentLocale);
 
-  let loadingVaults = false;
-  let busyAction: 'import' | 'create' | 'backup' | 'restore' | 'export' | null = null;
+  let loadingVaults = $state(false);
+  let busyAction = $state<'import' | 'create' | 'backup' | 'restore' | 'export' | null>(null);
 
   const relativeTimeFormatter = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' });
 
@@ -724,7 +724,3 @@
     </CardContent>
   </Card>
 </div>
-
-
-
-

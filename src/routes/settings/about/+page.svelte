@@ -23,9 +23,9 @@
   type UpdateStatus = 'idle' | 'checking' | 'uptoDate';
   type IconComponent = typeof FileText;
 
-  let updateStatus: UpdateStatus = 'idle';
+  let updateStatus = $state<UpdateStatus>('idle');
   const locale = $derived($currentLocale);
-  let uploadDiagnostics = false;
+  let uploadDiagnostics = $state(false);
 
   const versionDetails = [
     { label: 'Version', value: '2.1.4' },

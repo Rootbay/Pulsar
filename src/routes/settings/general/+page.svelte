@@ -16,12 +16,6 @@
   import { Smartphone, Key, Lock, Settings } from '@lucide/svelte';
   import { currentLocale, t as translate, type I18nKey } from '$lib/i18n';
 
-  interface Props {
-    onclose?: () => void;
-  }
-
-  let { onclose }: Props = $props();
-
   type BooleanSettingKey = {
     [K in keyof GeneralSettings]: GeneralSettings[K] extends boolean ? K : never;
   }[keyof GeneralSettings];

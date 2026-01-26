@@ -262,11 +262,11 @@
             ? dndItems.length
             : filteredDisplayFields.length
           : 0;
-          if (count > 0) {
-            showSkeletonDetail = true;
-            clearTimeout(skeletonTimerDetail);
-            skeletonTimerDetail = setTimeout(() => {
-              showSkeletonDetail = false;
+        if (count > 0) {
+          showSkeletonDetail = true;
+          clearTimeout(skeletonTimerDetail);
+          skeletonTimerDetail = setTimeout(() => {
+            showSkeletonDetail = false;
           }, 200);
         }
       })();
@@ -1197,7 +1197,3 @@
     <UnsavedChangesPopup onsave={handleSave} onreset={handleReset} />
   {/if}
 </main>
-
-
-
-

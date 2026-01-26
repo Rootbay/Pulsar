@@ -51,56 +51,35 @@
       </button>
       <div class="dialog-header">
         <h2 class="dialog-title">
-          {type === 'preset'
-            ? t('Edit Preset')
-            : t('Edit Rule')}
+          {type === 'preset' ? t('Edit Preset') : t('Edit Rule')}
         </h2>
       </div>
       <div class="dialog-content">
         {#if type === 'preset'}
-          <Input
-            title={t('Preset Name')}
-            bind:inputValue={editedItem.name}
-          />
-          <Input
-            title={t('Length')}
-            type="number"
-            bind:inputValue={editedItem.length}
-          />
+          <Input title={t('Preset Name')} bind:inputValue={editedItem.name} />
+          <Input title={t('Length')} type="number" bind:inputValue={editedItem.length} />
           <div class="toggle-group">
-            <span class="toggle-label"
-              >{t('Include uppercase (A-Z)')}</span
-            >
+            <span class="toggle-label">{t('Include uppercase (A-Z)')}</span>
             <Switch bind:checked={editedItem.settings.uppercase} />
           </div>
           <div class="toggle-group">
-            <span class="toggle-label"
-              >{t('Include lowercase (a-z)')}</span
-            >
+            <span class="toggle-label">{t('Include lowercase (a-z)')}</span>
             <Switch bind:checked={editedItem.settings.lowercase} />
           </div>
           <div class="toggle-group">
-            <span class="toggle-label"
-              >{t('Include digits (0-9)')}</span
-            >
+            <span class="toggle-label">{t('Include digits (0-9)')}</span>
             <Switch bind:checked={editedItem.settings.digits} />
           </div>
           <div class="toggle-group">
-            <span class="toggle-label"
-              >{t('Include symbols (!@#$)')}</span
-            >
+            <span class="toggle-label">{t('Include symbols (!@#$)')}</span>
             <Switch bind:checked={editedItem.settings.symbols} />
           </div>
           <div class="toggle-group">
-            <span class="toggle-label"
-              >{t('Avoid ambiguous characters')}</span
-            >
+            <span class="toggle-label">{t('Avoid ambiguous characters')}</span>
             <Switch bind:checked={editedItem.settings.ambiguous} />
           </div>
           <div class="toggle-group">
-            <span class="toggle-label"
-              >{t('Exclude similar')}</span
-            >
+            <span class="toggle-label">{t('Exclude similar')}</span>
             <Switch bind:checked={editedItem.settings.similar} />
           </div>
           <div class="toggle-group">
@@ -109,50 +88,31 @@
           </div>
         {:else if type === 'rule'}
           <Input title="URL" bind:inputValue={editedItem.url} />
-          <Input
-            title={t('Length')}
-            type="number"
-            bind:inputValue={editedItem.length}
-          />
+          <Input title={t('Length')} type="number" bind:inputValue={editedItem.length} />
           <Input title={t('Type')} bind:inputValue={editedItem.type} />
-          <Input
-            title={t('Description')}
-            bind:inputValue={editedItem.desc}
-          />
+          <Input title={t('Description')} bind:inputValue={editedItem.desc} />
           <div class="toggle-group">
-            <span class="toggle-label"
-              >{t('Include uppercase (A-Z)')}</span
-            >
+            <span class="toggle-label">{t('Include uppercase (A-Z)')}</span>
             <Switch bind:checked={editedItem.settings.uppercase} />
           </div>
           <div class="toggle-group">
-            <span class="toggle-label"
-              >{t('Include lowercase (a-z)')}</span
-            >
+            <span class="toggle-label">{t('Include lowercase (a-z)')}</span>
             <Switch bind:checked={editedItem.settings.lowercase} />
           </div>
           <div class="toggle-group">
-            <span class="toggle-label"
-              >{t('Include digits (0-9)')}</span
-            >
+            <span class="toggle-label">{t('Include digits (0-9)')}</span>
             <Switch bind:checked={editedItem.settings.digits} />
           </div>
           <div class="toggle-group">
-            <span class="toggle-label"
-              >{t('Include symbols (!@#$)')}</span
-            >
+            <span class="toggle-label">{t('Include symbols (!@#$)')}</span>
             <Switch bind:checked={editedItem.settings.symbols} />
           </div>
           <div class="toggle-group">
-            <span class="toggle-label"
-              >{t('Avoid ambiguous characters')}</span
-            >
+            <span class="toggle-label">{t('Avoid ambiguous characters')}</span>
             <Switch bind:checked={editedItem.settings.ambiguous} />
           </div>
           <div class="toggle-group">
-            <span class="toggle-label"
-              >{t('Exclude similar')}</span
-            >
+            <span class="toggle-label">{t('Exclude similar')}</span>
             <Switch bind:checked={editedItem.settings.similar} />
           </div>
           <div class="toggle-group">

@@ -135,9 +135,7 @@
   let healthReport = $state<{
     reusedPasswords: { itemIds: number[]; count: number }[];
     weakPasswordsCount: number;
-  } | null>(
-    null
-  );
+  } | null>(null);
   let healthLoading = $state(false);
   let healthError = $state<string | null>(null);
 
@@ -944,7 +942,10 @@
           >
             <TriangleAlert class="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
             <p>
-              {t(locale, 'Security issues detected. Consider updating shared or short passwords to improve vault integrity.')}
+              {t(
+                locale,
+                'Security issues detected. Consider updating shared or short passwords to improve vault integrity.'
+              )}
             </p>
           </div>
         {:else}
@@ -1032,8 +1033,14 @@
             </p>
             <p class="text-muted-foreground text-sm">
               {$loginTotpConfigured
-                ? t(locale, 'Unlocking requires both your master password and an authenticator token.')
-                : t(locale, 'Generate a secret to require an authenticator token when unlocking the vault.')}
+                ? t(
+                    locale,
+                    'Unlocking requires both your master password and an authenticator token.'
+                  )
+                : t(
+                    locale,
+                    'Generate a secret to require an authenticator token when unlocking the vault.'
+                  )}
             </p>
           </div>
           <Badge
@@ -1227,7 +1234,10 @@
           </div>
 
           <p class="text-muted-foreground text-xs">
-            {t(locale, 'Codes rotate every 30 seconds. If verification fails, wait for the next code before trying again.')}
+            {t(
+              locale,
+              'Codes rotate every 30 seconds. If verification fails, wait for the next code before trying again.'
+            )}
           </p>
         </div>
       {/if}
@@ -1241,8 +1251,14 @@
               <p class="text-foreground text-sm font-semibold">Stored secret on this device</p>
               <p class="text-muted-foreground text-sm">
                 {storedSecret
-                  ? t(locale, 'Copy the secret if you need to enrol another authenticator or keep an offline backup.')
-                  : t(locale, 'This device does not have a local copy of the secret. Rotate the secret to capture it again.')}
+                  ? t(
+                      locale,
+                      'Copy the secret if you need to enrol another authenticator or keep an offline backup.'
+                    )
+                  : t(
+                      locale,
+                      'This device does not have a local copy of the secret. Rotate the secret to capture it again.'
+                    )}
               </p>
             </div>
           </div>
@@ -1352,9 +1368,7 @@
             {t(locale, 'Key Derivation')}
           </p>
           <p class="text-muted-foreground text-sm">
-            {argon2Loading
-              ? t(locale, 'Loading key derivation parameters…')
-              : argon2Summary}
+            {argon2Loading ? t(locale, 'Loading key derivation parameters…') : argon2Summary}
           </p>
         </div>
         <Button variant="outline" size="sm" onclick={openKdfModal}>
@@ -1477,7 +1491,10 @@
           {t(locale, 'Clipboard Clear Timeout')}
         </Label>
         <p class="text-muted-foreground text-sm">
-          {t(locale, 'Automatically clear sensitive data from your clipboard after the selected duration.')}
+          {t(
+            locale,
+            'Automatically clear sensitive data from your clipboard after the selected duration.'
+          )}
         </p>
         <Select
           type="single"
@@ -1785,7 +1802,10 @@
         {t(locale, 'Change Master Password')}
       </DialogTitle>
       <DialogDescription>
-        {t(locale, 'Provide your current master password and enter a new secure password to re-encrypt the vault.')}
+        {t(
+          locale,
+          'Provide your current master password and enter a new secure password to re-encrypt the vault.'
+        )}
       </DialogDescription>
     </DialogHeader>
 
@@ -1850,7 +1870,10 @@
       >
         <TriangleAlert class="mt-0.5 h-4 w-4" aria-hidden="true" />
         <p>
-          {t(locale, 'Changing the master password re-encrypts the vault. The operation may take several minutes for large vaults.')}
+          {t(
+            locale,
+            'Changing the master password re-encrypts the vault. The operation may take several minutes for large vaults.'
+          )}
         </p>
       </div>
       {#if changePasswordError}
@@ -1957,7 +1980,10 @@
       >
         <TriangleAlert class="text-primary mt-0.5 h-4 w-4" aria-hidden="true" />
         <p>
-          {t(locale, 'Updating Argon2 parameters will re-encrypt the vault and may take a few moments.')}
+          {t(
+            locale,
+            'Updating Argon2 parameters will re-encrypt the vault and may take a few moments.'
+          )}
         </p>
       </div>
 
@@ -2035,7 +2061,3 @@
     </DialogFooter>
   </DialogContent>
 </Dialog>
-
-
-
-

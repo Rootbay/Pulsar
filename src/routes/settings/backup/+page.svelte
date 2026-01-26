@@ -105,22 +105,22 @@
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const backupState = derived(backupSettings, ($settings) => ({ ...$settings }));
 
-  let showModal = false;
-  let modalTitle = '';
-  let modalDescription = '';
-  let modalConfirmLabel = 'Continue';
-  let modalDanger = false;
+  let showModal = $state(false);
+  let modalTitle = $state('');
+  let modalDescription = $state('');
+  let modalConfirmLabel = $state('Continue');
+  let modalDanger = $state(false);
   type ModalConfirmHandler = (passphrase: string) => Promise<void> | void;
 
-  let modalOnConfirm: ModalConfirmHandler | null = null;
-  let modalPassphrase = '';
-  let modalMasterPassword = '';
-  let modalBusy = false;
-  let modalError: string | null = null;
-  let modalRequiresPassphrase = true;
-  let modalRequiresMasterPassword = false;
-  let modalStatus: string | null = null;
-  let feedback: { type: 'success' | 'error'; message: string } | null = null;
+  let modalOnConfirm = $state<ModalConfirmHandler | null>(null);
+  let modalPassphrase = $state('');
+  let modalMasterPassword = $state('');
+  let modalBusy = $state(false);
+  let modalError = $state<string | null>(null);
+  let modalRequiresPassphrase = $state(true);
+  let modalRequiresMasterPassword = $state(false);
+  let modalStatus = $state<string | null>(null);
+  let feedback = $state<{ type: 'success' | 'error'; message: string } | null>(null);
 
   const importProgressMessages: Record<ImportVaultProgressStage, string> = {
     decrypting: 'Decrypting backup…',
@@ -172,7 +172,10 @@
   async function handleManualBackup() {
     openModal({
       title: t(locale, 'Create manual backup?'),
-      description: t(locale, 'This creates a fresh encrypted backup of your vault using the active settings.'),
+      description: t(
+        locale,
+        'This creates a fresh encrypted backup of your vault using the active settings.'
+      ),
       confirmLabel: t(locale, 'Export backup'),
       requiresMasterPassword: true,
       onConfirm: async (passphrase) => {
@@ -187,7 +190,10 @@
   async function handleExportEncrypted() {
     openModal({
       title: t(locale, 'Export encrypted data?'),
-      description: t(locale, 'Export your vault in encrypted form. Keep the generated file secure.'),
+      description: t(
+        locale,
+        'Export your vault in encrypted form. Keep the generated file secure.'
+      ),
       confirmLabel: t(locale, 'Export encrypted'),
       requiresMasterPassword: true,
       onConfirm: async (passphrase) => {
@@ -202,7 +208,10 @@
   async function handleExportPlaintext() {
     openModal({
       title: t(locale, 'Export plaintext data?'),
-      description: t(locale, 'WARNING: This exports all vault contents without encryption. Only proceed on trusted devices.'),
+      description: t(
+        locale,
+        'WARNING: This exports all vault contents without encryption. Only proceed on trusted devices.'
+      ),
       confirmLabel: t(locale, 'Export plaintext'),
       danger: true,
       requiresMasterPassword: true,
@@ -219,7 +228,10 @@
   async function handleImport() {
     openModal({
       title: t(locale, 'Start import process?'),
-      description: t(locale, 'Select a previous Pulsar backup and provide its passphrase to restore your vault contents.'),
+      description: t(
+        locale,
+        'Select a previous Pulsar backup and provide its passphrase to restore your vault contents.'
+      ),
       confirmLabel: t(locale, 'Import backup'),
       requiresMasterPassword: true,
       onConfirm: async (passphrase) => {
@@ -577,7 +589,10 @@
             }}
           />
           <p class="text-muted-foreground text-xs">
-            {t(locale, 'This passphrase encrypts or decrypts your vault backup. Use the same passphrase you will remember later.')}
+            {t(
+              locale,
+              'This passphrase encrypts or decrypts your vault backup. Use the same passphrase you will remember later.'
+            )}
           </p>
         </div>
       {/if}
@@ -622,11 +637,9 @@
           type="button"
           variant={modalDanger ? 'destructive' : 'default'}
           class="gap-2"
-          disabled={
-            modalBusy ||
+          disabled={modalBusy ||
             (modalRequiresPassphrase && modalPassphrase.trim().length === 0) ||
-            (modalRequiresMasterPassword && modalMasterPassword.trim().length === 0)
-          }
+            (modalRequiresMasterPassword && modalMasterPassword.trim().length === 0)}
           onclick={async () => {
             if (!modalOnConfirm) {
               closeModal();

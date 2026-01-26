@@ -138,7 +138,10 @@
       >
         <TriangleAlert class="mt-0.5 h-4 w-4" aria-hidden="true" />
         <p>
-          {t(locale, 'Increasing these parameters strengthens security but also slows down authentication.')}
+          {t(
+            locale,
+            'Increasing these parameters strengthens security but also slows down authentication.'
+          )}
         </p>
       </div>
 
@@ -326,7 +329,3 @@
     </CardContent>
   </Card>
 </div>
-
-
-
-

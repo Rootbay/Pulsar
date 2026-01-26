@@ -1,6 +1,6 @@
 <script lang="ts">
   import { generalSettings } from '$lib/stores/general';
-  import type { GeneralSettings } from '$lib/config/settings';
+  import type { AppLanguage, GeneralSettings } from '$lib/config/settings';
   import KeyboardShortcutsPopup from '$lib/components/KeyboardShortcutsPopup.svelte';
   import { Button } from '$lib/components/ui/button';
   import {
@@ -14,16 +14,25 @@
   import { Select, SelectContent, SelectItem, SelectTrigger } from '$lib/components/ui/select';
   import { Switch } from '$lib/components/ui/switch';
   import { Smartphone, Key, Lock, Settings } from '@lucide/svelte';
-  import { currentLocale, t } from '$lib/i18n';
+  import { currentLocale, t as translate, type I18nKey } from '$lib/i18n';
+
+  interface Props {
+    onclose?: () => void;
+  }
+
+  let { onclose }: Props = $props();
 
   type BooleanSettingKey = {
     [K in keyof GeneralSettings]: GeneralSettings[K] extends boolean ? K : never;
   }[keyof GeneralSettings];
 
   type SelectSettingKey = Exclude<keyof GeneralSettings, BooleanSettingKey>;
+  type NonLanguageSelectKey = Exclude<SelectSettingKey, 'appLanguage'>;
 
   let currentGeneralSettings = $state<GeneralSettings>({} as GeneralSettings);
   const locale = $derived($currentLocale);
+  const t = (key: I18nKey, vars: Record<string, string | number> = {}) =>
+    translate(locale, key, vars);
 
   $effect(() => {
     return generalSettings.subscribe((value) => {
@@ -32,17 +41,11 @@
   });
 
   let showKeyboardShortcutsPopup = $state(false);
+  let languageSearch = $state('');
 
-  const selectOptions: Record<SelectSettingKey, { value: string; label: string }[]> = {
-    appLanguage: [
-      { value: 'en', label: 'English' },
-      { value: 'es', label: 'Español' },
-      { value: 'fr', label: 'Français' },
-      { value: 'de', label: 'Deutsch' },
-      { value: 'pt-BR', label: 'Português (Brasil)' },
-      { value: 'zh', label: '简体中文' },
-      { value: 'sv', label: 'Svenska' }
-    ],
+  type LanguageOption = { value: AppLanguage; label: string; search: string };
+
+  const selectOptions: Record<NonLanguageSelectKey, { value: string; label: string }[]> = {
     defaultVaultOnStartup: [
       { value: '8 characters', label: '8 characters' },
       { value: '12 characters', label: '12 characters' },
@@ -59,38 +62,34 @@
     ]
   };
 
-  const toggleSettings: Array<{
-    key: BooleanSettingKey;
-    title: string;
-    description: string;
-    ariaLabel: string;
-  }> = [
+  const toggleSettings = $derived<
+    Array<{
+      key: BooleanSettingKey;
+      title: string;
+      description: string;
+      ariaLabel: string;
+    }>
+  >([
     {
       key: 'startOnSystemBoot',
-      title: 'Start on System Boot',
-      description: 'Launch automatically when your computer starts.',
-      ariaLabel: 'Toggle start on system boot'
+      title: t('settingsGeneralStartOnBootTitle'),
+      description: t('settingsGeneralStartOnBootDesc'),
+      ariaLabel: t('settingsGeneralStartOnBootAria')
     },
     {
       key: 'showInSystemTray',
-      title: 'Show in System Tray',
-      description: 'Keep the app accessible from the system tray.',
-      ariaLabel: 'Toggle show in system tray'
+      title: t('settingsGeneralShowInTrayTitle'),
+      description: t('settingsGeneralShowInTrayDesc'),
+      ariaLabel: t('settingsGeneralShowInTrayAria')
     }
-  ];
+  ]);
 
   const authenticationMethods: Array<{
     key: BooleanSettingKey;
-    title: string;
-    description: string;
-    ariaLabel: string;
     icon: typeof Smartphone;
   }> = [
     {
       key: 'totpEnabled',
-      title: 'TOTP (Time-based)',
-      description: 'Built-in authenticator support.',
-      ariaLabel: 'Toggle TOTP (Time-based)',
       icon: Smartphone
     }
   ];
@@ -103,11 +102,57 @@
     updateSetting(setting, !currentGeneralSettings[setting]);
   }
 
+  function getLanguageOptions(): LanguageOption[] {
+    return [
+      {
+        value: 'system',
+        label: t('settingsGeneralLanguageSystem'),
+        search: 'system auto os default'
+      },
+      { value: 'en', label: 'English', search: 'english en' },
+      { value: 'es', label: 'Español', search: 'spanish espanol es' },
+      { value: 'fr', label: 'Français', search: 'french francais fr' },
+      { value: 'de', label: 'Deutsch', search: 'german deutsch de' },
+      { value: 'pt-BR', label: 'Português (Brasil)', search: 'portuguese brasil br pt' },
+      { value: 'zh', label: '简体中文', search: 'chinese simplified zh' },
+      { value: 'sv', label: 'Svenska', search: 'swedish svenska sv' },
+      { value: 'ru', label: 'Русский', search: 'russian russkiy ru' },
+      { value: 'ja', label: '日本語', search: 'japanese nihongo ja' },
+      { value: 'hi', label: 'हिन्दी', search: 'hindi hi' },
+      { value: 'ko', label: '한국어', search: 'korean ko' },
+      { value: 'ar', label: 'العربية', search: 'arabic ar' },
+      { value: 'it', label: 'Italiano', search: 'italian it' },
+      { value: 'tr', label: 'Türkçe', search: 'turkish turkce tr' },
+      { value: 'nl', label: 'Nederlands', search: 'dutch nederlands nl' },
+      { value: 'pl', label: 'Polski', search: 'polish polski pl' },
+      { value: 'id', label: 'Bahasa Indonesia', search: 'indonesian bahasa indonesia id' },
+      { value: 'th', label: 'ไทย', search: 'thai th' },
+      { value: 'vi', label: 'Tiếng Việt', search: 'vietnamese tieng viet vi' },
+      { value: 'el', label: 'Ελληνικά', search: 'greek ellinika el' }
+    ];
+  }
+
+  function getFilteredLanguageOptions(): LanguageOption[] {
+    const options = getLanguageOptions();
+    const query = languageSearch.trim().toLowerCase();
+    if (!query) return options;
+    return options.filter((option) => {
+      const haystack = `${option.label} ${option.value} ${option.search}`.toLowerCase();
+      return haystack.includes(query);
+    });
+  }
+
   function getOptionLabel(setting: SelectSettingKey) {
+    if (setting === 'appLanguage') {
+      const option = getLanguageOptions().find(
+        (item) => item.value === currentGeneralSettings.appLanguage
+      );
+      return option?.label ?? t('settingsGeneralLanguageSystem');
+    }
     const option = selectOptions[setting].find(
       (item) => item.value === currentGeneralSettings[setting]
     );
-    return option?.label ?? 'Select an option';
+    return option?.label ?? t('settingsGeneralSelectOptionFallback');
   }
 </script>
 
@@ -121,9 +166,9 @@
           <Settings size={20} color="currentColor" aria-hidden="true" />
         </div>
         <div>
-          <CardTitle>{t(locale, 'General Settings')}</CardTitle>
+          <CardTitle>{t('settingsGeneralTitle')}</CardTitle>
           <CardDescription>
-            {t(locale, 'Manage default language, startup behaviour, and layout.')}
+            {t('settingsGeneralDescription')}
           </CardDescription>
         </div>
       </div>
@@ -132,23 +177,45 @@
       <div class="grid gap-6 md:grid-cols-2">
         <div class="space-y-2">
           <Label class="text-foreground text-sm font-medium">
-            {t(locale, 'App Language')}
+            {t('settingsGeneralLanguageLabel')}
           </Label>
           {#each [locale] as l (l)}
             <Select
               type="single"
               value={currentGeneralSettings.appLanguage}
-              onValueChange={(value) => updateSetting('appLanguage', value)}
+              onValueChange={(value) => {
+                const next = getLanguageOptions().find((option) => option.value === value)?.value;
+                if (!next) return;
+                updateSetting('appLanguage', next);
+                languageSearch = '';
+              }}
             >
-              <SelectTrigger aria-label="Select app language" class="w-full">
+              <SelectTrigger aria-label={t('settingsGeneralLanguageAria')} class="w-full">
                 <span data-slot="select-value" class="truncate">
                   {getOptionLabel('appLanguage')}
                 </span>
               </SelectTrigger>
               <SelectContent>
-                {#each selectOptions.appLanguage as option (option.value)}
-                  <SelectItem value={option.value}>{option.label}</SelectItem>
-                {/each}
+                <div class="px-2 pt-2">
+                  <input
+                    class="border-border/60 bg-muted/30 focus:border-primary focus:ring-primary/30 text-foreground placeholder:text-muted-foreground w-full rounded-md border px-3 py-2 text-sm outline-none focus:ring-2"
+                    type="text"
+                    placeholder={t('settingsGeneralLanguageSearchPlaceholder')}
+                    aria-label={t('settingsGeneralLanguageSearchPlaceholder')}
+                    bind:value={languageSearch}
+                  />
+                </div>
+                <div class="max-h-64 overflow-y-auto pb-1">
+                  {#if getFilteredLanguageOptions().length === 0}
+                    <div class="text-muted-foreground px-3 py-2 text-sm">
+                      {t('settingsGeneralLanguageNoResults')}
+                    </div>
+                  {:else}
+                    {#each getFilteredLanguageOptions() as option (option.value)}
+                      <SelectItem value={option.value}>{option.label}</SelectItem>
+                    {/each}
+                  {/if}
+                </div>
               </SelectContent>
             </Select>
           {/each}
@@ -156,14 +223,14 @@
 
         <div class="space-y-2">
           <Label class="text-foreground text-sm font-medium">
-            {t(locale, 'Default Vault on Startup')}
+            {t('settingsGeneralDefaultVaultLabel')}
           </Label>
           <Select
             type="single"
             value={currentGeneralSettings.defaultVaultOnStartup}
             onValueChange={(value) => updateSetting('defaultVaultOnStartup', value)}
           >
-            <SelectTrigger aria-label="Select default vault on startup" class="w-full">
+            <SelectTrigger aria-label={t('settingsGeneralDefaultVaultAria')} class="w-full">
               <span data-slot="select-value" class="truncate">
                 {getOptionLabel('defaultVaultOnStartup')}
               </span>
@@ -184,18 +251,10 @@
           >
             <div class="space-y-1">
               <p class="text-foreground text-sm font-medium">
-                {locale === 'sv' && toggleSetting.key === 'startOnSystemBoot'
-                  ? 'Starta med systemet'
-                  : locale === 'sv' && toggleSetting.key === 'showInSystemTray'
-                    ? 'Visa i systemfältet'
-                    : toggleSetting.title}
+                {toggleSetting.title}
               </p>
               <p class="text-muted-foreground text-sm">
-                {locale === 'sv' && toggleSetting.key === 'startOnSystemBoot'
-                  ? 'Öppna Pulsar automatiskt när datorn startar.'
-                  : locale === 'sv' && toggleSetting.key === 'showInSystemTray'
-                    ? 'Håll appen tillgänglig från systemfältet.'
-                    : toggleSetting.description}
+                {toggleSetting.description}
               </p>
             </div>
             <Switch
@@ -209,14 +268,14 @@
 
       <div class="space-y-2">
         <Label class="text-foreground text-sm font-medium">
-          {t(locale, 'Default View on Open')}
+          {t('settingsGeneralDefaultViewLabel')}
         </Label>
         <Select
           type="single"
           value={currentGeneralSettings.defaultViewOnOpen}
           onValueChange={(value) => updateSetting('defaultViewOnOpen', value)}
         >
-          <SelectTrigger aria-label="Select default view on open" class="w-full md:w-80">
+          <SelectTrigger aria-label={t('settingsGeneralDefaultViewAria')} class="w-full md:w-80">
             <span data-slot="select-value" class="truncate">
               {getOptionLabel('defaultViewOnOpen')}
             </span>
@@ -243,16 +302,16 @@
         </div>
         <div>
           <CardTitle>
-            {t(locale, 'Two-Factor Authentication')}
+            {t('settingsGeneralTwoFactorTitle')}
           </CardTitle>
           <CardDescription>
-            {t(locale, 'Add extra layers of protection to vault access.')}
+            {t('settingsGeneralTwoFactorDesc')}
           </CardDescription>
         </div>
       </div>
       <Switch
         checked={currentGeneralSettings.enable2FAForUnlock}
-        aria-label="Toggle enable 2FA for unlock"
+        aria-label={t('settingsGeneralTwoFactorAria')}
         onclick={() => toggleSwitch('enable2FAForUnlock')}
       />
     </CardHeader>
@@ -263,22 +322,21 @@
         >
           <div class="space-y-1">
             <p class="text-foreground text-sm font-medium">
-              {t(locale, 'TOTP (Time-based)')}
+              {t('settingsGeneralTotpTitle')}
             </p>
             <p class="text-muted-foreground text-sm">
-              {t(locale, 'Built-in authenticator support.')}
+              {t('settingsGeneralTotpDesc')}
             </p>
           </div>
           <Switch
             checked={currentGeneralSettings[method.key]}
-            aria-label={method.ariaLabel}
+            aria-label={t('settingsGeneralTotpAria')}
             onclick={() => toggleSwitch(method.key)}
           />
         </div>
       {/each}
       <p class="text-muted-foreground text-sm">
-        Configure per-vault overrides from the vaults settings page to enforce different
-        requirements.
+        {t('settingsGeneralTwoFactorNote')}
       </p>
     </CardContent>
   </Card>
@@ -295,10 +353,10 @@
         </div>
         <div>
           <CardTitle>
-            {t(locale, 'Keyboard Shortcuts')}
+            {t('settingsGeneralKeyboardTitle')}
           </CardTitle>
           <CardDescription>
-            {t(locale, 'Customize shortcuts for frequently used actions.')}
+            {t('settingsGeneralKeyboardDesc')}
           </CardDescription>
         </div>
       </div>
@@ -308,12 +366,12 @@
         class="mt-3 sm:mt-0"
         onclick={() => (showKeyboardShortcutsPopup = true)}
       >
-        {t(locale, 'Configure Shortcuts')}
+        {t('settingsGeneralKeyboardCta')}
       </Button>
     </CardHeader>
     <CardContent class="pt-4">
       <p class="text-muted-foreground text-sm">
-        {t(locale, 'Personalize key combinations to match your workflow and speed up navigation.')}
+        {t('settingsGeneralKeyboardBody')}
       </p>
     </CardContent>
   </Card>

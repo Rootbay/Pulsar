@@ -129,7 +129,7 @@
   let pendingTagOrder = $state<string | null>(null);
   let dndItems = $state<DisplayField[]>([]);
   let showSkeletonDetail = $state(false);
-  let skeletonTimerDetail: ReturnType<typeof setTimeout> | null = null;
+  let skeletonTimerDetail: ReturnType<typeof setTimeout> | undefined = undefined;
   let totpSecondsRemaining = $state(0);
   let totpCode = $state<string | null>(null);
   let totpCodeError = $state<string | null>(null);
@@ -262,11 +262,11 @@
             ? dndItems.length
             : filteredDisplayFields.length
           : 0;
-        if (count > 0) {
-          showSkeletonDetail = true;
-          clearTimeout(skeletonTimerDetail);
-          skeletonTimerDetail = setTimeout(() => {
-            showSkeletonDetail = false;
+          if (count > 0) {
+            showSkeletonDetail = true;
+            clearTimeout(skeletonTimerDetail);
+            skeletonTimerDetail = setTimeout(() => {
+              showSkeletonDetail = false;
           }, 200);
         }
       })();

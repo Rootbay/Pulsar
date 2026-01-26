@@ -41,7 +41,12 @@ function createTagStore() {
   };
 
   const updateTag = async (tag: TagButton) => {
-    await callBackend('update_button', tag);
+    await callBackend('update_button', {
+      id: tag.id,
+      text: tag.text,
+      icon: tag.icon,
+      color: tag.color
+    });
     update((items) => items.map((item) => (item.id === tag.id ? tag : item)));
   };
 

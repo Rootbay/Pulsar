@@ -78,11 +78,7 @@
           {t(locale, 'Application Information')}
         </CardTitle>
         <CardDescription>
-          {t(
-            locale,
-            'Version details and update status.',
-            'Versionsinformation och uppdateringsstatus.'
-          )}
+          {t(locale, 'Version details and update status.')}
         </CardDescription>
       </div>
     </CardHeader>
@@ -106,11 +102,7 @@
             {t(locale, 'Check for Updates')}
           </h3>
           <p class="text-muted-foreground text-sm">
-            {t(
-              locale,
-              'Check if a newer version is available',
-              'Kontrollera om en nyare version finns tillgänglig'
-            )}
+            {t(locale, 'Check if a newer version is available')}
           </p>
         </div>
         <Button class="shrink-0" onclick={checkForUpdates} disabled={updateStatus !== 'idle'}>
@@ -141,11 +133,7 @@
           {t(locale, 'Documentation & Support')}
         </CardTitle>
         <CardDescription>
-          {t(
-            locale,
-            'Find helpful resources and get in touch.',
-            'Hitta hjälpresurser och kontakta oss.'
-          )}
+          {t(locale, 'Find helpful resources and get in touch.')}
         </CardDescription>
       </div>
     </CardHeader>
@@ -184,11 +172,7 @@
           {t(locale, 'Diagnostic Tools')}
         </CardTitle>
         <CardDescription>
-          {t(
-            locale,
-            'Tools for troubleshooting and support.',
-            'Verktyg för felsökning och support.'
-          )}
+          {t(locale, 'Tools for troubleshooting and support.')}
         </CardDescription>
       </div>
     </CardHeader>
@@ -223,11 +207,7 @@
             {t(locale, 'Upload Diagnostics to Support')}
           </h3>
           <p class="text-muted-foreground text-sm">
-            {t(
-              locale,
-              'Help us identify and fix issues faster',
-              'Hjälp oss hitta och åtgärda problem snabbare'
-            )}
+            {t(locale, 'Help us identify and fix issues faster')}
           </p>
         </div>
         <div class="flex items-center gap-3">

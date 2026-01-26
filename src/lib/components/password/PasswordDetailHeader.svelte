@@ -38,8 +38,9 @@
 
     onEnterEditMode?: () => void;
     onSave?: () => void;
+    onHandleReset?: () => void;
     onRemoveEntry?: (id: number | undefined) => void;
-    onTagsReorderedPending?: (detail: { items: unknown[] }) => void;
+    onTagsReorderedPending?: (detail: { tags: string }) => void;
   }
 
   let {
@@ -49,6 +50,7 @@
     buttons,
     onEnterEditMode,
     onSave,
+    onHandleReset,
     onRemoveEntry,
     onTagsReorderedPending
   }: Props = $props();

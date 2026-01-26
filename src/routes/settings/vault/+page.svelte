@@ -158,7 +158,7 @@
     if (status === 'unlocked') return t(locale, 'settingsVaultStatusUnlocked');
     if (status === 'locked') return t(locale, 'settingsVaultStatusLocked');
     if (status === 'available') return t(locale, 'settingsVaultStatusAvailable');
-    return status.charAt(0).toUpperCase() + status.slice(1);
+    return t(locale, 'settingsVaultUnknown');
   }
 
   async function refreshVaults({ preserveSelection = true } = {}): Promise<void> {

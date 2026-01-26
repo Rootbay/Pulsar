@@ -39,6 +39,7 @@
   import { currentLocale, t, type Locale } from '$lib/i18n';
 
   const locale = $derived($currentLocale);
+  const isDev = import.meta.env.DEV;
 
   const frequencies = [
     { value: 'daily', label: 'Daily (Default)' },
@@ -113,9 +114,11 @@
 
   let modalOnConfirm: ModalConfirmHandler | null = null;
   let modalPassphrase = '';
+  let modalMasterPassword = '';
   let modalBusy = false;
   let modalError: string | null = null;
   let modalRequiresPassphrase = true;
+  let modalRequiresMasterPassword = false;
   let modalStatus: string | null = null;
   let feedback: { type: 'success' | 'error'; message: string } | null = null;
 
@@ -130,6 +133,7 @@
     confirmLabel = 'Continue',
     danger = false,
     requiresPassphrase = true,
+    requiresMasterPassword = false,
     onConfirm
   }: {
     title: string;
@@ -137,6 +141,7 @@
     confirmLabel?: string;
     danger?: boolean;
     requiresPassphrase?: boolean;
+    requiresMasterPassword?: boolean;
     onConfirm: ModalConfirmHandler;
   }) {
     modalTitle = title;
@@ -144,9 +149,11 @@
     modalConfirmLabel = confirmLabel;
     modalDanger = danger;
     modalPassphrase = '';
+    modalMasterPassword = '';
     modalError = null;
     modalBusy = false;
     modalRequiresPassphrase = requiresPassphrase;
+    modalRequiresMasterPassword = requiresMasterPassword;
     modalOnConfirm = onConfirm;
     modalStatus = null;
     showModal = true;
@@ -156,6 +163,7 @@
     showModal = false;
     modalOnConfirm = null;
     modalPassphrase = '';
+    modalMasterPassword = '';
     modalError = null;
     modalBusy = false;
     modalStatus = null;
@@ -164,14 +172,13 @@
   async function handleManualBackup() {
     openModal({
       title: t(locale, 'Create manual backup?'),
-      description: t(
-        locale,
-        'This creates a fresh encrypted backup of your vault using the active settings.',
-        'Detta skapar en ny krypterad säkerhetskopia av ditt valv baserat på aktuella inställningar.'
-      ),
+      description: t(locale, 'This creates a fresh encrypted backup of your vault using the active settings.'),
       confirmLabel: t(locale, 'Export backup'),
+      requiresMasterPassword: true,
       onConfirm: async (passphrase) => {
-        const message = await exportVaultBackup(passphrase);
+        const message = await exportVaultBackup(passphrase, {
+          masterPassword: modalMasterPassword
+        });
         feedback = { type: 'success', message };
       }
     });
@@ -180,14 +187,13 @@
   async function handleExportEncrypted() {
     openModal({
       title: t(locale, 'Export encrypted data?'),
-      description: t(
-        locale,
-        'Export your vault in encrypted form. Keep the generated file secure.',
-        'Exportera ditt valv i krypterad form. Förvara den skapade filen säkert.'
-      ),
+      description: t(locale, 'Export your vault in encrypted form. Keep the generated file secure.'),
       confirmLabel: t(locale, 'Export encrypted'),
+      requiresMasterPassword: true,
       onConfirm: async (passphrase) => {
-        const message = await exportVaultBackup(passphrase);
+        const message = await exportVaultBackup(passphrase, {
+          masterPassword: modalMasterPassword
+        });
         feedback = { type: 'success', message };
       }
     });
@@ -196,15 +202,15 @@
   async function handleExportPlaintext() {
     openModal({
       title: t(locale, 'Export plaintext data?'),
-      description: t(
-        locale,
-        'WARNING: This exports all vault contents without encryption. Only proceed on trusted devices.',
-        'VARNING: Detta exporterar allt innehåll i valvet utan kryptering. Fortsätt bara på betrodda enheter.'
-      ),
+      description: t(locale, 'WARNING: This exports all vault contents without encryption. Only proceed on trusted devices.'),
       confirmLabel: t(locale, 'Export plaintext'),
       danger: true,
+      requiresMasterPassword: true,
       onConfirm: async (passphrase) => {
-        const message = await exportVaultBackup(passphrase, { plaintext: true });
+        const message = await exportVaultBackup(passphrase, {
+          plaintext: true,
+          masterPassword: modalMasterPassword
+        });
         feedback = { type: 'success', message };
       }
     });
@@ -213,14 +219,12 @@
   async function handleImport() {
     openModal({
       title: t(locale, 'Start import process?'),
-      description: t(
-        locale,
-        'Select a previous Pulsar backup and provide its passphrase to restore your vault contents.',
-        'Välj en tidigare Pulsar-säkerhetskopia och ange dess lösenfras för att återställa ditt valv.'
-      ),
+      description: t(locale, 'Select a previous Pulsar backup and provide its passphrase to restore your vault contents.'),
       confirmLabel: t(locale, 'Import backup'),
+      requiresMasterPassword: true,
       onConfirm: async (passphrase) => {
         const snapshot = await importVaultBackup(passphrase, {
+          masterPassword: modalMasterPassword,
           onProgress: (stage) => {
             modalStatus = importProgressMessages[stage];
           }
@@ -267,6 +271,7 @@
     openModal({
       title: t(locale, 'Configure {provider}', { provider }),
       description: t(locale, 'Provide credentials for your {provider} connection.', { provider }),
+      requiresMasterPassword: false,
       onConfirm: () => {}
     });
   }
@@ -298,17 +303,13 @@
         <div>
           <CardTitle>{t(locale, 'Backups')}</CardTitle>
           <CardDescription>
-            {t(
-              locale,
-              'Manage automated and on-demand backups for your vault.',
-              'Hantera automatiska och manuella säkerhetskopior av ditt valv.'
-            )}
+            {t(locale, 'Manage automated and on-demand backups for your vault.')}
           </CardDescription>
         </div>
       </div>
       <Badge variant="secondary" class="w-fit">
         {t(locale, 'Retaining')}
-        {$state.retentionCount}
+        {$backupSettings.retentionCount}
         {t(locale, 'copies')}
       </Badge>
     </CardHeader>
@@ -323,15 +324,11 @@
               {t(locale, 'Automatic backups')}
             </p>
             <p class="text-muted-foreground text-xs">
-              {t(
-                locale,
-                'Create backups at regular intervals based on your chosen schedule.',
-                'Skapa säkerhetskopior med jämna mellanrum enligt ditt schema.'
-              )}
+              {t(locale, 'Create backups at regular intervals based on your chosen schedule.')}
             </p>
           </div>
           <Switch
-            checked={$state.automaticBackups}
+            checked={$backupSettings.automaticBackups}
             aria-label="Toggle automatic backups"
             onclick={() => toggleSetting('automaticBackups')}
           />
@@ -343,10 +340,14 @@
               {t(locale, 'Backup frequency')}
             </Label>
             {#key locale}
-              <Select type="single" value={$state.backupFrequency} onValueChange={updateFrequency}>
+              <Select
+                type="single"
+                value={$backupSettings.backupFrequency}
+                onValueChange={updateFrequency}
+              >
                 <SelectTrigger aria-label="Select backup frequency" class="w-full">
                   <span data-slot="select-value" class="truncate text-sm">
-                    {getFrequencyLabel($state.backupFrequency, locale) ??
+                    {getFrequencyLabel($backupSettings.backupFrequency, locale) ??
                       t(locale, 'Select frequency')}
                   </span>
                 </SelectTrigger>
@@ -370,15 +371,11 @@
               type="number"
               min="1"
               max="100"
-              value={$state.retentionCount}
+              value={$backupSettings.retentionCount}
               oninput={updateRetention}
             />
             <p class="text-muted-foreground text-xs">
-              {t(
-                locale,
-                'Number of backup versions to keep on disk.',
-                'Antal säkerhetskopior som ska sparas på disk.'
-              )}
+              {t(locale, 'Number of backup versions to keep on disk.')}
             </p>
           </div>
         </div>
@@ -407,11 +404,7 @@
       <div>
         <CardTitle>{t(locale, 'Export options')}</CardTitle>
         <CardDescription>
-          {t(
-            locale,
-            'Generate encrypted or plaintext exports of your vault.',
-            'Skapa krypterade eller okrypterade exporter av ditt valv.'
-          )}
+          {t(locale, 'Generate encrypted or plaintext exports of your vault.')}
         </CardDescription>
       </div>
     </CardHeader>
@@ -430,38 +423,36 @@
           </Button>
         </div>
 
-        <div class="border-border/60 bg-muted/10 space-y-2 rounded-xl border p-4">
-          <div class="flex items-center gap-2">
-            <ShieldAlert class="text-destructive size-4" aria-hidden="true" />
-            <p class="text-foreground text-sm font-semibold">
-              {t(locale, 'Plaintext export')}
+        {#if isDev}
+          <div class="border-border/60 bg-muted/10 space-y-2 rounded-xl border p-4">
+            <div class="flex items-center gap-2">
+              <ShieldAlert class="text-destructive size-4" aria-hidden="true" />
+              <p class="text-foreground text-sm font-semibold">
+                {t(locale, 'Plaintext export')}
+              </p>
+            </div>
+            <p class="text-muted-foreground text-xs">
+              {t(locale, 'Only use on trusted devices. Sensitive data remains unprotected.')}
             </p>
+            <div class="flex items-center justify-between gap-2">
+              <Switch
+                checked={$backupSettings.enablePlaintextExport}
+                aria-label="Allow plaintext exports"
+                onclick={() => toggleSetting('enablePlaintextExport')}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                class="text-destructive gap-2"
+                onclick={handleExportPlaintext}
+                disabled={!$backupSettings.enablePlaintextExport}
+              >
+                <Shield class="size-4" aria-hidden="true" />
+                {t(locale, 'Export plaintext')}
+              </Button>
+            </div>
           </div>
-          <p class="text-muted-foreground text-xs">
-            {t(
-              locale,
-              'Only use on trusted devices. Sensitive data remains unprotected.',
-              'Använd endast på betrodda enheter. Känslig data förblir oskyddad.'
-            )}
-          </p>
-          <div class="flex items-center justify-between gap-2">
-            <Switch
-              checked={$state.enablePlaintextExport}
-              aria-label="Allow plaintext exports"
-              onclick={() => toggleSetting('enablePlaintextExport')}
-            />
-            <Button
-              type="button"
-              variant="outline"
-              class="text-destructive gap-2"
-              onclick={handleExportPlaintext}
-              disabled={!$state.enablePlaintextExport}
-            >
-              <Shield class="size-4" aria-hidden="true" />
-              {t(locale, 'Export plaintext')}
-            </Button>
-          </div>
-        </div>
+        {/if}
       </div>
     </CardContent>
   </Card>
@@ -476,11 +467,7 @@
       <div>
         <CardTitle>{t(locale, 'Sync')}</CardTitle>
         <CardDescription>
-          {t(
-            locale,
-            'Configure cloud providers to replicate backups across devices.',
-            'Konfigurera molnleverantörer för att replikera säkerhetskopior mellan enheter.'
-          )}
+          {t(locale, 'Configure cloud providers to replicate backups across devices.')}
         </CardDescription>
       </div>
     </CardHeader>
@@ -491,11 +478,11 @@
             type="button"
             class={cn(
               'border-border/60 bg-background/70 flex h-full flex-col items-start gap-3 rounded-xl border p-4 text-left transition',
-              $state.syncMode === mode.id
+              $backupSettings.syncMode === mode.id
                 ? 'border-primary/60 bg-primary/10 text-primary shadow-sm'
                 : 'hover:border-primary/40 hover:bg-muted/40'
             )}
-            aria-pressed={$state.syncMode === mode.id}
+            aria-pressed={$backupSettings.syncMode === mode.id}
             onclick={() => updateSyncMode(mode.id)}
           >
             <mode.icon class="size-5" aria-hidden="true" />
@@ -509,18 +496,10 @@
               </p>
               <p class="text-muted-foreground text-xs">
                 {mode.id === 'off'
-                  ? t(
-                      locale,
-                      'Backups stay local to this device.',
-                      'Säkerhetskopior stannar lokalt på denna enhet.'
-                    )
+                  ? t(locale, 'Backups stay local to this device.')
                   : mode.id === 'manual'
                     ? t(locale, 'Trigger cloud sync on demand.')
-                    : t(
-                        locale,
-                        'Keep cloud copy in sync automatically.',
-                        'Håll molnkopian synkroniserad automatiskt.'
-                      )}
+                    : t(locale, 'Keep cloud copy in sync automatically.')}
               </p>
             </div>
           </button>
@@ -535,11 +514,11 @@
             type="button"
             class={cn(
               'border-border/60 bg-background/70 flex h-full flex-col items-start gap-3 rounded-xl border p-4 text-left transition',
-              $state.selectedProvider === provider.id
+              $backupSettings.selectedProvider === provider.id
                 ? 'border-primary/60 bg-primary/10 text-primary shadow-sm'
                 : 'hover:border-primary/40 hover:bg-muted/40'
             )}
-            aria-pressed={$state.selectedProvider === provider.id}
+            aria-pressed={$backupSettings.selectedProvider === provider.id}
             onclick={() => openProvider(provider.id)}
           >
             <provider.icon class="size-5" aria-hidden="true" />
@@ -598,11 +577,28 @@
             }}
           />
           <p class="text-muted-foreground text-xs">
-            {t(
-              locale,
-              'This passphrase encrypts or decrypts your vault backup. Use the same passphrase you will remember later.',
-              'Denna lösenfras krypterar eller dekrypterar din säkerhetskopia. Använd en lösenfras du kommer ihåg.'
-            )}
+            {t(locale, 'This passphrase encrypts or decrypts your vault backup. Use the same passphrase you will remember later.')}
+          </p>
+        </div>
+      {/if}
+
+      {#if modalRequiresMasterPassword}
+        <div class="mt-4 space-y-2">
+          <Label for="master-password" class="text-foreground text-sm font-medium">
+            {t(locale, 'loginMasterPasswordLabel')}
+          </Label>
+          <Input
+            id="master-password"
+            type="password"
+            autocomplete="current-password"
+            value={modalMasterPassword}
+            oninput={(event) => {
+              modalMasterPassword = (event.target as HTMLInputElement).value;
+              modalError = null;
+            }}
+          />
+          <p class="text-muted-foreground text-xs">
+            {t(locale, 'Confirm with your master password to proceed.')}
           </p>
         </div>
       {/if}
@@ -626,7 +622,11 @@
           type="button"
           variant={modalDanger ? 'destructive' : 'default'}
           class="gap-2"
-          disabled={modalBusy || (modalRequiresPassphrase && modalPassphrase.trim().length === 0)}
+          disabled={
+            modalBusy ||
+            (modalRequiresPassphrase && modalPassphrase.trim().length === 0) ||
+            (modalRequiresMasterPassword && modalMasterPassword.trim().length === 0)
+          }
           onclick={async () => {
             if (!modalOnConfirm) {
               closeModal();
@@ -634,8 +634,13 @@
             }
 
             const trimmed = modalPassphrase.trim();
+            const masterTrimmed = modalMasterPassword.trim();
             if (modalRequiresPassphrase && trimmed.length === 0) {
               modalError = 'A passphrase is required.';
+              return;
+            }
+            if (modalRequiresMasterPassword && masterTrimmed.length === 0) {
+              modalError = t(locale, 'loginMasterPasswordPlaceholder');
               return;
             }
 

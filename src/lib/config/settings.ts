@@ -84,8 +84,31 @@ export const defaultClipboardSettings: ClipboardSettings = {
   permissionLevel: 'ask'
 };
 
+export type AppLanguage =
+  | 'system'
+  | 'en'
+  | 'sv'
+  | 'es'
+  | 'fr'
+  | 'de'
+  | 'pt-BR'
+  | 'zh'
+  | 'ru'
+  | 'ja'
+  | 'hi'
+  | 'ko'
+  | 'ar'
+  | 'it'
+  | 'tr'
+  | 'nl'
+  | 'pl'
+  | 'id'
+  | 'th'
+  | 'vi'
+  | 'el';
+
 export interface GeneralSettings {
-  appLanguage: string;
+  appLanguage: AppLanguage;
   defaultVaultOnStartup: string;
   startOnSystemBoot: boolean;
   showInSystemTray: boolean;
@@ -95,7 +118,7 @@ export interface GeneralSettings {
 }
 
 export const defaultGeneralSettings: GeneralSettings = {
-  appLanguage: 'en',
+  appLanguage: 'system',
   defaultVaultOnStartup: '16 characters',
   startOnSystemBoot: true,
   showInSystemTray: true,
@@ -133,6 +156,7 @@ export const defaultGeneratorSettings: GeneratorSettings = {
 export interface SecuritySettings {
   lockOnSuspend: boolean;
   lockOnMinimize: boolean;
+  lockGraceSeconds: number;
   autoLockInactivity: string;
   biometricUnlock: boolean;
   sessionPersistence: boolean;
@@ -147,6 +171,7 @@ export interface SecuritySettings {
 export const defaultSecuritySettings: SecuritySettings = {
   lockOnSuspend: true,
   lockOnMinimize: false,
+  lockGraceSeconds: 5,
   autoLockInactivity: '5 minutes',
   biometricUnlock: true,
   sessionPersistence: false,

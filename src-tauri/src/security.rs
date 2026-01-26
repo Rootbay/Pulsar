@@ -180,7 +180,6 @@ pub struct SecurityReport {
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ReusedPasswordGroup {
-    pub password_hash: String,
     pub item_ids: Vec<i64>,
     pub count: usize,
 }
@@ -205,13 +204,7 @@ pub async fn get_security_report(state: State<'_, AppState>) -> Result<SecurityR
 
     for (password, ids) in password_map {
         if ids.len() > 1 {
-            use sha2::{Sha256, Digest};
-            let mut hasher = Sha256::new();
-            hasher.update(password.as_bytes());
-            let hash = hex::encode(hasher.finalize());
-
             reused_passwords.push(ReusedPasswordGroup {
-                password_hash: hash,
                 item_ids: ids.clone(),
                 count: ids.len(),
             });

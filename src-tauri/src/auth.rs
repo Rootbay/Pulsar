@@ -12,7 +12,6 @@ use hkdf::Hkdf;
 use sha2::Sha256;
 use subtle::ConstantTimeEq;
 use keyring::Entry;
-use tokio::sync::Semaphore;
 use rand::rngs::OsRng;
 use rand::RngCore;
 use serde::{Deserialize, Serialize};
@@ -24,7 +23,6 @@ use std::time::Instant;
 use tauri::{AppHandle, State};
 use tauri_plugin_clipboard_manager::ClipboardExt;
 use tokio::fs;
-use tokio::io::AsyncWriteExt;
 use tokio::time::Duration;
 use totp_rs::{Algorithm as TotpAlgorithm, Secret, TOTP};
 use zeroize::{Zeroize, Zeroizing};
@@ -40,6 +38,10 @@ const ARGON2_MAX_MEMORY_KIB: u32 = 1024 * 1024;
 const ARGON2_MAX_TIME_COST: u32 = 10;
 const ARGON2_MAX_PARALLELISM: u32 = 16;
 pub const UNLOCK_CONCURRENCY_LIMIT: usize = 1;
+const SQLCIPHER_PAGE_SIZE: i64 = 4096;
+const SQLCIPHER_KDF_ITER: i64 = 256_000;
+const SQLCIPHER_HMAC_ALG: &str = "HMAC_SHA512";
+const SQLCIPHER_KDF_ALG: &str = "PBKDF2_HMAC_SHA512";
 
 #[cfg(target_os = "macos")]
 #[link(name = "LocalAuthentication", kind = "framework")]
@@ -686,6 +688,25 @@ fn build_attach_cmd(path: &Path, hex_key: &str) -> String {
     )
 }
 
+async fn apply_sqlcipher_pragmas(
+    conn: &mut SqliteConnection,
+    db_name: Option<&str>,
+) -> Result<()> {
+    let prefix = db_name.map(|name| format!("{}.", name)).unwrap_or_default();
+    let statements = [
+        format!("PRAGMA {}cipher_page_size = {}", prefix, SQLCIPHER_PAGE_SIZE),
+        format!("PRAGMA {}kdf_iter = {}", prefix, SQLCIPHER_KDF_ITER),
+        format!("PRAGMA {}cipher_hmac_algorithm = {}", prefix, SQLCIPHER_HMAC_ALG),
+        format!("PRAGMA {}cipher_kdf_algorithm = {}", prefix, SQLCIPHER_KDF_ALG),
+    ];
+
+    for stmt in statements {
+        let _ = sqlx::query(&stmt).execute(&mut *conn).await;
+    }
+
+    Ok(())
+}
+
 async fn attach_encrypted_db(
     conn: &mut SqliteConnection,
     path: &Path,
@@ -693,7 +714,10 @@ async fn attach_encrypted_db(
 ) -> Result<()> {
     let attach_cmd = build_attach_cmd(path, hex_key);
     match sqlx::query(&attach_cmd).execute(&mut *conn).await {
-        Ok(_) => Ok(()),
+        Ok(_) => {
+            let _ = apply_sqlcipher_pragmas(conn, Some("encrypted")).await;
+            Ok(())
+        }
         Err(err) => {
             if is_unable_to_open_db_error(&err) {
                 if let Some(parent) = path.parent() {
@@ -705,6 +729,7 @@ async fn attach_encrypted_db(
                     .open(path)
                     .await;
                 sqlx::query(&attach_cmd).execute(&mut *conn).await?;
+                let _ = apply_sqlcipher_pragmas(conn, Some("encrypted")).await;
                 Ok(())
             } else {
                 Err(Error::Database(err))
@@ -1320,7 +1345,7 @@ pub async fn verify_login_totp(state: State<'_, AppState>, token: String) -> Res
         6,
         1,
         30,
-        secret_bytes,
+        secret_bytes.clone(),
         Some("Pulsar".to_string()),
         "vault".to_string(),
     )
@@ -1654,6 +1679,54 @@ pub async fn update_argon2_params(
     finalize_unlock(&state, new_key_z.clone()).await?;
 
     Ok(())
+}
+
+pub(crate) async fn verify_master_password_impl(
+    state: &State<'_, AppState>,
+    password: &str,
+) -> Result<bool> {
+    if password.trim().is_empty() {
+        return Err(Error::Validation("Master password is required.".to_string()));
+    }
+
+    let db_path = get_db_path(state).await?;
+    let metadata = match read_password_metadata(db_path.as_path()).await? {
+        Some(meta) => Some(meta),
+        None => {
+            let pool = get_db_pool(state).await?;
+            load_metadata_from_db(&pool).await?
+        }
+    };
+
+    let meta = metadata.ok_or_else(|| {
+        Error::Internal("Vault is not initialised with a master password.".to_string())
+    })?;
+    let (salt, nonce, ciphertext) = decode_metadata(&meta)?;
+    let argon_params = meta.argon2_params();
+    validate_argon_params(&argon_params)?;
+
+    let mut derived_key = derive_key(password, &salt, &argon_params)?;
+    let key_z = Zeroizing::new(derived_key.to_vec());
+    derived_key.zeroize();
+
+    let cipher = XChaCha20Poly1305::new(Key::from_slice(&key_z));
+    let mut decrypted = match cipher.decrypt(XNonce::from_slice(&nonce), ciphertext.as_ref()) {
+        Ok(value) => value,
+        Err(_) => return Ok(false),
+    };
+
+    let is_valid = decrypted.ct_eq(PASSWORD_CHECK_PLAINTEXT).unwrap_u8() == 1;
+    decrypted.zeroize();
+    Ok(is_valid)
+}
+
+#[tauri::command]
+pub async fn verify_master_password(
+    state: State<'_, AppState>,
+    password: String,
+) -> Result<bool> {
+    let password = Zeroizing::new(password);
+    verify_master_password_impl(&state, password.as_str()).await
 }
 
 #[tauri::command]

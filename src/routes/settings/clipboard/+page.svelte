@@ -152,11 +152,7 @@
       <div>
         <CardTitle>{t(locale, 'Core Integration')}</CardTitle>
         <CardDescription>
-          {t(
-            locale,
-            'Configure basic clipboard functionality.',
-            'Ställ in grundläggande urklippsfunktioner.'
-          )}
+          {t(locale, 'Configure basic clipboard functionality.')}
         </CardDescription>
       </div>
     </CardHeader>
@@ -167,11 +163,7 @@
             {t(locale, 'Clipboard integration')}
           </p>
           <p class="text-muted-foreground text-sm">
-            {t(
-              locale,
-              'Enable automatic clipboard functionality.',
-              'Aktivera automatisk hantering av urklipp.'
-            )}
+            {t(locale, 'Enable automatic clipboard functionality.')}
           </p>
         </div>
         <Switch
@@ -185,11 +177,7 @@
 
       {#if !$clipboardIntegrationState.integrationAvailable}
         <p class="text-destructive text-sm">
-          {t(
-            locale,
-            'Clipboard integration is currently unavailable.',
-            'Urklippsintegration är för närvarande inte tillgänglig.'
-          )}
+          {t(locale, 'Clipboard integration is currently unavailable.')}
         </p>
       {/if}
 
@@ -256,11 +244,7 @@
       <div>
         <CardTitle>{t(locale, 'Access control')}</CardTitle>
         <CardDescription>
-          {t(
-            locale,
-            'Fine-tune clipboard safety and permissions.',
-            'Finjustera säkerhet och behörigheter för urklipp.'
-          )}
+          {t(locale, 'Fine-tune clipboard safety and permissions.')}
         </CardDescription>
       </div>
     </CardHeader>
@@ -279,11 +263,7 @@
             </Badge>
           </div>
           <p class="text-muted-foreground text-sm">
-            {t(
-              locale,
-              'Prevent system clipboard history from storing entries.',
-              'Förhindra att systemets urklippshistorik sparar poster.'
-            )}
+            {t(locale, 'Prevent system clipboard history from storing entries.')}
           </p>
         </div>
         <Switch
@@ -298,11 +278,7 @@
 
       {#if !$clipboardIntegrationState.historyBlockingSupported}
         <p class="text-muted-foreground pl-11 text-xs">
-          {t(
-            locale,
-            'Clipboard history blocking is not supported on this platform.',
-            'Blockering av urklippshistorik stöds inte på denna plattform.'
-          )}
+          {t(locale, 'Clipboard history blocking is not supported on this platform.')}
         </p>
       {/if}
 
@@ -312,11 +288,7 @@
             {t(locale, 'Only allow on unlocked session')}
           </p>
           <p class="text-muted-foreground text-sm">
-            {t(
-              locale,
-              'Disable clipboard export when Pulsar is locked.',
-              'Inaktivera urklippsexport när Pulsar är låst.'
-            )}
+            {t(locale, 'Disable clipboard export when Pulsar is locked.')}
           </p>
         </div>
         <Switch
@@ -340,11 +312,7 @@
               {t(locale, 'Per-item clipboard permissions')}
             </p>
             <p class="text-muted-foreground text-sm">
-              {t(
-                locale,
-                'Choose how Pulsar prompts when copying credentials.',
-                'Välj hur Pulsar frågar när uppgifter kopieras.'
-              )}
+              {t(locale, 'Choose how Pulsar prompts when copying credentials.')}
             </p>
           </div>
         </div>
@@ -389,11 +357,7 @@
         {t(locale, 'Actions & monitoring')}
       </CardTitle>
       <CardDescription>
-        {t(
-          locale,
-          'Manual controls and local activity tracking.',
-          'Manuella kontroller och lokal aktivitetslogg.'
-        )}
+        {t(locale, 'Manual controls and local activity tracking.')}
       </CardDescription>
     </CardHeader>
     <CardContent class="space-y-6">

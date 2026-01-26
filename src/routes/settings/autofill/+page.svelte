@@ -61,11 +61,7 @@
     <CardHeader>
       <CardTitle>{t(locale, 'Browser Auto-fill')}</CardTitle>
       <CardDescription>
-        {t(
-          locale,
-          'Configure browser auto-fill settings.',
-          'Konfigurera inställningar för autofyll i webbläsare.'
-        )}
+        {t(locale, 'Configure browser auto-fill settings.')}
       </CardDescription>
     </CardHeader>
     <CardContent>
@@ -75,11 +71,7 @@
             {t(locale, 'Enable Auto-fill for Browsers')}
           </p>
           <p class="text-muted-foreground text-sm">
-            {t(
-              locale,
-              'Automatically fill login forms in web browsers.',
-              'Fyll i inloggningsformulär automatiskt i webbläsare.'
-            )}
+            {t(locale, 'Automatically fill login forms in web browsers.')}
           </p>
         </div>
         <Switch
@@ -95,11 +87,7 @@
     <CardHeader>
       <CardTitle>{t(locale, 'Global Auto-type')}</CardTitle>
       <CardDescription>
-        {t(
-          locale,
-          'Configure global auto-type settings.',
-          'Konfigurera globala inställningar för autotypning.'
-        )}
+        {t(locale, 'Configure global auto-type settings.')}
       </CardDescription>
     </CardHeader>
     <CardContent>
@@ -109,11 +97,7 @@
             {t(locale, 'Enable Global Auto-type')}
           </p>
           <p class="text-muted-foreground text-sm">
-            {t(
-              locale,
-              'Type passwords automatically using keyboard shortcuts.',
-              'Skriv lösenord automatiskt med tangentbordsgenvägar.'
-            )}
+            {t(locale, 'Type passwords automatically using keyboard shortcuts.')}
           </p>
         </div>
         <Switch
@@ -129,11 +113,7 @@
     <CardHeader>
       <CardTitle>{t(locale, 'Safety Checks')}</CardTitle>
       <CardDescription>
-        {t(
-          locale,
-          'Configure safety checks for autofill.',
-          'Konfigurera säkerhetskontroller för autofyll.'
-        )}
+        {t(locale, 'Configure safety checks for autofill.')}
       </CardDescription>
     </CardHeader>
     <CardContent class="space-y-6">
@@ -143,11 +123,7 @@
             {t(locale, 'Require OS-level Unlock for Auto-fill')}
           </p>
           <p class="text-muted-foreground text-sm">
-            {t(
-              locale,
-              'Require system authentication before auto-filling.',
-              'Kräv systemautentisering innan autofyll används.'
-            )}
+            {t(locale, 'Require system authentication before auto-filling.')}
           </p>
         </div>
         <Switch
@@ -162,11 +138,7 @@
             {t(locale, 'Require Per-site Confirmation')}
           </p>
           <p class="text-muted-foreground text-sm">
-            {t(
-              locale,
-              'Ask for confirmation before auto-filling on each site.',
-              'Fråga om bekräftelse innan autofyll på varje webbplats.'
-            )}
+            {t(locale, 'Ask for confirmation before auto-filling on each site.')}
           </p>
         </div>
         <Switch
@@ -182,11 +154,7 @@
     <CardHeader>
       <CardTitle>{t(locale, 'Test Auto-type')}</CardTitle>
       <CardDescription>
-        {t(
-          locale,
-          'Test your auto-type configuration.',
-          'Testa din konfiguration för autotypning.'
-        )}
+        {t(locale, 'Test your auto-type configuration.')}
       </CardDescription>
     </CardHeader>
     <CardContent class="space-y-6">
@@ -202,11 +170,7 @@
         >
           <TriangleAlert class="mt-0.5 size-4 shrink-0" />
           <span>
-            {t(
-              locale,
-              'Make sure you have a text field selected before testing.',
-              'Se till att ett textfält är markerat innan du testar.'
-            )}
+            {t(locale, 'Make sure you have a text field selected before testing.')}
           </span>
         </div>
       </div>

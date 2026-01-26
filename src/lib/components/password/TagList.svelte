@@ -11,7 +11,7 @@
   interface Props {
     selectedPasswordItem: PasswordItem | null;
     isEditing: boolean;
-    buttons: { text: string; color: string; icon: string; id?: string }[];
+    buttons: { text: string; color: string; icon: string; id?: number }[];
 
     onReorderPending?: (detail: { tags: string }) => void;
     onTagAdded?: () => void;

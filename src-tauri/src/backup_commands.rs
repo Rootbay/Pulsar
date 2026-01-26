@@ -1,3 +1,4 @@
+use crate::auth::verify_master_password_impl;
 use crate::encryption::{decrypt, decrypt_bytes, encrypt, encrypt_bytes};
 use crate::state::AppState;
 use crate::types::{ExportPayload, VaultBackupAttachment, VaultBackupSnapshot};
@@ -15,6 +16,8 @@ use rand::RngCore;
 use serde_json::{self, Value};
 use sqlx::{Error as SqlxError, Row, SqlitePool};
 use std::fs;
+use std::io::Write;
+use std::path::Path;
 use std::path::PathBuf;
 use tauri::command;
 use tauri::AppHandle;
@@ -63,6 +66,41 @@ async fn get_attachments_snapshot(db_pool: &SqlitePool, key: &[u8]) -> Result<Ve
     Ok(attachments)
 }
 
+fn write_sensitive_bytes(path: &Path, bytes: &[u8]) -> Result<()> {
+    let tmp_path = path.with_extension("tmp");
+    if tmp_path.exists() {
+        let _ = fs::remove_file(&tmp_path);
+    }
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        let mut file = fs::OpenOptions::new()
+            .create(true)
+            .write(true)
+            .truncate(true)
+            .mode(0o600)
+            .open(&tmp_path)?;
+        let _ = file.set_permissions(std::fs::Permissions::from_mode(0o600));
+        file.write_all(bytes)?;
+        file.sync_all()?;
+    }
+
+    #[cfg(not(unix))]
+    {
+        let mut file = fs::OpenOptions::new()
+            .create(true)
+            .write(true)
+            .truncate(true)
+            .open(&tmp_path)?;
+        file.write_all(bytes)?;
+        file.sync_all()?;
+    }
+
+    fs::rename(&tmp_path, path)?;
+    Ok(())
+}
+
 #[command]
 pub async fn export_vault_backend(
     app_handle: AppHandle,
@@ -70,9 +108,20 @@ pub async fn export_vault_backend(
     passphrase: Option<String>,
     is_plaintext: Option<bool>,
     destination: Option<String>,
+    reauth_password: Option<String>,
 ) -> Result<String> {
     let is_plaintext = is_plaintext.unwrap_or(false);
-    let passphrase_value = passphrase.unwrap_or_default();
+    if is_plaintext && !cfg!(debug_assertions) {
+        return Err(Error::Validation(
+            "Plaintext export is disabled in production builds.".to_string(),
+        ));
+    }
+    let reauth_password = Zeroizing::new(reauth_password.unwrap_or_default());
+    let reauth_ok = verify_master_password_impl(&state, reauth_password.as_str()).await?;
+    if !reauth_ok {
+        return Err(Error::InvalidPassword);
+    }
+    let passphrase_value = Zeroizing::new(passphrase.unwrap_or_default());
 
     if !is_plaintext && passphrase_value.is_empty() {
         return Err(Error::Validation("A passphrase is required to export the vault.".to_string()));
@@ -122,7 +171,7 @@ pub async fn export_vault_backend(
 
     if is_plaintext {
         let pretty_bytes = serde_json::to_vec_pretty(&snapshot)?;
-        fs::write(&path, pretty_bytes)?;
+        write_sensitive_bytes(&path, &pretty_bytes)?;
         return Ok(format!("Vault exported successfully to {}", path.display()));
     }
 
@@ -155,7 +204,7 @@ pub async fn export_vault_backend(
 
     let export_bytes = serde_json::to_vec_pretty(&export)?;
 
-    fs::write(&path, export_bytes)?;
+    write_sensitive_bytes(&path, &export_bytes)?;
     Ok(format!("Vault exported successfully to {}", path.display()))
 }
 
@@ -168,7 +217,12 @@ pub async fn export_vault(
     destination: Option<String>,
 ) -> Result<String> {
     let is_plaintext = is_plaintext.unwrap_or(false);
-    let passphrase_value = passphrase.unwrap_or_default();
+    if is_plaintext && !cfg!(debug_assertions) {
+        return Err(Error::Validation(
+            "Plaintext export is disabled in production builds.".to_string(),
+        ));
+    }
+    let passphrase_value = Zeroizing::new(passphrase.unwrap_or_default());
 
     if !is_plaintext && passphrase_value.is_empty() {
         return Err(Error::Validation("A passphrase is required to export the vault.".to_string()));
@@ -205,7 +259,7 @@ pub async fn export_vault(
             Err(_) => vault_data.as_bytes().to_vec(),
         };
 
-        fs::write(&path, pretty_bytes)?;
+        write_sensitive_bytes(&path, &pretty_bytes)?;
         return Ok(format!("Vault exported successfully to {}", path.display()));
     }
 
@@ -238,7 +292,7 @@ pub async fn export_vault(
 
     let export_bytes = serde_json::to_vec_pretty(&export)?;
 
-    fs::write(&path, export_bytes)?;
+    write_sensitive_bytes(&path, &export_bytes)?;
     Ok(format!("Vault exported successfully to {}", path.display()))
 }
 
@@ -248,7 +302,7 @@ pub async fn import_vault(
     passphrase: Option<String>,
     path: Option<String>,
 ) -> Result<String> {
-    let passphrase_value = passphrase.unwrap_or_default();
+    let passphrase_value = Zeroizing::new(passphrase.unwrap_or_default());
     if passphrase_value.is_empty() {
         return Err(Error::Validation("A passphrase is required to import the vault.".to_string()));
     }
@@ -272,6 +326,12 @@ pub async fn import_vault(
             None => return Err(Error::Internal("File open dialog was cancelled.".into())),
         }
     };
+
+    if path.extension().and_then(|s| s.to_str()) == Some("json") && !cfg!(debug_assertions) {
+        return Err(Error::Validation(
+            "Plaintext backups are not supported in production builds.".to_string(),
+        ));
+    }
 
     let file_content_bytes = fs::read(&path)?;
 
@@ -314,10 +374,16 @@ pub async fn restore_vault_backend(
     state: State<'_, AppState>,
     passphrase: Option<String>,
     path: Option<String>,
+    reauth_password: Option<String>,
 ) -> Result<VaultBackupSnapshot> {
-    let passphrase_value = passphrase.unwrap_or_default();
+    let passphrase_value = Zeroizing::new(passphrase.unwrap_or_default());
     if passphrase_value.is_empty() {
         return Err(Error::Validation("A passphrase is required to import the vault.".to_string()));
+    }
+    let reauth_password = Zeroizing::new(reauth_password.unwrap_or_default());
+    let reauth_ok = verify_master_password_impl(&state, reauth_password.as_str()).await?;
+    if !reauth_ok {
+        return Err(Error::InvalidPassword);
     }
 
     let path = if let Some(path) = path {
@@ -343,6 +409,11 @@ pub async fn restore_vault_backend(
     let file_content_bytes = fs::read(&path)?;
 
     let decrypted_json = if path.extension().and_then(|s| s.to_str()) == Some("json") {
+        if !cfg!(debug_assertions) {
+            return Err(Error::Validation(
+                "Plaintext backups are not supported in production builds.".to_string(),
+            ));
+        }
         String::from_utf8(file_content_bytes).map_err(|e| Error::Internal(format!("UTF-8 conversion failed: {}", e)))?
     } else {
         let payload: ExportPayload = serde_json::from_slice(&file_content_bytes).map_err(|_| {

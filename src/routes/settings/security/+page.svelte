@@ -132,7 +132,10 @@
     'integrity-check': false
   });
 
-  let healthReport = $state<{ reusedPasswords: unknown[]; weakPasswordsCount: number } | null>(
+  let healthReport = $state<{
+    reusedPasswords: { itemIds: number[]; count: number }[];
+    weakPasswordsCount: number;
+  } | null>(
     null
   );
   let healthLoading = $state(false);
@@ -407,10 +410,11 @@
     totpVerificationError = null;
 
     try {
-      const expectedToken = await invoke<string>('generate_totp', {
-        secret_b32: pendingTotpSecret
+      const isValid = await invoke<boolean>('verify_totp_secret', {
+        secret_b32: pendingTotpSecret,
+        token: totpVerificationCode
       });
-      if (expectedToken !== totpVerificationCode) {
+      if (!isValid) {
         totpVerificationError =
           'The verification code did not match. Wait for the next code window and try again.';
         return;
@@ -496,6 +500,13 @@
     applyChanges({ autoLockInactivity: value });
   }
 
+  function updateLockGrace(value: string) {
+    const seconds = parseInt(value);
+    if (!isNaN(seconds)) {
+      applyChanges({ lockGraceSeconds: Math.min(Math.max(seconds, 0), 60) });
+    }
+  }
+
   function updateClipboardClear(value: string) {
     const seconds = parseInt(value);
     if (!isNaN(seconds)) {
@@ -565,9 +576,9 @@
     kdfCurrentPassword = '';
     showKdfPassword = false;
     kdfError = '';
-    kdfMemoryMb = Math.max(8, Math.round(argon2Params.memoryKib / 1024));
-    kdfTimeCost = argon2Params.timeCost;
-    kdfParallelism = argon2Params.parallelism;
+    kdfMemoryMb = String(Math.max(8, Math.round(argon2Params.memoryKib / 1024)));
+    kdfTimeCost = String(argon2Params.timeCost);
+    kdfParallelism = String(argon2Params.parallelism);
   }
 
   function handleKdfDialogChange(open: boolean) {
@@ -669,25 +680,31 @@
   async function submitKdfUpdate() {
     kdfError = '';
     if (!isKdfFormValid) {
+      const memoryMb = Number(kdfMemoryMb);
+      const timeCost = Number(kdfTimeCost);
+      const parallelism = Number(kdfParallelism);
       if (kdfCurrentPassword.trim().length === 0) {
         kdfError = 'Current password is required.';
-      } else if (kdfMemoryMb < 8) {
+      } else if (memoryMb < 8) {
         kdfError = 'Memory must be at least 8 MiB.';
-      } else if (kdfTimeCost < 1) {
+      } else if (timeCost < 1) {
         kdfError = 'Time cost must be at least 1.';
-      } else if (kdfParallelism < 1) {
+      } else if (parallelism < 1) {
         kdfError = 'Parallelism must be at least 1.';
       }
       return;
     }
 
+    const memoryMb = Number(kdfMemoryMb);
+    const timeCost = Number(kdfTimeCost);
+    const parallelism = Number(kdfParallelism);
     isUpdatingKdf = true;
     try {
       await callBackend('update_argon2_params', {
         currentPassword: kdfCurrentPassword,
-        memoryKib: Math.round(kdfMemoryMb * 1024),
-        timeCost: Math.round(kdfTimeCost),
-        parallelism: Math.round(kdfParallelism)
+        memoryKib: Math.round(memoryMb * 1024),
+        timeCost: Math.round(timeCost),
+        parallelism: Math.round(parallelism)
       });
       toast.success('Key derivation parameters updated.');
       handleKdfDialogChange(false);
@@ -781,8 +798,15 @@
     currentPassword.length > 0 && newPassword.length >= 8 && newPassword === confirmPassword
   );
 
+  const kdfMemoryMbValue = $derived(Number(kdfMemoryMb));
+  const kdfTimeCostValue = $derived(Number(kdfTimeCost));
+  const kdfParallelismValue = $derived(Number(kdfParallelism));
+
   const isKdfFormValid = $derived(
-    kdfCurrentPassword.length > 0 && kdfMemoryMb >= 8 && kdfTimeCost >= 1 && kdfParallelism >= 1
+    kdfCurrentPassword.length > 0 &&
+      kdfMemoryMbValue >= 8 &&
+      kdfTimeCostValue >= 1 &&
+      kdfParallelismValue >= 1
   );
 
   const privacyToggles = [
@@ -804,6 +828,13 @@
     { value: '30 minutes', label: '30 minutes' },
     { value: '1 hour', label: '1 hour' },
     { value: 'Never', label: 'Never' }
+  ];
+
+  const lockGraceOptions = [
+    { value: '0', label: '0 seconds' },
+    { value: '5', label: '5 seconds' },
+    { value: '10', label: '10 seconds' },
+    { value: '30', label: '30 seconds' }
   ];
 
   const clipboardClearOptions = [
@@ -834,11 +865,7 @@
         <div>
           <CardTitle>{t(locale, 'Vault Health')}</CardTitle>
           <CardDescription>
-            {t(
-              locale,
-              'Security analysis of your stored items.',
-              'Säkerhetsanalys av dina sparade poster.'
-            )}
+            {t(locale, 'Security analysis of your stored items.')}
           </CardDescription>
         </div>
         <Button variant="ghost" size="sm" onclick={loadSecurityReport} disabled={healthLoading}>
@@ -883,11 +910,7 @@
             </p>
             <p class="text-muted-foreground mt-1 text-xs">
               {reusedCount > 0
-                ? t(
-                    locale,
-                    'Multiple items share the same password.',
-                    'Flera poster delar samma lösenord.'
-                  )
+                ? t(locale, 'Multiple items share the same password.')
                 : t(locale, 'No password reuse detected.')}
             </p>
           </div>
@@ -921,11 +944,7 @@
           >
             <TriangleAlert class="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
             <p>
-              {t(
-                locale,
-                'Security issues detected. Consider updating shared or short passwords to improve vault integrity.',
-                'Säkerhetsproblem upptäckta. Överväg att uppdatera delade eller korta lösenord för att förbättra valvets säkerhet.'
-              )}
+              {t(locale, 'Security issues detected. Consider updating shared or short passwords to improve vault integrity.')}
             </p>
           </div>
         {:else}
@@ -952,11 +971,7 @@
           {t(locale, 'Two-factor authentication')}
         </CardTitle>
         <CardDescription>
-          {t(
-            locale,
-            'Protect vault unlocks with a time-based one-time password.',
-            'Skydda valvupplåsning med tidsbaserade engångskoder.'
-          )}
+          {t(locale, 'Protect vault unlocks with a time-based one-time password.')}
         </CardDescription>
       </div>
     </CardHeader>
@@ -1017,16 +1032,8 @@
             </p>
             <p class="text-muted-foreground text-sm">
               {$loginTotpConfigured
-                ? t(
-                    locale,
-                    'Unlocking requires both your master password and an authenticator token.',
-                    'Upplåsning kräver både ditt huvudlösenord och en autentiseringskod.'
-                  )
-                : t(
-                    locale,
-                    'Generate a secret to require an authenticator token when unlocking the vault.',
-                    'Generera en hemlighet för att kräva en autentiseringskod vid upplåsning.'
-                  )}
+                ? t(locale, 'Unlocking requires both your master password and an authenticator token.')
+                : t(locale, 'Generate a secret to require an authenticator token when unlocking the vault.')}
             </p>
           </div>
           <Badge
@@ -1220,11 +1227,7 @@
           </div>
 
           <p class="text-muted-foreground text-xs">
-            {t(
-              locale,
-              'Codes rotate every 30 seconds. If verification fails, wait for the next code before trying again.',
-              'Koder roterar var 30:e sekund. Om verifiering misslyckas, vänta på nästa kod innan du försöker igen.'
-            )}
+            {t(locale, 'Codes rotate every 30 seconds. If verification fails, wait for the next code before trying again.')}
           </p>
         </div>
       {/if}
@@ -1238,16 +1241,8 @@
               <p class="text-foreground text-sm font-semibold">Stored secret on this device</p>
               <p class="text-muted-foreground text-sm">
                 {storedSecret
-                  ? t(
-                      locale,
-                      'Copy the secret if you need to enrol another authenticator or keep an offline backup.',
-                      'Kopiera hemligheten om du behöver registrera en annan autentiserare eller spara en offline-kopia.'
-                    )
-                  : t(
-                      locale,
-                      'This device does not have a local copy of the secret. Rotate the secret to capture it again.',
-                      'Denna enhet har ingen lokal kopia av hemligheten. Rotera hemligheten för att fånga den igen.'
-                    )}
+                  ? t(locale, 'Copy the secret if you need to enrol another authenticator or keep an offline backup.')
+                  : t(locale, 'This device does not have a local copy of the secret. Rotate the secret to capture it again.')}
               </p>
             </div>
           </div>
@@ -1306,11 +1301,7 @@
                   {t(locale, 'No local secret available')}
                 </AlertTitle>
                 <AlertDescription>
-                  {t(
-                    locale,
-                    'Rotate the secret to store a copy on this device for backup access.',
-                    'Rotera hemligheten för att spara en kopia på denna enhet för backupåtkomst.'
-                  )}
+                  {t(locale, 'Rotate the secret to store a copy on this device for backup access.')}
                 </AlertDescription>
               </div>
             </Alert>
@@ -1332,11 +1323,7 @@
           {t(locale, 'Master Password & Encryption')}
         </CardTitle>
         <CardDescription>
-          {t(
-            locale,
-            'Manage the master password and key derivation policy.',
-            'Hantera huvudlösenordet och nyckelderiveringspolicyn.'
-          )}
+          {t(locale, 'Manage the master password and key derivation policy.')}
         </CardDescription>
       </div>
     </CardHeader>
@@ -1349,11 +1336,7 @@
             {t(locale, 'Master Password')}
           </p>
           <p class="text-muted-foreground text-sm">
-            {t(
-              locale,
-              'Update the password used to unlock your vault.',
-              'Uppdatera lösenordet som används för att låsa upp ditt valv.'
-            )}
+            {t(locale, 'Update the password used to unlock your vault.')}
           </p>
         </div>
         <Button variant="outline" onclick={openPasswordModal}>
@@ -1370,11 +1353,7 @@
           </p>
           <p class="text-muted-foreground text-sm">
             {argon2Loading
-              ? t(
-                  locale,
-                  'Loading key derivation parameters…',
-                  'Läser in parametrar för nyckelderivering…'
-                )
+              ? t(locale, 'Loading key derivation parameters…')
               : argon2Summary}
           </p>
         </div>
@@ -1397,11 +1376,7 @@
           {t(locale, 'Auto-lock Controls')}
         </CardTitle>
         <CardDescription>
-          {t(
-            locale,
-            'Define when the vault should automatically lock itself.',
-            'Definiera när valvet automatiskt ska låsa sig.'
-          )}
+          {t(locale, 'Define when the vault should automatically lock itself.')}
         </CardDescription>
       </div>
     </CardHeader>
@@ -1414,11 +1389,7 @@
             {t(locale, 'Lock on Suspend')}
           </p>
           <p class="text-muted-foreground text-sm">
-            {t(
-              locale,
-              'Lock whenever the system sleeps or hibernates.',
-              'Lås valvet när systemet går i vila eller viloläge.'
-            )}
+            {t(locale, 'Lock whenever the system sleeps or hibernates.')}
           </p>
         </div>
         <Switch
@@ -1436,11 +1407,7 @@
             {t(locale, 'Lock on Minimise')}
           </p>
           <p class="text-muted-foreground text-sm">
-            {t(
-              locale,
-              'Lock the vault when the window is minimised.',
-              'Lås valvet när fönstret minimeras.'
-            )}
+            {t(locale, 'Lock the vault when the window is minimised.')}
           </p>
         </div>
         <Switch
@@ -1452,14 +1419,38 @@
 
       <div class="border-border/60 bg-muted/20 flex flex-col gap-2 rounded-lg border px-4 py-4">
         <Label class="text-foreground text-sm font-semibold">
+          {t(locale, 'Lock Grace Period')}
+        </Label>
+        <p class="text-muted-foreground text-sm">
+          {t(locale, 'Delay before locking after minimize or suspend.')}
+        </p>
+        <Select
+          type="single"
+          value={currentSettings.lockGraceSeconds.toString()}
+          onValueChange={updateLockGrace}
+        >
+          <SelectTrigger aria-label="Select lock grace period" class="w-full sm:w-56">
+            <span data-slot="select-value" class="truncate text-sm">
+              {lockGraceOptions.find((o) => o.value === currentSettings.lockGraceSeconds.toString())
+                ?.label || t(locale, 'Select duration')}
+            </span>
+          </SelectTrigger>
+          <SelectContent>
+            {#each lockGraceOptions as option (option.value)}
+              <SelectItem value={option.value}>
+                {option.label}
+              </SelectItem>
+            {/each}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div class="border-border/60 bg-muted/20 flex flex-col gap-2 rounded-lg border px-4 py-4">
+        <Label class="text-foreground text-sm font-semibold">
           {t(locale, 'Auto-lock After Inactivity')}
         </Label>
         <p class="text-muted-foreground text-sm">
-          {t(
-            locale,
-            'Lock the vault automatically after the selected idle period.',
-            'Lås valvet automatiskt efter vald inaktivitetsperiod.'
-          )}
+          {t(locale, 'Lock the vault automatically after the selected idle period.')}
         </p>
         <Select
           type="single"
@@ -1486,11 +1477,7 @@
           {t(locale, 'Clipboard Clear Timeout')}
         </Label>
         <p class="text-muted-foreground text-sm">
-          {t(
-            locale,
-            'Automatically clear sensitive data from your clipboard after the selected duration.',
-            'Rensa automatiskt känslig data från ditt urklipp efter den valda tidsperioden.'
-          )}
+          {t(locale, 'Automatically clear sensitive data from your clipboard after the selected duration.')}
         </p>
         <Select
           type="single"
@@ -1528,11 +1515,7 @@
           {t(locale, 'Biometric & Session')}
         </CardTitle>
         <CardDescription>
-          {t(
-            locale,
-            'Control biometric unlock availability and session persistence.',
-            'Styr när biometrisk upplåsning är tillgänglig och hur sessioner bevaras.'
-          )}
+          {t(locale, 'Control biometric unlock availability and session persistence.')}
         </CardDescription>
       </div>
     </CardHeader>
@@ -1545,11 +1528,7 @@
             {t(locale, 'Biometric Unlock')}
           </p>
           <p class="text-muted-foreground text-sm">
-            {t(
-              locale,
-              'Allow fingerprint or face recognition to unlock the vault.',
-              'Tillåt fingeravtryck eller ansiktsigenkänning för att låsa upp valvet.'
-            )}
+            {t(locale, 'Allow fingerprint or face recognition to unlock the vault.')}
           </p>
         </div>
         <Switch
@@ -1568,11 +1547,7 @@
             {t(locale, 'Session Persistence')}
           </p>
           <p class="text-muted-foreground text-sm">
-            {t(
-              locale,
-              'Remember the unlocked session between restarts.',
-              'Kom ihåg upplåst session mellan omstarter.'
-            )}
+            {t(locale, 'Remember the unlocked session between restarts.')}
           </p>
         </div>
         <Switch
@@ -1597,11 +1572,7 @@
             {t(locale, 'Paired Devices')}
           </CardTitle>
           <CardDescription>
-            {t(
-              locale,
-              'Review devices authorised for biometric or key-based unlock.',
-              'Granska enheter som är auktoriserade för biometrisk eller nyckelbaserad upplåsning.'
-            )}
+            {t(locale, 'Review devices authorised for biometric or key-based unlock.')}
           </CardDescription>
         </div>
         <Button variant="outline" size="sm" onclick={handlePairDevice} disabled={devicesLoading}>
@@ -1695,11 +1666,7 @@
           {t(locale, 'Privacy Controls')}
         </CardTitle>
         <CardDescription>
-          {t(
-            locale,
-            'Fine-tune privacy and diagnostic data handling.',
-            'Finjustera integritet och hantering av diagnostikdata.'
-          )}
+          {t(locale, 'Fine-tune privacy and diagnostic data handling.')}
         </CardDescription>
       </div>
     </CardHeader>
@@ -1719,22 +1686,10 @@
               </p>
               <p class="text-muted-foreground text-sm">
                 {toggle.key === 'externalBreachCheck'
-                  ? t(
-                      locale,
-                      'Cross-reference vault items against known breach databases.',
-                      'Jämför valvposter mot kända läckage-databaser.'
-                    )
+                  ? t(locale, 'Cross-reference vault items against known breach databases.')
                   : toggle.key === 'localReuseDetection'
-                    ? t(
-                        locale,
-                        'Alert when passwords repeat across vault entries.',
-                        'Varna när lösenord återanvänds mellan poster i valvet.'
-                      )
-                    : t(
-                        locale,
-                        'Allocate hardened memory regions for sensitive operations.',
-                        'Tilldela härdade minnesområden för känsliga operationer.'
-                      )}
+                    ? t(locale, 'Alert when passwords repeat across vault entries.')
+                    : t(locale, 'Allocate hardened memory regions for sensitive operations.')}
               </p>
             </div>
             <Switch
@@ -1780,11 +1735,7 @@
           {t(locale, 'Security Actions')}
         </CardTitle>
         <CardDescription>
-          {t(
-            locale,
-            'Execute advanced maintenance and security tasks.',
-            'Utför avancerade underhålls- och säkerhetsåtgärder.'
-          )}
+          {t(locale, 'Execute advanced maintenance and security tasks.')}
         </CardDescription>
       </div>
     </CardHeader>
@@ -1814,22 +1765,10 @@
               </p>
               <p class="text-muted-foreground text-xs wrap-break-word whitespace-normal">
                 {action.id === 'rekey'
-                  ? t(
-                      locale,
-                      'Rotate encryption keys and re-encrypt stored data.',
-                      'Rotera krypteringsnycklar och kryptera om lagrad data.'
-                    )
+                  ? t(locale, 'Rotate encryption keys and re-encrypt stored data.')
                   : action.id === 'wipe-memory'
-                    ? t(
-                        locale,
-                        'Scrub sensitive material from memory immediately.',
-                        'Rensa känslig information från minnet omedelbart.'
-                      )
-                    : t(
-                        locale,
-                        'Verify vault contents for tampering or corruption.',
-                        'Verifiera valvets innehåll för manipulation eller korruption.'
-                      )}
+                    ? t(locale, 'Scrub sensitive material from memory immediately.')
+                    : t(locale, 'Verify vault contents for tampering or corruption.')}
               </p>
             </div>
           </Button>
@@ -1846,11 +1785,7 @@
         {t(locale, 'Change Master Password')}
       </DialogTitle>
       <DialogDescription>
-        {t(
-          locale,
-          'Provide your current master password and enter a new secure password to re-encrypt the vault.',
-          'Ange ditt nuvarande huvudlösenord och ett nytt säkert lösenord för att kryptera om valvet.'
-        )}
+        {t(locale, 'Provide your current master password and enter a new secure password to re-encrypt the vault.')}
       </DialogDescription>
     </DialogHeader>
 
@@ -1915,11 +1850,7 @@
       >
         <TriangleAlert class="mt-0.5 h-4 w-4" aria-hidden="true" />
         <p>
-          {t(
-            locale,
-            'Changing the master password re-encrypts the vault. The operation may take several minutes for large vaults.',
-            'Att byta huvudlösenord krypterar om valvet och kan ta några minuter för stora valv.'
-          )}
+          {t(locale, 'Changing the master password re-encrypts the vault. The operation may take several minutes for large vaults.')}
         </p>
       </div>
       {#if changePasswordError}
@@ -1954,11 +1885,7 @@
         {t(locale, 'Reconfigure Key Derivation')}
       </DialogTitle>
       <DialogDescription>
-        {t(
-          locale,
-          'Adjust the Argon2id parameters used when deriving the vault encryption key.',
-          'Justera Argon2id-parametrarna som används för att härleda valvets krypteringsnyckel.'
-        )}
+        {t(locale, 'Adjust the Argon2id parameters used when deriving the vault encryption key.')}
       </DialogDescription>
     </DialogHeader>
 
@@ -2030,11 +1957,7 @@
       >
         <TriangleAlert class="text-primary mt-0.5 h-4 w-4" aria-hidden="true" />
         <p>
-          {t(
-            locale,
-            'Updating Argon2 parameters will re-encrypt the vault and may take a few moments.',
-            'Att uppdatera Argon2-parametrarna krypterar om valvet och kan ta en stund.'
-          )}
+          {t(locale, 'Updating Argon2 parameters will re-encrypt the vault and may take a few moments.')}
         </p>
       </div>
 

@@ -4,8 +4,12 @@
   import { isLocked, totpVerified } from '$lib/stores';
   import { callBackend } from '$lib/utils/backend';
   import { get } from 'svelte/store';
+  import { getCurrentWindow } from '@tauri-apps/api/window';
+  import type { SecuritySettings } from '$lib/config/settings';
 
   let inactivityTimer: ReturnType<typeof setTimeout> | null = null;
+  let minimizeTimer: ReturnType<typeof setTimeout> | null = null;
+  let suspendTimer: ReturnType<typeof setTimeout> | null = null;
 
   function parseDuration(duration: string): number {
     const parts = duration.split(' ');
@@ -52,23 +56,112 @@
     }
   }
 
+  function clearMinimizeTimer() {
+    if (minimizeTimer) {
+      clearTimeout(minimizeTimer);
+      minimizeTimer = null;
+    }
+  }
+
+  function clearSuspendTimer() {
+    if (suspendTimer) {
+      clearTimeout(suspendTimer);
+      suspendTimer = null;
+    }
+  }
+
+  function getLockGraceMs(settings: SecuritySettings) {
+    const seconds = Number.isFinite(settings.lockGraceSeconds)
+      ? Math.max(0, Math.min(60, settings.lockGraceSeconds))
+      : 0;
+    return seconds * 1000;
+  }
+
   function handleActivity() {
     resetInactivityTimer();
   }
 
   onMount(() => {
+    const appWindow = getCurrentWindow();
+    let unlistenBlur: (() => void) | null = null;
+
     window.addEventListener('mousemove', handleActivity);
     window.addEventListener('keydown', handleActivity);
     window.addEventListener('mousedown', handleActivity);
     window.addEventListener('touchstart', handleActivity);
-
     resetInactivityTimer();
+
+    appWindow
+      .onFocusChanged(async ({ payload }) => {
+        if (payload === true) {
+          clearMinimizeTimer();
+          resetInactivityTimer();
+          return;
+        }
+        if (payload === false) {
+          const settings = get(securitySettings);
+          if (settings.lockOnMinimize) {
+            try {
+              const minimized = await appWindow.isMinimized();
+              if (minimized) {
+                clearMinimizeTimer();
+                const graceMs = getLockGraceMs(settings);
+                if (graceMs === 0) {
+                  await lockVault();
+                } else {
+                  minimizeTimer = setTimeout(async () => {
+                    await lockVault();
+                    minimizeTimer = null;
+                  }, graceMs);
+                }
+              }
+            } catch (error) {
+              console.warn('Failed to read window minimize state', error);
+            }
+          }
+        }
+      })
+      .then((unlisten) => {
+        unlistenBlur = unlisten;
+      })
+      .catch((error) => {
+        console.warn('Failed to register window focus listener', error);
+      });
+
+    const handleVisibility = async () => {
+      if (!document.hidden) {
+        clearSuspendTimer();
+        resetInactivityTimer();
+        return;
+      }
+      const settings = get(securitySettings);
+      if (settings.lockOnSuspend) {
+        clearSuspendTimer();
+        const graceMs = getLockGraceMs(settings);
+        if (graceMs === 0) {
+          await lockVault();
+        } else {
+          suspendTimer = setTimeout(async () => {
+            await lockVault();
+            suspendTimer = null;
+          }, graceMs);
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibility);
 
     return () => {
       window.removeEventListener('mousemove', handleActivity);
       window.removeEventListener('keydown', handleActivity);
       window.removeEventListener('mousedown', handleActivity);
       window.removeEventListener('touchstart', handleActivity);
+      document.removeEventListener('visibilitychange', handleVisibility);
+      if (unlistenBlur) {
+        unlistenBlur();
+      }
+      clearMinimizeTimer();
+      clearSuspendTimer();
       if (inactivityTimer) clearTimeout(inactivityTimer);
     };
   });

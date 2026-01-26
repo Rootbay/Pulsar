@@ -13,7 +13,7 @@
   import { cn } from '$lib/utils';
   import { Check } from '@lucide/svelte';
   import { open } from '@tauri-apps/plugin-dialog';
-  import { currentLocale, type Locale } from '$lib/i18n';
+  import { currentLocale, t as translate, type I18nKey } from '$lib/i18n';
 
   interface PasswordManager {
     id: string;
@@ -32,8 +32,9 @@
 
   let { show = $bindable(false), onimportSelected, onclose }: Props = $props();
 
-  const t = (locale: Locale, en: string, sv: string) => (locale === 'sv' ? sv : en);
-  let locale = $derived($currentLocale);
+  const locale = $derived($currentLocale);
+  const t = (key: I18nKey, vars: Record<string, string | number> = {}) =>
+    translate(locale, key, vars);
 
   const passwordManagers: PasswordManager[] = [
     { id: 'lastpass', name: 'LastPass' },
@@ -92,11 +93,7 @@
       }
     } catch (error) {
       console.error('Failed to pick import file:', error);
-      fileError = t(
-        locale,
-        'Failed to open the file picker. Please try again.',
-        'Kunde inte öppna filväljaren. Försök igen.'
-      );
+      fileError = t('Failed to open the file picker. Please try again.');
     } finally {
       selectingFile = false;
     }
@@ -115,11 +112,7 @@
     }
 
     if (!passphrase.trim()) {
-      fileError = t(
-        locale,
-        'Enter the passphrase that protects your backup.',
-        'Ange lösenfrasen som skyddar din backup.'
-      );
+      fileError = t('Enter the passphrase that protects your backup.');
       return;
     }
 
@@ -149,13 +142,9 @@
 <Dialog open={dialogOpen} onOpenChange={handleOpenChange}>
   <DialogContent class="sm:max-w-md">
     <DialogHeader>
-      <DialogTitle>{t(locale, 'Import passwords', 'Importera lösenord')}</DialogTitle>
+      <DialogTitle>{t('Import passwords')}</DialogTitle>
       <DialogDescription>
-        {t(
-          locale,
-          'Choose the password manager export you would like to import into Pulsar.',
-          'Välj den export från lösenordshanteraren som du vill importera till Pulsar.'
-        )}
+        {t('Choose the password manager export you would like to import into Pulsar.')}
       </DialogDescription>
     </DialogHeader>
 
@@ -182,38 +171,34 @@
     <div class="mt-4 space-y-4">
       <div class="space-y-2">
         <Label for="import-file" class="text-foreground text-sm font-medium">
-          {t(locale, 'Backup file', 'Backupfil')}
+          {t('Backup file')}
         </Label>
         <div class="flex items-center gap-2">
           <Input
             id="import-file"
             type="text"
-            placeholder={t(locale, 'Select a Pulsar backup file', 'Välj en Pulsar-backupfil')}
+            placeholder={t('Select a Pulsar backup file')}
             readonly
             value={selectedFilePath ?? ''}
           />
           <Button type="button" variant="outline" onclick={pickFile} disabled={selectingFile}>
             {#if selectingFile}
-              {t(locale, 'Selecting...', 'Väljer...')}
+              {t('Selecting...')}
             {:else if selectedFilePath}
-              {t(locale, 'Change', 'Byt')}
+              {t('Change')}
             {:else}
-              {t(locale, 'Choose file', 'Välj fil')}
+              {t('Choose file')}
             {/if}
           </Button>
         </div>
         <p class="text-muted-foreground text-xs">
-          {t(
-            locale,
-            'Accepted formats: .psec or .json backup files.',
-            'Tillåtna format: .psec- eller .json-backupfiler.'
-          )}
+          {t('Accepted formats: .psec or .json backup files.')}
         </p>
       </div>
 
       <div class="space-y-2">
         <Label for="import-passphrase" class="text-foreground text-sm font-medium">
-          {t(locale, 'Backup passphrase', 'Lösenfras för backup')}
+          {t('Backup passphrase')}
         </Label>
         <Input
           id="import-passphrase"
@@ -234,14 +219,14 @@
 
     <DialogFooter>
       <Button type="button" variant="outline" onclick={closeDialog}>
-        {t(locale, 'Cancel', 'Avbryt')}
+        {t('Cancel')}
       </Button>
       <Button
         type="button"
         disabled={!selectedManager || !selectedFilePath || !passphrase.trim() || selectingFile}
         onclick={handleImport}
       >
-        {t(locale, 'Import', 'Importera')}
+        {t('Import')}
       </Button>
     </DialogFooter>
   </DialogContent>

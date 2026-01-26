@@ -9,8 +9,11 @@ use chacha20poly1305::{aead::{Aead, KeyInit}, XChaCha20Poly1305, Key, XNonce};
 use hkdf::Hkdf;
 use sha2::Sha256;
 use x25519_dalek::{PublicKey as X25519Public, EphemeralSecret as X25519Secret, StaticSecret};
-use zeroize::Zeroize;
+use zeroize::{Zeroize, Zeroizing};
 use tauri::Window;
+use std::fs;
+use std::io::Write;
+use std::path::Path;
 
 #[tauri::command]
 pub async fn export_password_entry(
@@ -22,6 +25,7 @@ pub async fn export_password_entry(
     let path = std::path::PathBuf::from(&path_str);
     let plaintext = serde_json::to_vec(&password_item)?;
 
+    let passphrase = Zeroizing::new(passphrase);
 
     let mut salt = [0u8; 16];
     OsRng.fill_bytes(&mut salt);
@@ -63,7 +67,7 @@ pub async fn export_password_entry(
     };
 
     let export_bytes = serde_json::to_vec_pretty(&export)?;
-    tokio::fs::write(&path, export_bytes).await?;
+    write_sensitive_bytes(&path, &export_bytes)?;
 
     Ok(format!("Exported (passphrase) to {}", path.display()))
 }
@@ -149,7 +153,7 @@ pub async fn export_password_entry_to_public_key(
     };
 
     let bytes = serde_json::to_vec_pretty(&payload)?;
-    tokio::fs::write(&path, bytes).await?;
+    write_sensitive_bytes(&path, &bytes)?;
 
     Ok(format!("Exported (recipient pubkey) to {}", path.display()))
 }
@@ -232,5 +236,40 @@ pub async fn import_password_entry_with_private_key(
 
     let item: PasswordItem = serde_json::from_slice(&plaintext)?;
     Ok(item)
+}
+
+fn write_sensitive_bytes(path: &Path, bytes: &[u8]) -> Result<()> {
+    let tmp_path = path.with_extension("tmp");
+    if tmp_path.exists() {
+        let _ = fs::remove_file(&tmp_path);
+    }
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        let mut file = fs::OpenOptions::new()
+            .create(true)
+            .write(true)
+            .truncate(true)
+            .mode(0o600)
+            .open(&tmp_path)?;
+        let _ = file.set_permissions(std::fs::Permissions::from_mode(0o600));
+        file.write_all(bytes)?;
+        file.sync_all()?;
+    }
+
+    #[cfg(not(unix))]
+    {
+        let mut file = fs::OpenOptions::new()
+            .create(true)
+            .write(true)
+            .truncate(true)
+            .open(&tmp_path)?;
+        file.write_all(bytes)?;
+        file.sync_all()?;
+    }
+
+    fs::rename(&tmp_path, path)?;
+    Ok(())
 }
 

@@ -146,11 +146,7 @@
       <div>
         <CardTitle>{t(locale, 'Theme & Display')}</CardTitle>
         <CardDescription>
-          {t(
-            locale,
-            'Customise the application look and spacing.',
-            'Anpassa appens utseende och mellanrum.'
-          )}
+          {t(locale, 'Customise the application look and spacing.')}
         </CardDescription>
       </div>
     </CardHeader>
@@ -226,16 +222,8 @@
               </p>
               <p class="text-muted-foreground text-sm">
                 {option.key === 'highContrast'
-                  ? t(
-                      locale,
-                      'Increase contrast for improved readability.',
-                      'Öka kontrasten för bättre läsbarhet.'
-                    )
-                  : t(
-                      locale,
-                      'Minimise animations and motion effects.',
-                      'Minimera animationer och rörelse.'
-                    )}
+                  ? t(locale, 'Increase contrast for improved readability.')
+                  : t(locale, 'Minimise animations and motion effects.')}
               </p>
             </div>
             <Switch
@@ -259,11 +247,7 @@
       <div>
         <CardTitle>{t(locale, 'Page Density')}</CardTitle>
         <CardDescription>
-          {t(
-            locale,
-            'Choose how much information appears on each view.',
-            'Välj hur mycket information som visas per vy.'
-          )}
+          {t(locale, 'Choose how much information appears on each view.')}
         </CardDescription>
       </div>
     </CardHeader>

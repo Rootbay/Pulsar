@@ -163,6 +163,14 @@ fn build_status(policy: &ClipboardPolicyState) -> ClipboardPolicyStatus {
     }
 }
 
+pub fn restore_clipboard_history(policy: &ClipboardPolicyState) {
+    if policy.block_history {
+        if let Some(previous) = policy.prior_history_setting {
+            let _ = set_history_enabled(previous != 0);
+        }
+    }
+}
+
 #[tauri::command]
 pub async fn get_clipboard_capabilities(
     _app: tauri::AppHandle,

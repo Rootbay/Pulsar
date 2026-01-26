@@ -22,7 +22,7 @@ use tokio::sync::{Mutex, Semaphore};
 use crate::state::AppState;
 use crate::auth::UNLOCK_CONCURRENCY_LIMIT;
 use crate::error::{Error, Result};
-use tauri::State;
+use tauri::{Manager, RunEvent, State};
 use tauri_plugin_store::StoreBuilder;
 use zeroize::Zeroize;
 
@@ -153,6 +153,7 @@ fn main() {
             auth::get_argon2_params,
             auth::rotate_master_password,
             auth::update_argon2_params,
+            auth::verify_master_password,
             auth::lock,
             auth::is_locked,
             auth::is_master_password_configured,
@@ -188,6 +189,7 @@ fn main() {
             crypto::import_password_entry_with_private_key,
             totp::generate_totp_secret,
             totp::generate_totp,
+            totp::verify_totp_secret,
             totp::verify_totp,
             file_dialog::pick_open_file,
             file_dialog::pick_save_file,
@@ -212,9 +214,19 @@ fn main() {
             clipboard::clear_clipboard,
         ]);
 
-    builder
-        .run(context)
-        .expect("error while running tauri application");
+    let app = builder.build(context).expect("error while building tauri application");
+    app.run(|app_handle, event| {
+        match event {
+            RunEvent::ExitRequested { .. } | RunEvent::Exit { .. } => {
+                tauri::async_runtime::block_on(async {
+                    let state = app_handle.state::<AppState>();
+                    let policy = state.clipboard_policy.lock().await;
+                    clipboard::restore_clipboard_history(&policy);
+                });
+            }
+            _ => {}
+        }
+    });
 }
 
 use keyring::Entry;
@@ -252,17 +264,27 @@ async fn get_all_settings(app_handle: tauri::AppHandle) -> Result<Option<String>
     if let Some(encrypted_val) = store.get("settings_encrypted") {
         let encrypted_str = encrypted_val.as_str().ok_or_else(|| Error::Internal("Invalid encrypted settings format".to_string()))?;
         let key = get_or_create_settings_key()?;
-        match decrypt(encrypted_str, &key) {
-            Ok(decrypted) => return Ok(Some(decrypted)),
-            Err(_e) => {}
-        }
+        let decrypted = decrypt(encrypted_str, &key)
+            .map_err(|_| Error::Internal("Failed to decrypt settings.".to_string()))?;
+        return Ok(Some(decrypted));
     }
 
-    Ok(store.get("settings").and_then(|v| {
+    let plaintext = store.get("settings").and_then(|v| {
         v.as_str()
             .map(|s| s.to_string())
             .or_else(|| Some(v.to_string()))
-    }))
+    });
+
+    if let Some(settings) = plaintext {
+        let key = get_or_create_settings_key()?;
+        let encrypted = encrypt(&settings, &key)?;
+        store.set("settings_encrypted".to_string(), serde_json::Value::String(encrypted));
+        store.delete("settings");
+        store.save().map_err(|e| Error::Internal(e.to_string()))?;
+        return Ok(Some(settings));
+    }
+
+    Ok(None)
 }
 
 #[tauri::command]
@@ -276,6 +298,7 @@ async fn set_all_settings(app_handle: tauri::AppHandle, settings: String) -> Res
     let encrypted = encrypt(&settings, &key)?;
 
     (*store).set("settings_encrypted".to_string(), serde_json::Value::String(encrypted));
+    (*store).delete("settings");
 
     match (*store).save() {
         Ok(()) => {}

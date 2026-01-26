@@ -10,6 +10,7 @@ use zeroize::Zeroizing;
 use validator::Validate;
 use serde_json;
 use std::fs;
+use std::io::Write;
 use std::path::Path;
 
 pub fn validate_password_item_fields(item: &PasswordItem) -> std::result::Result<(), validator::ValidationError> {
@@ -797,7 +798,42 @@ pub async fn save_attachment_to_disk(
     let data_blob: Vec<u8> = row.get("data");
     let file_data = decrypt_bytes(&data_blob, key.as_slice())?;
 
-    fs::write(&save_path, file_data)?;
+    write_sensitive_bytes(Path::new(&save_path), &file_data)?;
+    Ok(())
+}
+
+fn write_sensitive_bytes(path: &Path, bytes: &[u8]) -> Result<()> {
+    let tmp_path = path.with_extension("tmp");
+    if tmp_path.exists() {
+        let _ = fs::remove_file(&tmp_path);
+    }
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        let mut file = fs::OpenOptions::new()
+            .create(true)
+            .write(true)
+            .truncate(true)
+            .mode(0o600)
+            .open(&tmp_path)?;
+        let _ = file.set_permissions(std::fs::Permissions::from_mode(0o600));
+        file.write_all(bytes)?;
+        file.sync_all()?;
+    }
+
+    #[cfg(not(unix))]
+    {
+        let mut file = fs::OpenOptions::new()
+            .create(true)
+            .write(true)
+            .truncate(true)
+            .open(&tmp_path)?;
+        file.write_all(bytes)?;
+        file.sync_all()?;
+    }
+
+    fs::rename(&tmp_path, path)?;
     Ok(())
 }
 

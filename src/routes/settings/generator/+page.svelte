@@ -279,11 +279,19 @@
     editModalType = null;
   }
 
+  function isPreset(item: PasswordPreset | SiteRule): item is PasswordPreset {
+    return 'strength' in item && 'charSet' in item;
+  }
+
+  function isRule(item: PasswordPreset | SiteRule): item is SiteRule {
+    return 'url' in item;
+  }
+
   function handleSaveEdit(updatedItem: PasswordPreset | SiteRule) {
-    if (editModalType === 'preset' && itemToEdit) {
-      passwordPresets.updatePreset((itemToEdit as PasswordPreset).name, updatedItem);
-    } else if (editModalType === 'rule' && itemToEdit) {
-      siteRules.updateRule((itemToEdit as SiteRule).url, updatedItem);
+    if (editModalType === 'preset' && itemToEdit && isPreset(itemToEdit) && isPreset(updatedItem)) {
+      passwordPresets.updatePreset(itemToEdit.name, updatedItem);
+    } else if (editModalType === 'rule' && itemToEdit && isRule(itemToEdit) && isRule(updatedItem)) {
+      siteRules.updateRule(itemToEdit.url, updatedItem);
     }
     closeModal();
   }
@@ -346,11 +354,7 @@
             {t(locale, 'Password Generator')}
           </CardTitle>
           <CardDescription>
-            {t(
-              locale,
-              'Generate strong and secure passwords on demand.',
-              'Generera starka och säkra lösenord vid behov.'
-            )}
+            {t(locale, 'Generate strong and secure passwords on demand.')}
           </CardDescription>
         </div>
       </div>
@@ -384,11 +388,7 @@
             <span class="break-all">{generatedPassword}</span>
           {:else}
             <span class="text-muted-foreground text-sm">
-              {t(
-                locale,
-                'Select at least one character set to generate a password.',
-                'Välj minst en teckenuppsättning för att generera ett lösenord.'
-              )}
+              {t(locale, 'Select at least one character set to generate a password.')}
             </span>
           {/if}
         </div>
@@ -511,28 +511,12 @@
                   </p>
                   <p class="text-muted-foreground text-xs">
                     {option.key === 'uppercase'
-                      ? t(
-                          locale,
-                          'Adds capital letters to the character pool.',
-                          'Lägger till versaler i teckenmängden.'
-                        )
+                      ? t(locale, 'Adds capital letters to the character pool.')
                       : option.key === 'lowercase'
-                        ? t(
-                            locale,
-                            'Adds lowercase letters to the character pool.',
-                            'Lägger till gemener i teckenmängden.'
-                          )
+                        ? t(locale, 'Adds lowercase letters to the character pool.')
                         : option.key === 'digits'
-                          ? t(
-                              locale,
-                              'Adds numeric characters to the password.',
-                              'Lägger till siffror i lösenordet.'
-                            )
-                          : t(
-                              locale,
-                              'Adds punctuation and symbol characters.',
-                              'Lägger till skiljetecken och symboler.'
-                            )}
+                          ? t(locale, 'Adds numeric characters to the password.')
+                          : t(locale, 'Adds punctuation and symbol characters.')}
                   </p>
                 </div>
                 <Switch
@@ -563,31 +547,15 @@
                   {option.key === 'ambiguous'
                     ? t(locale, 'Avoid ambiguous characters')
                     : option.key === 'similar'
-                      ? t(
-                          locale,
-                          'Exclude visually similar characters',
-                          'Exkludera visuellt liknande tecken'
-                        )
+                      ? t(locale, 'Exclude visually similar characters')
                       : t(locale, 'Pronounceable mode')}
                 </p>
                 <p class="text-muted-foreground text-xs">
                   {option.key === 'ambiguous'
-                    ? t(
-                        locale,
-                        'Exclude characters like i, l, O, and 0.',
-                        'Exkludera tecken som i, l, O och 0.'
-                      )
+                    ? t(locale, 'Exclude characters like i, l, O, and 0.')
                     : option.key === 'similar'
-                      ? t(
-                          locale,
-                          'Avoid characters that look alike in some fonts.',
-                          'Undvik tecken som ser lika ut i vissa typsnitt.'
-                        )
-                      : t(
-                          locale,
-                          'Alternate vowels and consonants for readability.',
-                          'Växla vokaler och konsonanter för bättre läsbarhet.'
-                        )}
+                      ? t(locale, 'Avoid characters that look alike in some fonts.')
+                      : t(locale, 'Alternate vowels and consonants for readability.')}
                 </p>
               </div>
               <Switch
@@ -614,11 +582,7 @@
           {t(locale, 'Saved presets')}
         </CardTitle>
         <CardDescription>
-          {t(
-            locale,
-            'Manage and reuse your favourite password configurations.',
-            'Hantera och återanvänd dina favoritkonfigurationer för lösenord.'
-          )}
+          {t(locale, 'Manage and reuse your favourite password configurations.')}
         </CardDescription>
       </div>
     </CardHeader>
@@ -679,11 +643,7 @@
         </div>
       {:else}
         <p class="text-muted-foreground text-sm">
-          {t(
-            locale,
-            'No saved presets yet. Configure the generator and save your first preset.',
-            'Inga sparade förval ännu. Konfigurera generatorn och spara ditt första förval.'
-          )}
+          {t(locale, 'No saved presets yet. Configure the generator and save your first preset.')}
         </p>
       {/if}
     </CardContent>
@@ -701,11 +661,7 @@
           {t(locale, 'Site rule templates')}
         </CardTitle>
         <CardDescription>
-          {t(
-            locale,
-            'Maintain site-specific password requirements.',
-            'Hantera webbplatsspecifika lösenordskrav.'
-          )}
+          {t(locale, 'Maintain site-specific password requirements.')}
         </CardDescription>
       </div>
     </CardHeader>
@@ -756,11 +712,7 @@
         </div>
       {:else}
         <p class="text-muted-foreground text-sm">
-          {t(
-            locale,
-            'No site rule templates configured yet.',
-            'Inga mallar för webbplatsregler är konfigurerade ännu.'
-          )}
+          {t(locale, 'No site rule templates configured yet.')}
         </p>
       {/if}
     </CardContent>

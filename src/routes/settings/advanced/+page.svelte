@@ -128,11 +128,7 @@
           {t(locale, 'KDF Tuning (Argon2id)')}
         </CardTitle>
         <CardDescription>
-          {t(
-            locale,
-            'Adjust key-derivation hardness to balance security with unlock speed.',
-            'Justera nyckelderiveringens styrka för att balansera säkerhet mot upplåsningshastighet.'
-          )}
+          {t(locale, 'Adjust key-derivation hardness to balance security with unlock speed.')}
         </CardDescription>
       </div>
     </CardHeader>
@@ -142,11 +138,7 @@
       >
         <TriangleAlert class="mt-0.5 h-4 w-4" aria-hidden="true" />
         <p>
-          {t(
-            locale,
-            'Increasing these parameters strengthens security but also slows down authentication.',
-            'Att öka dessa parametrar stärker säkerheten men gör autentisering långsammare.'
-          )}
+          {t(locale, 'Increasing these parameters strengthens security but also slows down authentication.')}
         </p>
       </div>
 
@@ -251,11 +243,7 @@
           {t(locale, 'Memory Hardening')}
         </CardTitle>
         <CardDescription>
-          {t(
-            locale,
-            'Apply additional safeguards to keep sensitive data in memory protected.',
-            'Lägg till extra skydd för att hålla känslig data i minnet skyddad.'
-          )}
+          {t(locale, 'Apply additional safeguards to keep sensitive data in memory protected.')}
         </CardDescription>
       </div>
     </CardHeader>
@@ -272,16 +260,8 @@
             </p>
             <p class="text-muted-foreground text-sm">
               {toggle.key === 'lockMemoryPages'
-                ? t(
-                    locale,
-                    'Prevent sensitive pages from being swapped to disk.',
-                    'Förhindra att känsliga sidor växlas ut till disk.'
-                  )
-                : t(
-                    locale,
-                    'Use hardened allocators for secrets kept in RAM.',
-                    'Använd härdade allokerare för hemligheter i RAM.'
-                  )}
+                ? t(locale, 'Prevent sensitive pages from being swapped to disk.')
+                : t(locale, 'Use hardened allocators for secrets kept in RAM.')}
             </p>
           </div>
           <Switch
@@ -306,11 +286,7 @@
           {t(locale, 'Destructive Actions')}
         </CardTitle>
         <CardDescription>
-          {t(
-            locale,
-            'These operations permanently remove data and cannot be undone.',
-            'Dessa åtgärder tar bort data permanent och kan inte ångras.'
-          )}
+          {t(locale, 'These operations permanently remove data and cannot be undone.')}
         </CardDescription>
       </div>
     </CardHeader>
@@ -321,11 +297,7 @@
             {t(locale, 'Wipe Vault Database')}
           </p>
           <p class="text-destructive/80 text-sm">
-            {t(
-              locale,
-              'Enter the confirmation phrase to enable vault wiping.',
-              'Skriv in bekräftelsefrasen för att aktivera radering av valvet.'
-            )}
+            {t(locale, 'Enter the confirmation phrase to enable vault wiping.')}
           </p>
         </div>
         <Input

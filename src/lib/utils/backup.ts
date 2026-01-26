@@ -43,24 +43,26 @@ export interface ImportVaultBackupOptions {
 
 export async function exportVaultBackup(
   passphrase: string,
-  options: { plaintext?: boolean } = {}
+  options: { plaintext?: boolean; masterPassword?: string } = {}
 ): Promise<string> {
   return invoke<string>('export_vault_backend', {
     passphrase,
-    isPlaintext: options.plaintext ?? false
+    isPlaintext: options.plaintext ?? false,
+    reauthPassword: options.masterPassword ?? ''
   });
 }
 
 export async function importVaultBackup(
   passphrase: string,
-  options: ImportVaultBackupOptions = {}
+  options: ImportVaultBackupOptions & { masterPassword?: string } = {}
 ): Promise<VaultBackupSnapshot> {
-  const { sourcePath = null, onProgress } = options;
+  const { sourcePath = null, onProgress, masterPassword = '' } = options;
 
   onProgress?.('decrypting');
   const snapshot = await invoke<VaultBackupSnapshot>('restore_vault_backend', {
     passphrase,
-    path: sourcePath
+    path: sourcePath,
+    reauthPassword: masterPassword
   });
 
   return snapshot;

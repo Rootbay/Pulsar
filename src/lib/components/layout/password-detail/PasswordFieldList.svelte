@@ -1,7 +1,7 @@
 <svelte:options runes />
 
 <script lang="ts">
-  import { onDestroy } from 'svelte';
+  import { untrack } from 'svelte';
   import { dndzone } from 'svelte-dnd-action';
   import { flip } from 'svelte/animate';
   import { cubicOut } from 'svelte/easing';
@@ -49,27 +49,27 @@
     onfinalize
   }: Props = $props();
 
-  let securityHealth = $state<Record<number, PasswordHealth>>({});
-
-  const unsub = securityDashboard.subscribe((state) => {
-    securityHealth = state.items;
-  });
-
-  onDestroy(() => {
-    unsub();
-  });
-
   let breachCheckTimeout = $state<ReturnType<typeof setTimeout> | null>(null);
 
   $effect(() => {
-    if (passwordItem && passwordItem.id && passwordItem.password) {
-      securityDashboard.assessStrength(passwordItem);
+    const item = passwordItem;
+    if (item && item.id && item.password) {
+      untrack(() => {
+        securityDashboard.assessStrength(item);
+      });
+    }
+  });
 
-      const health = securityHealth[passwordItem.id];
+  $effect(() => {
+    const item = passwordItem;
+    if (item && item.id && item.password) {
+      const health = untrack(() => $securityDashboard.items[item.id!]);
       if (!health || health.isBreached === null) {
         if (breachCheckTimeout) clearTimeout(breachCheckTimeout);
         breachCheckTimeout = setTimeout(() => {
-          if (passwordItem) securityDashboard.checkBreach(passwordItem);
+          untrack(() => {
+            if (passwordItem) securityDashboard.checkBreach(passwordItem);
+          });
         }, 1000);
       }
     }
@@ -380,7 +380,7 @@
                   {/if}
 
                   {#if field.id === 'password' && passwordItem}
-                    {@const health = securityHealth[passwordItem.id]}
+                    {@const health = $securityDashboard.items[passwordItem.id]}
                     {#if health}
                       <Badge
                         variant="outline"

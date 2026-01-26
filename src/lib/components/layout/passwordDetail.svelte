@@ -15,7 +15,7 @@
   import PasswordDetailHeader from '../password/PasswordDetailHeader.svelte';
   import PasswordFieldList from './password-detail/PasswordFieldList.svelte';
   import PasswordMetadata from './password-detail/PasswordMetadata.svelte';
-  import { selectedTag, filterCategory } from '$lib/stores';
+  import { appState } from '$lib/stores';
   import { quintOut } from 'svelte/easing';
   import {
     Copy,
@@ -252,7 +252,7 @@
   let lastSkeletonKeyDetail = '';
 
   $effect(() => {
-    const currentSkeletonKeyDetail = `${$selectedTag ?? 'all'}|${$filterCategory}`;
+    const currentSkeletonKeyDetail = `${appState.selectedTag ?? 'all'}|${appState.filterCategory}`;
     if (currentSkeletonKeyDetail !== lastSkeletonKeyDetail) {
       lastSkeletonKeyDetail = currentSkeletonKeyDetail;
       (async () => {
@@ -528,11 +528,17 @@
     updated.custom_fields = newCustomFields;
     updated.field_order = dndItems.map((item) => item.id);
 
+    if (pendingTagOrder !== null) {
+      updated.tags = pendingTagOrder;
+    }
+
+    let wasSaved = false;
     if (JSON.stringify(updated) !== JSON.stringify(originalPasswordItem)) {
       try {
         await callBackend('update_password_item', { item: updated });
         selectedPasswordItem = updated;
         originalPasswordItem = JSON.parse(JSON.stringify(updated));
+        wasSaved = true;
       } catch (error) {
         console.error('Error updating password item:', error);
         alert(`Failed to save changes: ${error}`);
@@ -540,7 +546,7 @@
       }
     }
 
-    if (pendingTagOrder !== null && pendingTagOrder !== (item.tags ?? '')) {
+    if (!wasSaved && pendingTagOrder !== null && pendingTagOrder !== (item.tags ?? '')) {
       try {
         await callBackend('update_password_item_tags', {
           id: item.id,
@@ -554,6 +560,8 @@
         alert(`Failed to save tag order: ${error}`);
         return;
       }
+    } else if (wasSaved && pendingTagOrder !== null) {
+      handleTagsSaved({ id: updated.id, tags: pendingTagOrder });
     }
 
     hasUnsavedChanges = false;
@@ -814,7 +822,6 @@
           {displayColor}
           {buttons}
           onEnterEditMode={enterEditMode}
-          onHandleReset={handleReset}
           onSave={handleSave}
           onRemoveEntry={handleRemoveRequest}
           onTagsReorderedPending={(detail) => {

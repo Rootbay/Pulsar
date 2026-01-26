@@ -4,7 +4,7 @@ use base32::{encode, Alphabet};
 use crate::error::{Error, Result};
 use tauri::State;
 use crate::state::AppState;
-use crate::db_commands;
+use crate::db;
 
 fn build_totp(secret_b32: &str) -> Result<TOTP> {
     let secret = Secret::Encoded(secret_b32.to_string());
@@ -44,11 +44,11 @@ pub async fn verify_totp(
     id: i64,
     token: String,
 ) -> Result<bool> {
-    let password_item_option = db_commands::get_password_item_by_id(state, id).await?;
+    let password_item_option = db::get_password_item_by_id(state, id).await?;
 
     if let Some(password_item) = password_item_option {
-        if let Some(secret_b32) = password_item.totp_secret {
-            let totp = build_totp(&secret_b32)?;
+        if let Some(secret_string) = password_item.totp_secret {
+            let totp = build_totp(secret_string.as_str())?;
             totp.check_current(&token).map_err(|e| Error::Totp(e.to_string()))
         } else {
             Err(Error::Internal("TOTP secret not found for this item.".to_string()))

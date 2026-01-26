@@ -2,7 +2,7 @@ import type { PasswordItem } from '$lib/types/password';
 import { clear, readText, writeText } from '@tauri-apps/plugin-clipboard-manager';
 import { get } from 'svelte/store';
 
-import { isLocked } from '$lib/stores';
+import { appState } from '$lib/stores';
 import { clipboardSettings } from '$lib/stores/clipboard';
 import { clipboardIntegrationState, clipboardServiceReady } from '$lib/utils/clipboardService';
 
@@ -12,7 +12,7 @@ async function copyToClipboard(text: string) {
   const settings = get(clipboardSettings);
   const integrationStatus = get(clipboardIntegrationState);
   const serviceReady = get(clipboardServiceReady);
-  const locked = get(isLocked);
+  const locked = appState.isLocked;
 
   if (!settings.clipboardIntegration || !integrationStatus.integrationAvailable) {
     throw new Error('Clipboard integration is disabled.');

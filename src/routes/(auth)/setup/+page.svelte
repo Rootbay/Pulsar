@@ -15,11 +15,7 @@
   import { Label } from '$lib/components/ui/label';
   import { Progress } from '$lib/components/ui/progress';
   import {
-    isDatabaseLoaded,
-    isLocked,
-    needsPasswordSetup,
-    totpVerified,
-    totpRequired
+    appState
   } from '$lib/stores';
   import { currentLocale, t } from '$lib/i18n';
   import { ArrowLeft } from '@lucide/svelte';
@@ -75,10 +71,10 @@
       return;
     }
 
-    if (!$isDatabaseLoaded) {
+    if (!appState.isDatabaseLoaded) {
       goto('/select-vault', { replaceState: true });
-    } else if (!$needsPasswordSetup) {
-      goto($isLocked ? '/login' : '/', { replaceState: true });
+    } else if (!appState.needsPasswordSetup) {
+      goto(appState.isLocked ? '/login' : '/', { replaceState: true });
     }
   });
 
@@ -96,10 +92,10 @@
     isSetting = true;
     try {
       await invoke('set_master_password', { password: newMasterPassword });
-      needsPasswordSetup.set(false);
-      isLocked.set(false);
-      totpVerified.set(false);
-      totpRequired.set(false);
+      appState.needsPasswordSetup = false;
+      appState.isLocked = false;
+      appState.totpVerified = false;
+      appState.totpRequired = false;
     } catch (cause) {
       console.error('Set master password failed:', cause);
       loginError = typeof cause === 'string' ? cause : t(locale, 'setupUnknownError');
@@ -119,11 +115,11 @@
     } catch (error) {
       console.error('Failed to lock while leaving setup:', error);
     }
-    isDatabaseLoaded.set(false);
-    isLocked.set(true);
-    needsPasswordSetup.set(false);
-    totpVerified.set(false);
-    totpRequired.set(false);
+    appState.isDatabaseLoaded = false;
+    appState.isLocked = true;
+    appState.needsPasswordSetup = false;
+    appState.totpVerified = false;
+    appState.totpRequired = false;
     goto('/select-vault', { replaceState: true });
   }
 </script>

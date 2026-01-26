@@ -47,15 +47,15 @@ pub async fn pick_open_file(window: Window) -> Result<String> {
 
 #[tauri::command]
 pub async fn check_file_exists(path: String) -> Result<bool> {
-    Ok(Path::new(&path).exists())
+    Ok(tokio::fs::try_exists(path).await.unwrap_or(false))
 }
 
 #[tauri::command]
 pub async fn elevated_copy(src: String) -> Result<String> {
     let local_appdata = env::var("LOCALAPPDATA").map_err(|e| Error::Internal(format!("Failed to get LOCALAPPDATA: {}", e)))?;
     let app_dir = Path::new(&local_appdata).join("Pulsar");
-    if !app_dir.exists() {
-        fs::create_dir_all(&app_dir).map_err(|e| Error::Internal(format!("Failed to create app dir {}: {}", app_dir.display(), e)))?;
+    if !tokio::fs::try_exists(&app_dir).await.unwrap_or(false) {
+        tokio::fs::create_dir_all(&app_dir).await.map_err(|e| Error::Internal(format!("Failed to create app dir {}: {}", app_dir.display(), e)))?;
     }
 
     let src_path = Path::new(&src);
@@ -70,7 +70,7 @@ pub async fn elevated_copy(src: String) -> Result<String> {
         sanitized_dest
     );
 
-    let status = Command::new("powershell")
+    let status = tokio::process::Command::new("powershell")
         .arg("-NoProfile")
         .arg("-Command")
         .arg("Start-Process")
@@ -82,6 +82,7 @@ pub async fn elevated_copy(src: String) -> Result<String> {
         .arg("RunAs")
         .arg("-Wait")
         .status()
+        .await
         .map_err(|e| Error::Internal(format!("Failed to launch elevated copy: {}", e)))?;
 
     if status.success() {

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { callBackend } from '$lib/utils/backend';
-  import { tagStore } from '$lib/stores/tags';
+  import { tagStore } from '$lib/stores/tags.svelte';
   import {
     Dialog,
     DialogContent,

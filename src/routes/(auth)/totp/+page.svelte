@@ -17,11 +17,7 @@
   } from '$lib/components/ui/card';
   import { Copy, RefreshCw } from '@lucide/svelte';
   import {
-    isDatabaseLoaded,
-    isLocked,
-    needsPasswordSetup,
-    totpVerified,
-    totpRequired
+    appState
   } from '$lib/stores';
   import { loginTotpSecret } from '$lib/stores/totp';
   import { currentLocale, t } from '$lib/i18n';
@@ -53,7 +49,7 @@
   $effect(() => {
     if (
       browser &&
-      !($totpRequired && !$totpVerified && $isDatabaseLoaded && !$isLocked && !$needsPasswordSetup)
+      !(appState.totpRequired && !appState.totpVerified && appState.isDatabaseLoaded && !appState.isLocked && !appState.needsPasswordSetup)
     ) {
       goto('/', { replaceState: true });
     }
@@ -192,9 +188,9 @@
 
     try {
       await callBackend('verify_login_totp', { token: code });
-      isLocked.set(false);
-      totpVerified.set(true);
-      totpRequired.set(false);
+      appState.isLocked = false;
+      appState.totpVerified = true;
+      appState.totpRequired = false;
       await goto('/', { replaceState: true });
     } catch (cause) {
       const message = toErrorMessage(cause);
@@ -240,9 +236,9 @@
     } catch (error) {
       console.error('Failed to lock while leaving TOTP screen:', error);
     }
-    totpRequired.set(false);
-    totpVerified.set(false);
-    isLocked.set(true);
+    appState.totpRequired = false;
+    appState.totpVerified = false;
+    appState.isLocked = true;
     goto('/login', { replaceState: true });
   }
 </script>

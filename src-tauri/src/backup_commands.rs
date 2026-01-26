@@ -1,8 +1,8 @@
-use crate::auth::verify_master_password_impl;
+use crate::auth::verify_master_password_internal;
 use crate::encryption::{decrypt, decrypt_bytes, encrypt, encrypt_bytes};
 use crate::state::AppState;
 use crate::types::{ExportPayload, VaultBackupAttachment, VaultBackupSnapshot};
-use crate::db_commands::{get_password_items_impl, get_buttons_impl, get_recipient_keys_impl};
+use crate::db::{get_password_items_impl, get_buttons_impl, get_recipient_keys_impl};
 use crate::error::{Error, Result};
 use chrono::Utc;
 use argon2::{Algorithm, Argon2, Params, Version};
@@ -15,8 +15,6 @@ use rand::rngs::OsRng;
 use rand::RngCore;
 use serde_json::{self, Value};
 use sqlx::{Error as SqlxError, Row, SqlitePool};
-use std::fs;
-use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
 use tauri::command;
@@ -24,6 +22,7 @@ use tauri::AppHandle;
 use tauri::State;
 use tauri_plugin_dialog::DialogExt;
 use tokio::sync::oneshot;
+use tokio::io::AsyncWriteExt;
 use zeroize::{Zeroize, Zeroizing};
 
 async fn get_key(state: &State<'_, AppState>) -> Result<Zeroizing<Vec<u8>>> {
@@ -66,38 +65,38 @@ async fn get_attachments_snapshot(db_pool: &SqlitePool, key: &[u8]) -> Result<Ve
     Ok(attachments)
 }
 
-fn write_sensitive_bytes(path: &Path, bytes: &[u8]) -> Result<()> {
+async fn write_sensitive_bytes(path: &Path, bytes: &[u8]) -> Result<()> {
     let tmp_path = path.with_extension("tmp");
-    if tmp_path.exists() {
-        let _ = fs::remove_file(&tmp_path);
+    if tokio::fs::try_exists(&tmp_path).await.unwrap_or(false) {
+        let _ = tokio::fs::remove_file(&tmp_path).await;
     }
 
     #[cfg(unix)]
     {
         use std::os::unix::fs::OpenOptionsExt;
-        let mut file = fs::OpenOptions::new()
+        let mut file = tokio::fs::OpenOptions::new()
             .create(true)
             .write(true)
             .truncate(true)
             .mode(0o600)
-            .open(&tmp_path)?;
-        let _ = file.set_permissions(std::fs::Permissions::from_mode(0o600));
-        file.write_all(bytes)?;
-        file.sync_all()?;
+            .open(&tmp_path).await?;
+        // Note: tokio doesn't have a direct set_permissions on File, but we set mode in OpenOptions
+        tokio::io::AsyncWriteExt::write_all(&mut file, bytes).await?;
+        file.sync_all().await?;
     }
 
     #[cfg(not(unix))]
     {
-        let mut file = fs::OpenOptions::new()
+        let mut file = tokio::fs::OpenOptions::new()
             .create(true)
             .write(true)
             .truncate(true)
-            .open(&tmp_path)?;
-        file.write_all(bytes)?;
-        file.sync_all()?;
+            .open(&tmp_path).await?;
+        tokio::io::AsyncWriteExt::write_all(&mut file, bytes).await?;
+        file.sync_all().await?;
     }
 
-    fs::rename(&tmp_path, path)?;
+    tokio::fs::rename(&tmp_path, path).await?;
     Ok(())
 }
 
@@ -117,7 +116,7 @@ pub async fn export_vault_backend(
         ));
     }
     let reauth_password = Zeroizing::new(reauth_password.unwrap_or_default());
-    let reauth_ok = verify_master_password_impl(&state, reauth_password.as_str()).await?;
+    let reauth_ok = verify_master_password_internal(&state, reauth_password.as_str()).await?;
     if !reauth_ok {
         return Err(Error::InvalidPassword);
     }
@@ -148,7 +147,6 @@ pub async fn export_vault_backend(
 
     let file_extension = if is_plaintext { "json" } else { "pulsar" };
     let default_file_name = format!("vault_backup.{}", file_extension);
-
     let path = if let Some(destination) = destination {
         PathBuf::from(destination)
     } else {
@@ -171,7 +169,7 @@ pub async fn export_vault_backend(
 
     if is_plaintext {
         let pretty_bytes = serde_json::to_vec_pretty(&snapshot)?;
-        write_sensitive_bytes(&path, &pretty_bytes)?;
+        write_sensitive_bytes(&path, &pretty_bytes).await?;
         return Ok(format!("Vault exported successfully to {}", path.display()));
     }
 
@@ -204,7 +202,7 @@ pub async fn export_vault_backend(
 
     let export_bytes = serde_json::to_vec_pretty(&export)?;
 
-    write_sensitive_bytes(&path, &export_bytes)?;
+    write_sensitive_bytes(&path, &export_bytes).await?;
     Ok(format!("Vault exported successfully to {}", path.display()))
 }
 
@@ -259,7 +257,7 @@ pub async fn export_vault(
             Err(_) => vault_data.as_bytes().to_vec(),
         };
 
-        write_sensitive_bytes(&path, &pretty_bytes)?;
+        write_sensitive_bytes(&path, &pretty_bytes).await?;
         return Ok(format!("Vault exported successfully to {}", path.display()));
     }
 
@@ -292,7 +290,7 @@ pub async fn export_vault(
 
     let export_bytes = serde_json::to_vec_pretty(&export)?;
 
-    write_sensitive_bytes(&path, &export_bytes)?;
+    write_sensitive_bytes(&path, &export_bytes).await?;
     Ok(format!("Vault exported successfully to {}", path.display()))
 }
 
@@ -333,7 +331,7 @@ pub async fn import_vault(
         ));
     }
 
-    let file_content_bytes = fs::read(&path)?;
+    let file_content_bytes = tokio::fs::read(&path).await?;
 
     let payload: ExportPayload = serde_json::from_slice(&file_content_bytes).map_err(|_| {
         Error::Validation("Failed to parse backup file. It might be invalid or not a Pulsar backup.".to_string())
@@ -381,7 +379,7 @@ pub async fn restore_vault_backend(
         return Err(Error::Validation("A passphrase is required to import the vault.".to_string()));
     }
     let reauth_password = Zeroizing::new(reauth_password.unwrap_or_default());
-    let reauth_ok = verify_master_password_impl(&state, reauth_password.as_str()).await?;
+    let reauth_ok = verify_master_password_internal(&state, reauth_password.as_str()).await?;
     if !reauth_ok {
         return Err(Error::InvalidPassword);
     }
@@ -406,7 +404,7 @@ pub async fn restore_vault_backend(
         }
     };
 
-    let file_content_bytes = fs::read(&path)?;
+    let file_content_bytes = tokio::fs::read(&path).await?;
 
     let decrypted_json = if path.extension().and_then(|s| s.to_str()) == Some("json") {
         if !cfg!(debug_assertions) {

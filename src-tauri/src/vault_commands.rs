@@ -66,7 +66,9 @@ fn metadata_path(db_path: &Path) -> PathBuf {
 }
 
 fn load_stored_settings(app_handle: &tauri::AppHandle) -> Result<StoredAppSettings> {
-    let store = StoreBuilder::new(app_handle, ".settings.dat".parse::<PathBuf>().map_err(|e| Error::Internal(format!("Invalid settings path: {}", e)))?)
+    use tauri::Manager;
+    let settings_path = app_handle.path().app_data_dir().map_err(|e| Error::Internal(e.to_string()))?.join(".settings.dat");
+    let store = StoreBuilder::new(app_handle, settings_path)
         .build()
         .map_err(|e| Error::Internal(e.to_string()))?;
     store.reload().map_err(|e| Error::Internal(e.to_string()))?;
@@ -150,7 +152,7 @@ pub async fn list_vaults(
 
     for path_str in ordered_paths {
         let path = PathBuf::from(&path_str);
-        let metadata = match std::fs::metadata(&path) {
+        let metadata = match tokio::fs::metadata(&path).await {
             Ok(meta) => meta,
             Err(err) => {
                 eprintln!("Failed to stat vault {}: {}", path.display(), err);
@@ -196,7 +198,7 @@ pub async fn list_vaults(
             "available"
         };
 
-        let encrypted = metadata_path(&path).exists();
+        let encrypted = tokio::fs::try_exists(metadata_path(&path)).await.unwrap_or(false);
 
         let item_count = resolve_item_count(active_pool.clone(), is_active && is_unlocked).await;
 

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { iconPaths } from '$lib/icons';
-  import { filterCategory, selectedTag } from '$lib/stores';
+  import { appState } from '$lib/stores';
   import { goto } from '$app/navigation';
   import Icon from '$lib/components/ui/Icon.svelte';
   import { Globe, Plus, Settings } from '@lucide/svelte';
@@ -44,12 +44,12 @@
   }
 
   function handleShowAll() {
-    selectedTag.set(null);
-    filterCategory.set('all');
+    appState.selectedTag = null;
+    appState.filterCategory = 'all';
   }
 
   function handleTagClick(tagText: string) {
-    selectedTag.set(tagText);
+    appState.selectedTag = tagText;
   }
 
   function handleEdit(button: ButtonOption) {
@@ -75,7 +75,7 @@
               size="lg"
               aria-label="Show all items"
               tooltipContent="All items"
-              isActive={$selectedTag === null && $filterCategory === 'all'}
+              isActive={appState.selectedTag === null && appState.filterCategory === 'all'}
               style="--tag-color: var(--sidebar-border); --tag-hover: color-mix(in oklch, var(--sidebar-foreground) 40%, var(--sidebar-border)); --tag-active: color-mix(in oklch, var(--sidebar-foreground) 60%, var(--sidebar-border));"
               class="hover:text-color:var(--tag-hover) data-[active=true]:text-color:var(--tag-active) active:text-color:var(--tag-hover)! h-11.5 w-11.5 cursor-pointer justify-center rounded-lg text-(--tag-color) shadow-[0_0_0_1px_var(--sidebar-border)] transition hover:bg-transparent hover:shadow-[0_0_0_1px_var(--tag-hover)] active:bg-transparent! active:shadow-[0_0_0_1px_var(--tag-hover)]! data-[active=true]:bg-transparent data-[active=true]:shadow-[0_0_0_2px_var(--tag-active)]"
               onclick={handleShowAll}
@@ -95,7 +95,7 @@
                     size="lg"
                     aria-label={button.text}
                     tooltipContent={button.text}
-                    isActive={$selectedTag === button.text}
+                    isActive={appState.selectedTag === button.text}
                     style={`--tag-color: ${button.color || DEFAULT_TAG_COLOR};`}
                     class="group text-color:var(--tag-color) data-[active=true]:text-color:var(--tag-color) hover:text-color:var(--tag-color) active:!text-color:var(--tag-color) h-11.5 w-11.5 cursor-pointer justify-center rounded-lg shadow-[0_0_0_1px_var(--sidebar-border)] transition hover:bg-transparent hover:shadow-[0_0_0_1px_var(--tag-color)] active:bg-transparent! active:shadow-[0_0_0_1px_var(--tag-color)]! data-[active=true]:bg-transparent data-[active=true]:shadow-[0_0_0_2px_var(--tag-color)]"
                     onclick={() => handleTagClick(button.text)}

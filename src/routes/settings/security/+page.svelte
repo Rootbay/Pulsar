@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
   import { get } from 'svelte/store';
-  import { totpVerified, totpRequired } from '$lib/stores';
+  import { appState } from '$lib/stores';
   import { securitySettings } from '$lib/stores/security';
   import { loginTotpSecret, loginTotpConfigured } from '$lib/stores/totp';
   import { callBackend } from '$lib/utils/backend';
@@ -427,8 +427,8 @@
       pendingTotpSecret = null;
       pendingProvisioningUri = null;
       totpVerificationCode = '';
-      totpRequired.set(false);
-      totpVerified.set(true);
+      appState.totpRequired = false;
+      appState.totpVerified = true;
       await refreshTotpStatus();
     } catch (error) {
       totpVerificationError = toErrorMessage(error);
@@ -454,8 +454,8 @@
       pendingProvisioningUri = null;
       totpVerificationCode = '';
       totpDisableSuccess = 'Login TOTP disabled. Unlocking will only require your master password.';
-      totpRequired.set(false);
-      totpVerified.set(false);
+      appState.totpRequired = false;
+      appState.totpVerified = false;
       await refreshTotpStatus();
     } catch (error) {
       totpStatusError = toErrorMessage(error);

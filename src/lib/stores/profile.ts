@@ -1,4 +1,4 @@
-import { createDatabaseStore } from '$lib/utils/databaseStore';
+import { createDatabaseStore } from '$lib/utils/databaseStore.svelte';
 
 export interface ProfileSettings {
   name: string;

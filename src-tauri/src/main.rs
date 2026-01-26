@@ -5,11 +5,11 @@ mod backup_commands;
 mod clipboard;
 mod crypto;
 mod db;
-mod db_commands;
 mod encryption;
 mod error;
 mod file_dialog;
 mod security;
+mod settings;
 mod state;
 mod totp;
 mod types;
@@ -23,22 +23,23 @@ use crate::state::AppState;
 use crate::auth::UNLOCK_CONCURRENCY_LIMIT;
 use crate::error::{Error, Result};
 use tauri::{Manager, RunEvent, State};
-use tauri_plugin_store::StoreBuilder;
 use zeroize::Zeroize;
 
 #[tauri::command]
-async fn is_database_loaded(app_state: State<'_, AppState>) -> Result<bool> {
-    Ok(app_state.db.lock().await.is_some())
+async fn is_database_loaded(state: State<'_, AppState>) -> Result<bool> {
+    let guard = state.db.lock().await;
+    Ok(guard.is_some())
 }
 
 #[tauri::command]
-async fn get_active_db_path(app_state: State<'_, AppState>) -> Result<Option<String>> {
-    let guard = app_state.db_path.lock().await;
+async fn get_active_db_path(state: State<'_, AppState>) -> Result<Option<String>> {
+    let guard = state.db_path.lock().await;
     Ok(guard.as_ref().map(|p| p.to_string_lossy().to_string()))
 }
 
 #[tauri::command]
 async fn switch_database(db_path: PathBuf, app_state: State<'_, AppState>) -> Result<()> {
+    // Check if the requested database is already active and loaded.
     {
         let path_guard = app_state.db_path.lock().await;
         if let Some(active_path) = path_guard.as_ref() {
@@ -51,55 +52,58 @@ async fn switch_database(db_path: PathBuf, app_state: State<'_, AppState>) -> Re
         }
     }
 
+    // Capture current key and locking state before we close the old pool.
     let key_opt = {
         let guard = app_state.key.lock().await;
         guard.clone()
     };
     let key_slice_opt: Option<&[u8]> = key_opt.as_ref().map(|z| z.as_slice());
+    
+    // Use the rekey lock to serialize database switching operations.
     let _rekey_lock = app_state.rekey.lock().await;
 
-    let mut last_err = None;
-    let mut new_pool_opt = None;
-    for _ in 0..5 {
-        match crate::db::init_db(&db_path, key_slice_opt).await {
-            Ok(pool) => {
-                new_pool_opt = Some(pool);
-                last_err = None;
-                break;
-            }
-            Err(e) => {
-                last_err = Some(e);
-                tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
-            }
-        }
-    }
-
-    let new_pool = match new_pool_opt {
-        Some(pool) => pool,
-        None => {
-            let e = last_err.unwrap_or_else(|| "Unknown error".to_string());
-            eprintln!(
-                "Failed to initialize database at {}: {}",
-                db_path.display(),
-                e
-            );
-            return Err(Error::Internal(e));
-        }
-    };
-
+    // Close the old database pool first to release file locks.
     {
         let mut guard = app_state.db.lock().await;
         if let Some(old_pool) = guard.take() {
             old_pool.close().await;
         }
-        *guard = Some(new_pool);
     }
 
-    {
-        let mut path_guard = app_state.db_path.lock().await;
-        *path_guard = Some(db_path.clone());
-    }
+    // Small delay to ensure the OS has released any file system handles.
+    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
 
+    // Initialize the new database pool.
+    match crate::db::init_db(&db_path, key_slice_opt).await {
+        Ok(new_pool) => {
+            // Update the app state with the new pool and database path.
+            let mut guard = app_state.db.lock().await;
+            *guard = Some(new_pool);
+            
+            let mut path_guard = app_state.db_path.lock().await;
+            *path_guard = Some(db_path.clone());
+        }
+        Err(e) => {
+            // If it failed because it's encrypted or not a database yet, 
+            // we still want to set the db_path so that it can be unlocked/initialized later.
+            let mut path_guard = app_state.db_path.lock().await;
+            *path_guard = Some(db_path.clone());
+
+            // If we have no key and it failed, it's likely just encrypted, which is fine at this stage.
+            if key_slice_opt.is_none() {
+                eprintln!("Database at {} is encrypted or requires initialization.", db_path.display());
+            } else {
+                eprintln!(
+                    "Failed to initialize database at {}: {}",
+                    db_path.display(),
+                    e
+                );
+                return Err(Error::Internal(e));
+            }
+        }
+    };
+
+    // Clear session-specific keys to ensure security.
     {
         let mut kg = app_state.key.lock().await;
         *kg = None;
@@ -116,7 +120,6 @@ async fn switch_database(db_path: PathBuf, app_state: State<'_, AppState>) -> Re
 }
 
 fn main() {
-
     let context = tauri::generate_context!();
     let mut builder = tauri::Builder::default()
         .manage(AppState {
@@ -161,28 +164,28 @@ fn main() {
             auth::disable_biometrics,
             auth::is_biometrics_enabled,
             auth::unlock_with_biometrics,
-            db_commands::save_button,
-            db_commands::get_buttons,
-            db_commands::update_button,
-            db_commands::delete_button,
-            db_commands::remove_tag_from_password_items,
-            db_commands::rename_tag_in_password_items,
-            db_commands::save_password_item,
-            db_commands::get_password_items,
-            db_commands::update_password_item,
-            db_commands::update_password_item_tags,
-            db_commands::update_password_item_totp_secret,
-            db_commands::delete_password_item,
-            db_commands::wipe_vault_database,
-            db_commands::add_custom_field,
-            db_commands::add_attachment,
-            db_commands::delete_attachment,
-            db_commands::save_attachment_to_disk,
-            db_commands::save_recipient_key,
-            db_commands::get_recipient_keys,
-            db_commands::delete_recipient_key,
-            db_commands::save_profile_settings,
-            db_commands::get_profile_settings,
+            db::save_button,
+            db::get_buttons,
+            db::update_button,
+            db::delete_button,
+            db::remove_tag_from_password_items,
+            db::rename_tag_in_password_items,
+            db::save_password_item,
+            db::get_password_items,
+            db::update_password_item,
+            db::update_password_item_tags,
+            db::update_password_item_totp_secret,
+            db::delete_password_item,
+            db::wipe_vault_database,
+            db::add_custom_field,
+            db::add_attachment,
+            db::delete_attachment,
+            db::save_attachment_to_disk,
+            db::save_recipient_key,
+            db::get_recipient_keys,
+            db::delete_recipient_key,
+            db::save_profile_settings,
+            db::get_profile_settings,
             crypto::export_password_entry,
             crypto::generate_x25519_keypair,
             crypto::export_password_entry_to_public_key,
@@ -207,8 +210,8 @@ fn main() {
             security::wipe_memory,
             security::get_security_report,
             security::run_integrity_check,
-            get_all_settings,
-            set_all_settings,
+            settings::get_all_settings,
+            settings::set_all_settings,
             clipboard::get_clipboard_capabilities,
             clipboard::apply_clipboard_policy,
             clipboard::clear_clipboard,
@@ -228,82 +231,3 @@ fn main() {
         }
     });
 }
-
-use keyring::Entry;
-use crate::encryption::{encrypt, decrypt};
-use base64::{engine::general_purpose, Engine as _};
-use rand::{rngs::OsRng, RngCore};
-
-const SETTINGS_KEYRING_SERVICE: &str = "pulsar-settings";
-const SETTINGS_KEYRING_USER: &str = "encryption-key";
-
-fn get_or_create_settings_key() -> Result<Vec<u8>> {
-    let entry = Entry::new(SETTINGS_KEYRING_SERVICE, SETTINGS_KEYRING_USER).map_err(|e| Error::Internal(e.to_string()))?;
-    match entry.get_password() {
-        Ok(key_b64) => {
-            general_purpose::STANDARD.decode(&key_b64).map_err(|e| Error::Internal(e.to_string()))
-        }
-        Err(keyring::Error::NoEntry) => {
-            let mut key = [0u8; 32];
-            OsRng.fill_bytes(&mut key);
-            let key_b64 = general_purpose::STANDARD.encode(key);
-            entry.set_password(&key_b64).map_err(|e| Error::Internal(e.to_string()))?;
-            Ok(key.to_vec())
-        }
-        Err(e) => Err(Error::Internal(e.to_string())),
-    }
-}
-
-#[tauri::command]
-async fn get_all_settings(app_handle: tauri::AppHandle) -> Result<Option<String>> {
-    let store = StoreBuilder::new(&app_handle, PathBuf::from(".settings.dat"))
-        .build()
-        .map_err(|e| Error::Internal(e.to_string()))?;
-    store.reload().map_err(|e| Error::Internal(e.to_string()))?;
-
-    if let Some(encrypted_val) = store.get("settings_encrypted") {
-        let encrypted_str = encrypted_val.as_str().ok_or_else(|| Error::Internal("Invalid encrypted settings format".to_string()))?;
-        let key = get_or_create_settings_key()?;
-        let decrypted = decrypt(encrypted_str, &key)
-            .map_err(|_| Error::Internal("Failed to decrypt settings.".to_string()))?;
-        return Ok(Some(decrypted));
-    }
-
-    let plaintext = store.get("settings").and_then(|v| {
-        v.as_str()
-            .map(|s| s.to_string())
-            .or_else(|| Some(v.to_string()))
-    });
-
-    if let Some(settings) = plaintext {
-        let key = get_or_create_settings_key()?;
-        let encrypted = encrypt(&settings, &key)?;
-        store.set("settings_encrypted".to_string(), serde_json::Value::String(encrypted));
-        store.delete("settings");
-        store.save().map_err(|e| Error::Internal(e.to_string()))?;
-        return Ok(Some(settings));
-    }
-
-    Ok(None)
-}
-
-#[tauri::command]
-async fn set_all_settings(app_handle: tauri::AppHandle, settings: String) -> Result<()> {
-    let store = StoreBuilder::new(&app_handle, PathBuf::from(".settings.dat"))
-        .build()
-        .map_err(|e| Error::Internal(e.to_string()))?;
-    store.reload().map_err(|e| Error::Internal(e.to_string()))?;
-
-    let key = get_or_create_settings_key()?;
-    let encrypted = encrypt(&settings, &key)?;
-
-    (*store).set("settings_encrypted".to_string(), serde_json::Value::String(encrypted));
-    (*store).delete("settings");
-
-    match (*store).save() {
-        Ok(()) => {}
-        Err(e) => return Err(Error::Internal(e.to_string())),
-    }
-    Ok(())
-}
-

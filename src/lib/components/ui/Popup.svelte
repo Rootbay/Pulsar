@@ -4,7 +4,7 @@
   import Icon from '$lib/components/ui/Icon.svelte';
   import { iconPaths } from '$lib/icons';
 
-  import type { TagInput } from '$lib/stores/tags';
+  import type { TagInput } from '$lib/stores/tags.svelte';
 
   interface Props {
     mode?: 'create' | 'edit';

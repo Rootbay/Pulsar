@@ -1,5 +1,5 @@
 import { iconPaths } from '$lib/icons';
-import type { FilterCategory } from '$lib/stores';
+import { type FilterCategory } from '$lib/stores';
 import type { PasswordItem } from '$lib/types/password';
 
 export type TagButton = {

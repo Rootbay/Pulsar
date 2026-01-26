@@ -1,8 +1,7 @@
 <script lang="ts">
   import Icon from '$lib/components/ui/Icon.svelte';
-  import { onMount, tick } from 'svelte';
+  import { onMount, tick, untrack } from 'svelte';
   import type { Snippet } from 'svelte';
-  import type { HTMLInputAttributes, HTMLTextareaAttributes } from 'svelte/elements';
 
   interface Props {
     id?: string;
@@ -43,12 +42,6 @@
 
   let expanded = $state(false);
 
-  $effect(() => {
-    if (inputValue == null) {
-      inputValue = '';
-    }
-  });
-
   const isPlaceholderValue = $derived(readOnly && (!inputValue || inputValue === 'N/A'));
 
   function resizeTextarea() {
@@ -65,7 +58,9 @@
 
   $effect(() => {
     if (isMultiline) {
-      tick().then(() => resizeTextarea());
+      untrack(() => {
+        tick().then(() => resizeTextarea());
+      });
     }
   });
 

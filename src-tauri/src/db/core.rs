@@ -46,7 +46,7 @@ fn build_pool_options() -> SqlitePoolOptions {
         .acquire_timeout(std::time::Duration::from_secs(60))
         .after_connect(move |conn, _meta| {
             Box::pin(async move {
-                sqlx::query("PRAGMA journal_mode = DELETE")
+                sqlx::query("PRAGMA journal_mode = WAL")
                     .execute(&mut *conn)
                     .await?;
 
@@ -78,8 +78,6 @@ fn build_pool_options() -> SqlitePoolOptions {
 }
 
 pub async fn init_db(db_path: &Path, password: Option<&[u8]>) -> Result<SqlitePool, String> {
-    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-
     let db_path_abs = resolve_db_path(db_path)?;
 
     if let Some(parent) = db_path_abs.parent() {

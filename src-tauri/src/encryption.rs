@@ -34,6 +34,41 @@ pub fn encrypt(plaintext: &str, key: &[u8]) -> Result<String> {
     Ok(format!("{nonce_b64}:{ciphertext_b64}"))
 }
 
+pub fn decrypt(encrypted_payload: &str, key: &[u8]) -> Result<String> {
+    ensure_key_len(key, Error::Decryption)?;
+    let mut parts = encrypted_payload.split(':');
+    let nonce_b64 = parts.next().ok_or_else(|| Error::Decryption("Invalid encrypted payload format: missing nonce".to_string()))?;
+    let ciphertext_b64 = parts.next().ok_or_else(|| Error::Decryption("Invalid encrypted payload format: missing ciphertext".to_string()))?;
+
+    if parts.next().is_some() {
+        return Err(Error::Decryption("Invalid encrypted payload format: too many parts".to_string()));
+    }
+
+    let nonce_bytes = general_purpose::STANDARD
+        .decode(nonce_b64)
+        .map_err(|e| Error::Decryption(format!("Nonce decode failed: {e}")))?;
+    
+    if nonce_bytes.len() != 24 {
+        return Err(Error::Decryption("Invalid nonce length".to_string()));
+    }
+
+    let ciphertext = general_purpose::STANDARD
+        .decode(ciphertext_b64)
+        .map_err(|e| Error::Decryption(format!("Ciphertext decode failed: {e}")))?;
+
+    let nonce = XNonce::from_slice(&nonce_bytes);
+
+    let key: &Key = Key::from_slice(key);
+    let cipher = XChaCha20Poly1305::new(key);
+
+    let decrypted_bytes = cipher
+        .decrypt(nonce, ciphertext.as_ref())
+        .map_err(|e| Error::Decryption(format!("Decryption failed: {e}")))?;
+
+    String::from_utf8(decrypted_bytes)
+        .map_err(|e| Error::Decryption(format!("UTF-8 conversion failed: {e}")))
+}
+
 pub fn encrypt_bytes(data: &[u8], key: &[u8]) -> Result<Vec<u8>> {
     ensure_key_len(key, Error::Encryption)?;
     let key: &Key = Key::from_slice(key);
@@ -73,38 +108,64 @@ pub fn decrypt_bytes(encrypted_data: &[u8], key: &[u8]) -> Result<Vec<u8>> {
     Ok(decrypted_bytes)
 }
 
-pub fn decrypt(encrypted_payload: &str, key: &[u8]) -> Result<String> {
-    ensure_key_len(key, Error::Decryption)?;
-    let mut parts = encrypted_payload.split(':');
-    let nonce_b64 = parts.next().ok_or_else(|| Error::Decryption("Invalid encrypted payload format: missing nonce".to_string()))?;
-    let ciphertext_b64 = parts.next().ok_or_else(|| Error::Decryption("Invalid encrypted payload format: missing ciphertext".to_string()))?;
+pub struct CipherSession {
+    cipher: XChaCha20Poly1305,
+}
 
-    if parts.next().is_some() {
-        return Err(Error::Decryption("Invalid encrypted payload format: too many parts".to_string()));
+impl CipherSession {
+    pub fn new(key: &[u8]) -> Result<Self> {
+        ensure_key_len(key, Error::Encryption)?;
+        let key: &Key = Key::from_slice(key);
+        Ok(Self {
+            cipher: XChaCha20Poly1305::new(key),
+        })
     }
 
-    let nonce_bytes = general_purpose::STANDARD
-        .decode(nonce_b64)
-        .map_err(|e| Error::Decryption(format!("Nonce decode failed: {e}")))?;
-    
-    if nonce_bytes.len() != 24 {
-        return Err(Error::Decryption("Invalid nonce length".to_string()));
+    pub fn encrypt(&self, plaintext: &str) -> Result<String> {
+        let mut nonce_bytes = [0u8; 24];
+        OsRng.fill_bytes(&mut nonce_bytes);
+        let nonce = XNonce::from_slice(&nonce_bytes);
+
+        let ciphertext = self.cipher
+            .encrypt(nonce, plaintext.as_bytes())
+            .map_err(|e| Error::Encryption(format!("Encryption failed: {e}")))?;
+
+        let nonce_b64 = general_purpose::STANDARD.encode(nonce_bytes);
+        let ciphertext_b64 = general_purpose::STANDARD.encode(&ciphertext);
+
+        Ok(format!("{nonce_b64}:{ciphertext_b64}"))
     }
 
-    let ciphertext = general_purpose::STANDARD
-        .decode(ciphertext_b64)
-        .map_err(|e| Error::Decryption(format!("Ciphertext decode failed: {e}")))?;
+    pub fn decrypt(&self, encrypted_payload: &str) -> Result<String> {
+        let mut parts = encrypted_payload.split(':');
+        let nonce_b64 = parts.next().ok_or_else(|| Error::Decryption("Invalid encrypted payload format: missing nonce".to_string()))?;
+        let ciphertext_b64 = parts.next().ok_or_else(|| Error::Decryption("Invalid encrypted payload format: missing ciphertext".to_string()))?;
 
-    let key: &Key = Key::from_slice(key);
-    let cipher = XChaCha20Poly1305::new(key);
-    let nonce = XNonce::from_slice(&nonce_bytes);
+        if parts.next().is_some() {
+            return Err(Error::Decryption("Invalid encrypted payload format: too many parts".to_string()));
+        }
 
-    let decrypted_bytes = cipher
-        .decrypt(nonce, ciphertext.as_ref())
-        .map_err(|e| Error::Decryption(format!("Decryption failed: {e}")))?;
+        let nonce_bytes = general_purpose::STANDARD
+            .decode(nonce_b64)
+            .map_err(|e| Error::Decryption(format!("Nonce decode failed: {e}")))?;
+        
+        if nonce_bytes.len() != 24 {
+            return Err(Error::Decryption("Invalid nonce length".to_string()));
+        }
 
-    String::from_utf8(decrypted_bytes)
-        .map_err(|e| Error::Decryption(format!("UTF-8 conversion failed: {e}")))
+        let ciphertext = general_purpose::STANDARD
+            .decode(ciphertext_b64)
+            .map_err(|e| Error::Decryption(format!("Ciphertext decode failed: {e}")))?;
+
+        let nonce = XNonce::from_slice(&nonce_bytes);
+
+        let decrypted_bytes = self.cipher
+            .decrypt(nonce, ciphertext.as_ref())
+            .map_err(|e| Error::Decryption(format!("Decryption failed: {e}")))?;
+
+        String::from_utf8(decrypted_bytes)
+            .map_err(|e| Error::Decryption(format!("UTF-8 conversion failed: {e}")))
+    }
 }
 
 #[cfg(test)]

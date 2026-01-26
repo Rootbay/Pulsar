@@ -15,11 +15,7 @@
     CardTitle
   } from '$lib/components/ui/card';
   import {
-    isDatabaseLoaded,
-    isLocked,
-    needsPasswordSetup,
-    totpVerified,
-    totpRequired
+    appState
   } from '$lib/stores';
   import { currentLocale, t } from '$lib/i18n';
   import { Lock, Eye, EyeOff, ArrowLeft, FingerprintPattern, TriangleAlert } from '@lucide/svelte';
@@ -67,14 +63,14 @@
       const result = await callBackend<{ totp_required: boolean }>('unlock_with_biometrics');
 
       if (result?.totp_required) {
-        totpRequired.set(true);
-        totpVerified.set(false);
-        isLocked.set(false);
+        appState.totpRequired = true;
+        appState.totpVerified = false;
+        appState.isLocked = false;
         await goto('/totp', { replaceState: true });
       } else {
-        totpRequired.set(false);
-        totpVerified.set(true);
-        isLocked.set(false);
+        appState.totpRequired = false;
+        appState.totpVerified = true;
+        appState.isLocked = false;
         await goto('/', { replaceState: true });
       }
     } catch (error: unknown) {
@@ -94,11 +90,11 @@
 
   $effect(() => {
     if (browser) {
-      if (!$isDatabaseLoaded) {
+      if (!appState.isDatabaseLoaded) {
         goto('/select-vault', { replaceState: true });
-      } else if ($needsPasswordSetup) {
+      } else if (appState.needsPasswordSetup) {
         goto('/setup', { replaceState: true });
-      } else if (!$isLocked) {
+      } else if (!appState.isLocked) {
         goto('/', { replaceState: true });
       }
     }
@@ -116,20 +112,20 @@
         password: trimmedPassword
       });
       if (result?.totp_required) {
-        totpRequired.set(true);
-        totpVerified.set(false);
-        isLocked.set(false);
+        appState.totpRequired = true;
+        appState.totpVerified = false;
+        appState.isLocked = false;
         await goto('/totp', { replaceState: true });
       } else {
-        totpRequired.set(false);
-        totpVerified.set(true);
-        isLocked.set(false);
+        appState.totpRequired = false;
+        appState.totpVerified = true;
+        appState.isLocked = false;
         await goto('/', { replaceState: true });
       }
     } catch (error: unknown) {
       console.error('Unlock failed:', error);
-      totpRequired.set(false);
-      totpVerified.set(false);
+      appState.totpRequired = false;
+      appState.totpVerified = false;
       loginError =
         ((error as Record<string, unknown>).message as string) || t(locale, 'loginUnknownError');
     } finally {
@@ -139,10 +135,10 @@
 
   const handleChangeDatabase = async () => {
     await callBackend('lock');
-    isDatabaseLoaded.set(false);
-    isLocked.set(true);
-    totpRequired.set(false);
-    totpVerified.set(false);
+    appState.isDatabaseLoaded = false;
+    appState.isLocked = true;
+    appState.totpRequired = false;
+    appState.totpVerified = false;
   };
 
   const goBack = async () => {

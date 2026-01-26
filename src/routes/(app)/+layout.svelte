@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { isLocked, showSettingsPopup, selectedTag } from '$lib/stores';
-  import { tagStore, type TagInput, type TagButton } from '$lib/stores/tags';
+  import { appState, vaultStore } from '$lib/stores';
+  import { tagStore, type TagInput, type TagButton } from '$lib/stores/tags.svelte';
   import AppSidebar from '$lib/components/layout/sidebar.svelte';
   import PasswordList from '$lib/components/layout/passwordList.svelte';
   import PasswordDetail from '$lib/components/layout/passwordDetail.svelte';
@@ -21,7 +21,6 @@
   const SIDEBAR_WIDTH = '86px';
   const SIDEBAR_STYLE = '--sidebar-width: ' + SIDEBAR_WIDTH + ';';
 
-  let passwordItems = $state<PasswordItem[]>([]);
   let selectedPasswordItem = $state<PasswordItem | null>(null);
   let showCreatePasswordPopup = $state(false);
   let showPopup = $state(false);
@@ -45,13 +44,12 @@
   });
 
   async function loadPasswordItems() {
-    if ($isLocked) {
-      passwordItems = [];
+    if (appState.isLocked) {
       return;
     }
 
     try {
-      passwordItems = await callBackend('get_password_items');
+      await vaultStore.loadItems();
       await tagStore.refresh();
     } catch (error) {
       console.error('Failed to load vault items:', error);
@@ -75,7 +73,7 @@
   });
 
   $effect(() => {
-    if (!$isLocked) {
+    if (!appState.isLocked) {
       loadPasswordItems();
       profileSettings.load();
     }
@@ -114,8 +112,8 @@
         await tagStore.renameTagAcrossItems(oldTag.text, updatedTag.text);
         toast.success('Tag updated across items.');
 
-        if ($selectedTag === oldTag.text) {
-          selectedTag.set(updatedTag.text);
+        if (appState.selectedTag === oldTag.text) {
+          appState.selectedTag = updatedTag.text;
         }
       }
     } catch (error) {
@@ -124,10 +122,10 @@
       return;
     }
 
-    passwordItems = await callBackend('get_password_items');
+    await vaultStore.loadItems();
 
     if (selectedPasswordItem) {
-      const refreshedItem = passwordItems.find((item) => item.id === selectedPasswordItem?.id);
+      const refreshedItem = vaultStore.items.find((item) => item.id === selectedPasswordItem?.id);
       selectedPasswordItem = refreshedItem ?? null;
     }
   }
@@ -147,14 +145,14 @@
       return;
     }
 
-    if ($selectedTag === detail.text) {
-      selectedTag.set(null);
+    if (appState.selectedTag === detail.text) {
+      appState.selectedTag = null;
     }
 
-    passwordItems = await callBackend('get_password_items');
+    await vaultStore.loadItems();
 
     if (selectedPasswordItem) {
-      const refreshedItem = passwordItems.find((item) => item.id === selectedPasswordItem?.id);
+      const refreshedItem = vaultStore.items.find((item) => item.id === selectedPasswordItem?.id);
       selectedPasswordItem = refreshedItem ?? null;
     }
   }
@@ -165,12 +163,12 @@
 
   async function handlePasswordSaved() {
     showCreatePasswordPopup = false;
-    passwordItems = await callBackend('get_password_items');
+    await vaultStore.loadItems();
 
-    if (passwordItems.length) {
-      let newest = passwordItems[0];
+    if (vaultStore.items.length) {
+      let newest = vaultStore.items[0];
 
-      for (const item of passwordItems) {
+      for (const item of vaultStore.items) {
         try {
           if (new Date(item.created_at) > new Date(newest.created_at)) {
             newest = item;
@@ -195,7 +193,7 @@
   }
 
   async function handlePasswordEditRequested(item: PasswordItem) {
-    if (!item || $isLocked) {
+    if (!item || appState.isLocked) {
       return;
     }
 
@@ -206,14 +204,14 @@
     passwordDetailRef?.enterEditMode?.();
   }
 
-  let disableContextEdit = $derived($isLocked || passwordItems.length === 0);
+  let disableContextEdit = $derived(appState.isLocked || vaultStore.items.length === 0);
 
   async function handleRemoveEntry(itemToRemove: PasswordItem) {
     if (!itemToRemove) return;
 
     try {
       await callBackend('delete_password_item', { id: itemToRemove.id });
-      passwordItems = passwordItems.filter((item) => item.id !== itemToRemove.id);
+      vaultStore.removeItem(itemToRemove.id);
 
       if (selectedPasswordItem && selectedPasswordItem.id === itemToRemove.id) {
         selectedPasswordItem = null;
@@ -236,7 +234,7 @@
       </SidebarProvider>
 
       <PasswordList
-        items={passwordItems}
+        items={vaultStore.items}
         oncreateEntry={handleCreateEntry}
         onselect={handlePasswordSelected}
         oneditEntry={handlePasswordEditRequested}
@@ -253,10 +251,10 @@
         onremoveEntry={handleRemoveEntry}
         ontagsSaved={(detail) => {
           const { id, tags } = detail;
-          const idx = passwordItems.findIndex((item) => item.id === id);
+          const idx = vaultStore.items.findIndex((item) => item.id === id);
           if (idx !== -1) {
-            passwordItems[idx] = { ...passwordItems[idx], tags };
-            passwordItems = [...passwordItems];
+            const updatedItem = { ...vaultStore.items[idx], tags };
+            vaultStore.updateItem(updatedItem);
           }
         }}
         bind:this={passwordDetailRef}
@@ -267,8 +265,12 @@
   </div>
 </div>
 
-{#if $showSettingsPopup}
-  <Settings onclose={() => showSettingsPopup.set(false)} />
+{#if appState.showSettingsPopup}
+  <div class="bg-background/80 fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-sm sm:p-8">
+    <div class="max-h-full w-full max-w-4xl overflow-y-auto rounded-2xl shadow-2xl">
+      <Settings onclose={() => appState.showSettingsPopup = false} />
+    </div>
+  </div>
 {/if}
 
 {#if showPopup}

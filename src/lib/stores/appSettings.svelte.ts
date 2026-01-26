@@ -62,10 +62,16 @@ const defaultAllSettings: AllSettings = {
 class SettingsManager {
   #state = $state<AllSettings>(defaultAllSettings);
   #isInitialized = false;
+  #isSaving = false;
   #saveTimeout: ReturnType<typeof setTimeout> | null = null;
+  #pendingSave: Promise<void> | null = null;
 
   get current() {
     return this.#state;
+  }
+
+  get isSaving() {
+    return this.#isSaving;
   }
 
   async init() {
@@ -135,10 +141,18 @@ class SettingsManager {
   }
 
   async save() {
+    if (this.#isSaving) {
+      this.scheduleSave(); // Retry after current save finishes
+      return;
+    }
+
+    this.#isSaving = true;
     try {
       await callBackend('set_all_settings', { settings: JSON.stringify(this.#state) });
     } catch (error) {
       console.error('Failed to save settings:', error);
+    } finally {
+      this.#isSaving = false;
     }
   }
 

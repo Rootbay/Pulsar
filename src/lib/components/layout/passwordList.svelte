@@ -7,8 +7,7 @@
   import Favicon from '../ui/Favicon.svelte';
   import { iconPaths } from '$lib/icons';
   import { callBackend } from '$lib/utils/backend';
-  import { selectedTag, filterCategory } from '$lib/stores';
-  import type { FilterCategory } from '$lib/stores';
+  import { appState, vaultStore } from '$lib/stores';
   import type { PasswordItem } from '$lib/types/password';
   import { Search, X } from '@lucide/svelte';
   import { Button } from '$lib/components/ui/button';
@@ -70,12 +69,9 @@
   };
 
   const sectionOrder: SectionTitle[] = ['Pinned', 'Today', 'Yesterday', 'Earlier'];
-  const RECENT_DAY_WINDOW = 7;
-  const DAY_IN_MS = 24 * 60 * 60 * 1000;
   const PIN_TAG_NAMES = new Set(['pinned', 'pin']);
-  const RECENT_FILTER: FilterCategory = 'recent';
+  const RECENT_FILTER = 'recent' as const;
 
-  let searchTerm = $state('');
   let selectedItemId = $state<number | null>(null);
   let showSkeleton = $state(false);
   let skeletonTimer: ReturnType<typeof setTimeout> | null = null;
@@ -83,7 +79,7 @@
   let navInnerRef: HTMLElement | null = null;
   let highlightTimer: ReturnType<typeof setTimeout> | null = null;
 
-  const itemsCount = $derived(items.length);
+  const itemsCount = $derived(vaultStore.items.length);
 
   const tagMap = $derived.by(
     () =>
@@ -95,41 +91,11 @@
       )
   );
 
-  const filteredItems = $derived.by(() => {
-    const normalizedSearchTerm = searchTerm.trim().toLowerCase();
-
-    return items.filter((item) => {
-      const tagNames = getTagNames(item);
-
-      if ($selectedTag !== null && !tagNames.includes($selectedTag)) {
-        return false;
-      }
-
-      if ($filterCategory === RECENT_FILTER && !isRecent(item, tagNames)) {
-        return false;
-      }
-
-      if (!normalizedSearchTerm) {
-        return true;
-      }
-
-      const title = item.title?.toLowerCase() ?? '';
-      const username = item.username?.toLowerCase() ?? '';
-      const tags = item.tags?.toLowerCase() ?? '';
-      const url = item.url?.toLowerCase() ?? '';
-
-      return (
-        title.includes(normalizedSearchTerm) ||
-        username.includes(normalizedSearchTerm) ||
-        tags.includes(normalizedSearchTerm) ||
-        url.includes(normalizedSearchTerm)
-      );
-    });
-  });
+  const filteredItems = $derived(vaultStore.filteredItems);
 
   const sectionedItems = $derived.by(() => partitionItems(filteredItems));
 
-  const currentSkeletonKey = $derived(() => `${$selectedTag ?? 'all'}|${$filterCategory}`);
+  const currentSkeletonKey = $derived(() => `${appState.selectedTag ?? 'all'}|${appState.filterCategory}`);
 
   let lastDispatchedId: number | null = null;
   $effect(() => {
@@ -355,10 +321,6 @@
     return defaultFallback;
   }
 
-  function clearSearch() {
-    searchTerm = '';
-  }
-
   async function handlePinToggle(item: PasswordItem) {
     const id = item.id;
     const tagNames = getTagNames(item);
@@ -373,13 +335,10 @@
 
     try {
       await callBackend('update_password_item_tags', { id, tags: updatedTags });
-      const itemIndex = items.findIndex((candidate) => candidate.id === id);
+      const itemIndex = filteredItems.findIndex((candidate) => candidate.id === id);
       if (itemIndex !== -1) {
-        items = [
-          ...items.slice(0, itemIndex),
-          { ...items[itemIndex], tags: updatedTags },
-          ...items.slice(itemIndex + 1)
-        ];
+        const updatedItem = { ...filteredItems[itemIndex], tags: updatedTags };
+        vaultStore.updateItem(updatedItem);
       }
     } catch (error) {
       console.error('Failed to toggle pin:', error);
@@ -440,15 +399,15 @@
               type="text"
               placeholder="Search..."
               class="searchInput h-8 border-0 bg-transparent px-2 text-sm shadow-none focus-visible:border-0 focus-visible:ring-0 focus-visible:ring-offset-0"
-              bind:value={searchTerm}
+              bind:value={vaultStore.searchTerm}
             />
-            {#if searchTerm}
+            {#if vaultStore.searchTerm}
               <Button
                 type="button"
                 variant="ghost"
                 size="icon"
                 class="clearSearchBtn text-muted-foreground hover:text-foreground h-8 w-8 shrink-0"
-                onclick={clearSearch}
+                onclick={() => vaultStore.searchTerm = ''}
                 aria-label="Clear search"
               >
                 <X class="h-4 w-4" />
@@ -463,8 +422,8 @@
               role="tab"
               variant="ghost"
               size="sm"
-              aria-selected={$filterCategory === 'all'}
-              onclick={() => filterCategory.set('all')}
+              aria-selected={appState.filterCategory === 'all'}
+              onclick={() => appState.filterCategory = 'all'}
             >
               All <span class="count">({itemsCount})</span>
             </Button>
@@ -474,8 +433,8 @@
               role="tab"
               variant="ghost"
               size="sm"
-              aria-selected={$filterCategory === RECENT_FILTER}
-              onclick={() => filterCategory.set(RECENT_FILTER)}
+              aria-selected={appState.filterCategory === RECENT_FILTER}
+              onclick={() => appState.filterCategory = RECENT_FILTER}
             >
               Recently
             </Button>
@@ -487,8 +446,8 @@
             {#if filteredItems.length === 0}
               <ul class="itemList" role="list">
                 <li class="no-items-message">
-                  {#if $selectedTag}
-                    No passwords found for tag "{$selectedTag}".
+                  {#if appState.selectedTag}
+                    No passwords found for tag "{appState.selectedTag}".
                   {:else}
                     No passwords found. Create a new entry or select a tag.
                   {/if}

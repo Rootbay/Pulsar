@@ -67,7 +67,7 @@ pub async fn export_password_entry(
     };
 
     let export_bytes = serde_json::to_vec_pretty(&export)?;
-    write_sensitive_bytes(&path, &export_bytes)?;
+    write_sensitive_bytes(&path, &export_bytes).await?;
 
     Ok(format!("Exported (passphrase) to {}", path.display()))
 }
@@ -153,7 +153,7 @@ pub async fn export_password_entry_to_public_key(
     };
 
     let bytes = serde_json::to_vec_pretty(&payload)?;
-    write_sensitive_bytes(&path, &bytes)?;
+    write_sensitive_bytes(&path, &bytes).await?;
 
     Ok(format!("Exported (recipient pubkey) to {}", path.display()))
 }
@@ -238,38 +238,37 @@ pub async fn import_password_entry_with_private_key(
     Ok(item)
 }
 
-fn write_sensitive_bytes(path: &Path, bytes: &[u8]) -> Result<()> {
+async fn write_sensitive_bytes(path: &Path, bytes: &[u8]) -> Result<()> {
     let tmp_path = path.with_extension("tmp");
-    if tmp_path.exists() {
-        let _ = fs::remove_file(&tmp_path);
+    if tokio::fs::try_exists(&tmp_path).await.unwrap_or(false) {
+        let _ = tokio::fs::remove_file(&tmp_path).await;
     }
 
     #[cfg(unix)]
     {
         use std::os::unix::fs::OpenOptionsExt;
-        let mut file = fs::OpenOptions::new()
+        let mut file = tokio::fs::OpenOptions::new()
             .create(true)
             .write(true)
             .truncate(true)
             .mode(0o600)
-            .open(&tmp_path)?;
-        let _ = file.set_permissions(std::fs::Permissions::from_mode(0o600));
-        file.write_all(bytes)?;
-        file.sync_all()?;
+            .open(&tmp_path).await?;
+        tokio::io::AsyncWriteExt::write_all(&mut file, bytes).await?;
+        file.sync_all().await?;
     }
 
     #[cfg(not(unix))]
     {
-        let mut file = fs::OpenOptions::new()
+        let mut file = tokio::fs::OpenOptions::new()
             .create(true)
             .write(true)
             .truncate(true)
-            .open(&tmp_path)?;
-        file.write_all(bytes)?;
-        file.sync_all()?;
+            .open(&tmp_path).await?;
+        tokio::io::AsyncWriteExt::write_all(&mut file, bytes).await?;
+        file.sync_all().await?;
     }
 
-    fs::rename(&tmp_path, path)?;
+    tokio::fs::rename(&tmp_path, path).await?;
     Ok(())
 }
 

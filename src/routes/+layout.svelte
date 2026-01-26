@@ -4,13 +4,7 @@
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import { page } from '$app/stores';
-  import {
-    isDatabaseLoaded,
-    needsPasswordSetup,
-    isLocked,
-    totpVerified,
-    totpRequired
-  } from '$lib/stores';
+  import { appState } from '$lib/stores';
   import { appearanceSettings } from '$lib/stores/appearance';
   import { initClipboardService } from '$lib/utils/clipboardService';
   import SecurityManager from '$lib/components/SecurityManager.svelte';
@@ -42,18 +36,14 @@
     }
   });
 
-  const needsTotp = $derived(
-    $totpRequired && !$totpVerified && $isDatabaseLoaded && !$isLocked && !$needsPasswordSetup
-  );
-
   const requiredAuthRoute = $derived(
-    !$isDatabaseLoaded
+    !appState.isDatabaseLoaded
       ? '/select-vault'
-      : $needsPasswordSetup
+      : appState.needsPasswordSetup
         ? '/setup'
-        : $isLocked
+        : appState.isLocked
           ? '/login'
-          : needsTotp
+          : appState.totpRequired && !appState.totpVerified
             ? '/totp'
             : null
   );

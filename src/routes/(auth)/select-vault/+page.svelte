@@ -4,7 +4,7 @@
   import { callBackend } from '$lib/utils/backend';
   import { open, save } from '@tauri-apps/plugin-dialog';
   import ImportManagerPopup from '$lib/components/ImportManagerPopup.svelte';
-  import { isDatabaseLoaded, isLocked, needsPasswordSetup, totpVerified } from '$lib/stores';
+  import { appState } from '$lib/stores';
   import { recentDatabases } from '$lib/stores/recentDatabases';
   import { importVaultBackup, notifyVaultRefresh } from '$lib/utils/backup';
   import type { ImportVaultProgressStage } from '$lib/utils/backup';
@@ -19,8 +19,7 @@
     Upload,
     ArrowRight,
     Clock,
-    FileWarning,
-    Shield
+    FileWarning
   } from '@lucide/svelte';
 
   let locale = $derived($currentLocale);
@@ -39,10 +38,10 @@
   const hasAccessDeniedError = $derived(Boolean(error?.toLowerCase().includes('access is denied')));
 
   $effect(() => {
-    if (browser && $isDatabaseLoaded) {
-      if ($needsPasswordSetup) {
+    if (browser && appState.isDatabaseLoaded) {
+      if (appState.needsPasswordSetup) {
         goto('/setup', { replaceState: true });
-      } else if ($isLocked) {
+      } else if (appState.isLocked) {
         goto('/login', { replaceState: true });
       } else {
         goto('/', { replaceState: true });
@@ -52,27 +51,33 @@
 
   const loadAndCheckDatabase = async (path: string) => {
     if (!path) {
+      console.warn('loadAndCheckDatabase called with empty path');
       return;
     }
 
+    console.log('Attempting to load database:', path);
     error = null;
     lastAttemptedPath = path;
-    totpVerified.set(false);
+    appState.totpVerified = false;
 
     try {
       await callBackend('switch_database', { dbPath: path });
+      console.log('Database switched successfully');
+      
       const isConfigured = await callBackend<boolean>('is_master_password_configured');
+      console.log('Is master password configured:', isConfigured);
 
       if (isConfigured) {
-        $isLocked = true;
-        $needsPasswordSetup = false;
+        appState.isLocked = true;
+        appState.needsPasswordSetup = false;
       } else {
-        $isLocked = false;
-        $needsPasswordSetup = true;
+        appState.isLocked = false;
+        appState.needsPasswordSetup = true;
       }
 
-      $isDatabaseLoaded = true;
+      appState.isDatabaseLoaded = true;
       recentDatabases.addRecentDatabase(path);
+      console.log('appState updated, isDatabaseLoaded:', appState.isDatabaseLoaded);
     } catch (cause: unknown) {
       console.error('Failed to load database:', cause);
       error =
@@ -114,14 +119,24 @@
 
   const selectExistingVault = async () => {
     try {
+      console.log('Opening file dialog...');
       const picked = await open({
         title: t(locale, 'selectVaultDialogTitle'),
         filters: [{ name: t(locale, 'vaultFileFilterName'), extensions: ['psec'] }],
         multiple: false
       });
 
-      if (typeof picked === 'string') {
-        await loadAndCheckDatabase(picked);
+      console.log('Picked from dialog:', picked);
+
+      if (picked) {
+        const path = typeof picked === 'string' ? picked : (picked as any).path;
+        if (typeof path === 'string') {
+          await loadAndCheckDatabase(path);
+        } else {
+          console.warn('Dialog returned unexpected type:', typeof picked, picked);
+        }
+      } else {
+        console.log('File selection cancelled');
       }
     } catch (cause) {
       console.error('Failed to open or switch vault:', cause);
@@ -234,20 +249,9 @@
 </svelte:head>
 
 <div class="bg-background relative min-h-screen">
-  <div class="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
-    <div class="bg-primary/10 absolute top-[12%] left-[8%] h-88 w-88 rounded-full blur-3xl"></div>
-    <div
-      class="bg-muted/40 absolute right-[10%] bottom-[10%] h-72 w-[18rem] rounded-full blur-2xl"
-    ></div>
-  </div>
-
   <div class="mx-auto flex w-full max-w-4xl flex-col items-center justify-start px-6 pt-20 pb-20">
     <div class="mb-12 w-full text-center">
-      <div
-        class="bg-primary/10 text-primary ring-primary/20 mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl ring-1"
-      >
-        <Shield class="h-8 w-8" />
-      </div>
+      <img src="/logo.png" alt="Pulsar Logo" class="mx-auto mb-6 h-20 w-20" />
       <h1 class="text-foreground text-4xl font-bold tracking-tight">
         {t(locale, 'welcomeTitle')}
       </h1>
@@ -435,6 +439,10 @@
 <style>
   * {
     box-sizing: border-box;
+  }
+
+  :global(html) {
+    overflow-y: scroll !important;
   }
 
   :global(body) {

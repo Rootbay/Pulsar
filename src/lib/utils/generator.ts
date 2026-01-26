@@ -99,15 +99,26 @@ export class GeneratorService {
       ...options
     };
 
-    let size = 0;
-    if (opts.uppercase) size += 26;
-    if (opts.lowercase) size += 26;
-    if (opts.digits) size += 10;
-    if (opts.symbols) size += SYMBOL_CHARSET.length;
+    let charset = '';
+    if (opts.uppercase) charset += 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    if (opts.lowercase) charset += 'abcdefghijklmnopqrstuvwxyz';
+    if (opts.digits) charset += '0123456789';
+    if (opts.symbols) charset += SYMBOL_CHARSET;
 
     if (opts.ambiguous) {
-      size = Math.max(0, size - 7);
+      charset = charset
+        .split('')
+        .filter((c) => !AMBIGUOUS_CHARS.has(c))
+        .join('');
     }
-    return size;
+
+    if (opts.similar) {
+      charset = charset
+        .split('')
+        .filter((c) => !SIMILAR_CHARS.has(c))
+        .join('');
+    }
+
+    return charset.length;
   }
 }

@@ -1,4 +1,4 @@
-import { writable, derived, type Writable, type Readable } from 'svelte/store';
+import { writable, derived, type Writable, type Readable, get } from 'svelte/store';
 import * as fastDeepEqual from 'fast-deep-equal';
 const deepEqual = fastDeepEqual.default;
 import { settingsStore } from '../stores/settingsStore';
@@ -10,6 +10,17 @@ interface SettingsModule<T> extends Writable<T> {
   hasUnsavedChanges: Readable<boolean>;
 }
 
+function cloneValue<T>(value: T): T {
+  if (value && typeof value === 'object') {
+    try {
+      return JSON.parse(JSON.stringify(value)) as T;
+    } catch {
+      return value;
+    }
+  }
+  return value;
+}
+
 function createLocalStorageStore<T>(key: string, startValue: T): SettingsModule<T> {
   const initialValue = writable<T>(startValue);
   const settings = writable<T>(startValue);
@@ -17,9 +28,14 @@ function createLocalStorageStore<T>(key: string, startValue: T): SettingsModule<
   if (browser) {
     const storedValue = localStorage.getItem(key);
     if (storedValue) {
-      const parsedValue = JSON.parse(storedValue);
-      initialValue.set(parsedValue);
-      settings.set(parsedValue);
+      try {
+        const parsedValue = JSON.parse(storedValue) as T;
+        initialValue.set(parsedValue);
+        settings.set(parsedValue);
+      } catch (error) {
+        console.warn(`Failed to parse local storage value for "${key}"`, error);
+        localStorage.removeItem(key);
+      }
     }
   }
 
@@ -28,18 +44,16 @@ function createLocalStorageStore<T>(key: string, startValue: T): SettingsModule<
   });
 
   function save() {
-    settings.subscribe((currentSettings) => {
-      initialValue.set({ ...currentSettings });
-      if (browser) {
-        localStorage.setItem(key, JSON.stringify(currentSettings));
-      }
-    })();
+    const currentSettings = get(settings);
+    initialValue.set(cloneValue(currentSettings));
+    if (browser) {
+      localStorage.setItem(key, JSON.stringify(currentSettings));
+    }
   }
 
   function reset() {
-    initialValue.subscribe((currentInitialSettings) => {
-      settings.set({ ...currentInitialSettings });
-    })();
+    const currentInitialSettings = get(initialValue);
+    settings.set(cloneValue(currentInitialSettings));
   }
 
   settingsStore.registerModule(key, {

@@ -20,15 +20,18 @@ function createSettingsStore() {
   const hasAnyUnsavedChanges = derived(
     allUnsavedChanges,
     ($unsavedStores, set) => {
-      let count = 0;
-      const unsubscribes = $unsavedStores.map((store) =>
+      const states = new Map<number, boolean>();
+      const computeAny = () => {
+        for (const value of states.values()) {
+          if (value) return true;
+        }
+        return false;
+      };
+
+      const unsubscribes = $unsavedStores.map((store, index) =>
         store.subscribe((value) => {
-          if (value) {
-            count++;
-          } else {
-            count--;
-          }
-          set(count > 0);
+          states.set(index, value);
+          set(computeAny());
         })
       );
 

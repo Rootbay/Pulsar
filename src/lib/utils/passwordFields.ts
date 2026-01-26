@@ -112,13 +112,30 @@ export function buildDisplayFields(
 
   if (item.field_order?.length) {
     const ordered: DisplayField[] = [];
-    const map = new Map(allFields.map((field) => [field.id, field]));
+    const map = new Map<string, DisplayField>();
+    for (const field of allFields) {
+      if (!map.has(field.id)) {
+        map.set(field.id, field);
+        continue;
+      }
+
+      if (customFields.includes(field)) {
+        map.set(`custom:${field.id}`, field);
+      }
+    }
 
     for (const fieldId of item.field_order) {
-      const field = map.get(fieldId);
-      if (field) {
-        ordered.push(field);
+      const direct = map.get(fieldId);
+      if (direct) {
+        ordered.push(direct);
         map.delete(fieldId);
+        continue;
+      }
+      const customKey = `custom:${fieldId}`;
+      const custom = map.get(customKey);
+      if (custom) {
+        ordered.push(custom);
+        map.delete(customKey);
       }
     }
 

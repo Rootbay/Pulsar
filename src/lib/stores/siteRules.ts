@@ -1,39 +1,36 @@
-import { derived } from 'svelte/store';
-import { appSettings } from './appSettings.svelte';
+import { appSettings, settingsManager } from './appSettings.svelte';
 import { type SiteRule, defaultSiteRules } from '../config/settings';
 
-function createSiteRulesStore() {
-  const { subscribe } = derived(appSettings, ($appSettings) => $appSettings.siteRules);
+export const siteRules = {
+  subscribe(fn: (value: SiteRule[]) => void) {
+    return appSettings.subscribe((settings) => {
+      fn(settings.siteRules);
+    });
+  },
+  get value() {
+    return settingsManager.current.siteRules;
+  },
+  addRule: (rule: SiteRule) => {
+    settingsManager.update((settings) => {
+      settings.siteRules = [...settings.siteRules, rule];
+    });
+  },
+  deleteRule: (url: string) => {
+    settingsManager.update((settings) => {
+      settings.siteRules = settings.siteRules.filter((rule) => rule.url !== url);
+    });
+  },
+  updateRule: (url: string, updatedRule: SiteRule) => {
+    settingsManager.update((settings) => {
+      settings.siteRules = settings.siteRules.map((rule) =>
+        rule.url === url ? updatedRule : rule
+      );
+    });
+  },
+  resetRules: () => {
+    settingsManager.update((settings) => {
+      settings.siteRules = [...defaultSiteRules];
+    });
+  }
+};
 
-  return {
-    subscribe,
-    addRule: (rule: SiteRule) => {
-      appSettings.update((settings) => {
-        settings.siteRules = [...settings.siteRules, rule];
-        return settings;
-      });
-    },
-    deleteRule: (url: string) => {
-      appSettings.update((settings) => {
-        settings.siteRules = settings.siteRules.filter((rule) => rule.url !== url);
-        return settings;
-      });
-    },
-    updateRule: (url: string, updatedRule: SiteRule) => {
-      appSettings.update((settings) => {
-        settings.siteRules = settings.siteRules.map((rule) =>
-          rule.url === url ? updatedRule : rule
-        );
-        return settings;
-      });
-    },
-    resetRules: () => {
-      appSettings.update((settings) => {
-        settings.siteRules = [...defaultSiteRules];
-        return settings;
-      });
-    }
-  };
-}
-
-export const siteRules = createSiteRulesStore();

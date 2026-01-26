@@ -3,7 +3,7 @@
   import { derived, get, writable, type Readable } from 'svelte/store';
   import { invoke } from '@tauri-apps/api/core';
   import { toast } from '$lib/components/ui/sonner';
-  import { vaultSettings } from '$lib/stores/vault';
+  import { vaultSettings } from '$lib/stores/vault.svelte';
   import { recentDatabases } from '$lib/stores/recentDatabases';
   import type { VaultSettings } from '$lib/config/settings';
   import { Button } from '$lib/components/ui/button';

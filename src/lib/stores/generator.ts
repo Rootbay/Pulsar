@@ -1,25 +1,29 @@
-import { derived } from 'svelte/store';
-import { appSettings } from './appSettings.svelte';
+import { appSettings, settingsManager } from './appSettings.svelte';
 import type { GeneratorSettings } from '../config/settings';
 
-function createGeneratorSettingsStore() {
-  const { subscribe } = derived(appSettings, ($appSettings) => $appSettings.generator);
+export const generatorSettings = {
+  subscribe(fn: (value: GeneratorSettings) => void) {
+    return appSettings.subscribe((settings) => {
+      fn(settings.generator);
+    });
+  },
+  set(value: GeneratorSettings) {
+    settingsManager.update((s) => {
+      s.generator = value;
+    });
+  },
+  update(updater: (s: GeneratorSettings) => GeneratorSettings) {
+    settingsManager.update((s) => {
+      s.generator = updater(s.generator);
+    });
+  },
+  get value() {
+    return settingsManager.current.generator;
+  },
+  set value(v: GeneratorSettings) {
+    settingsManager.update((s) => {
+      s.generator = v;
+    });
+  }
+};
 
-  return {
-    subscribe,
-    set: (value: GeneratorSettings) => {
-      appSettings.update((settings) => {
-        settings.generator = value;
-        return settings;
-      });
-    },
-    update: (callback: (settings: GeneratorSettings) => GeneratorSettings) => {
-      appSettings.update((settings) => {
-        settings.generator = callback(settings.generator);
-        return settings;
-      });
-    }
-  };
-}
-
-export const generatorSettings = createGeneratorSettingsStore();

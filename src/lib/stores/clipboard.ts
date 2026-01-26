@@ -1,25 +1,29 @@
-import { derived } from 'svelte/store';
-import { appSettings } from './appSettings.svelte';
+import { appSettings, settingsManager } from './appSettings.svelte';
 import type { ClipboardSettings } from '../config/settings';
 
-function createClipboardSettingsStore() {
-  const { subscribe } = derived(appSettings, ($appSettings) => $appSettings.clipboard);
+export const clipboardSettings = {
+  subscribe(fn: (value: ClipboardSettings) => void) {
+    return appSettings.subscribe((settings) => {
+      fn(settings.clipboard);
+    });
+  },
+  set(value: ClipboardSettings) {
+    settingsManager.update((s) => {
+      s.clipboard = value;
+    });
+  },
+  update(updater: (s: ClipboardSettings) => ClipboardSettings) {
+    settingsManager.update((s) => {
+      s.clipboard = updater(s.clipboard);
+    });
+  },
+  get value() {
+    return settingsManager.current.clipboard;
+  },
+  set value(v: ClipboardSettings) {
+    settingsManager.update((s) => {
+      s.clipboard = v;
+    });
+  }
+};
 
-  return {
-    subscribe,
-    set: (value: ClipboardSettings) => {
-      appSettings.update((settings) => {
-        settings.clipboard = value;
-        return settings;
-      });
-    },
-    update: (callback: (settings: ClipboardSettings) => ClipboardSettings) => {
-      appSettings.update((settings) => {
-        settings.clipboard = callback(settings.clipboard);
-        return settings;
-      });
-    }
-  };
-}
-
-export const clipboardSettings = createClipboardSettingsStore();

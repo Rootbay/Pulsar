@@ -49,7 +49,7 @@ pub async fn verify_totp(
     if let Some(password_item) = password_item_option {
         if let Some(secret_b32) = password_item.totp_secret {
             let totp = build_totp(&secret_b32)?;
-            Ok(totp.check_current(&token).map_err(|e| Error::Totp(e.to_string()))?)
+            totp.check_current(&token).map_err(|e| Error::Totp(e.to_string()))
         } else {
             Err(Error::Internal("TOTP secret not found for this item.".to_string()))
         }
@@ -61,5 +61,5 @@ pub async fn verify_totp(
 #[tauri::command]
 pub fn verify_totp_secret(secret_b32: String, token: String) -> Result<bool> {
     let totp = build_totp(&secret_b32)?;
-    Ok(totp.check_current(&token).map_err(|e| Error::Totp(e.to_string()))?)
+    totp.check_current(&token).map_err(|e| Error::Totp(e.to_string()))
 }

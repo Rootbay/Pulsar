@@ -217,7 +217,7 @@ fn main() {
     let app = builder.build(context).expect("error while building tauri application");
     app.run(|app_handle, event| {
         match event {
-            RunEvent::ExitRequested { .. } | RunEvent::Exit { .. } => {
+            RunEvent::ExitRequested { .. } | RunEvent::Exit => {
                 tauri::async_runtime::block_on(async {
                     let state = app_handle.state::<AppState>();
                     let policy = state.clipboard_policy.lock().await;

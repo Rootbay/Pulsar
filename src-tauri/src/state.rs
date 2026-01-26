@@ -42,17 +42,8 @@ pub struct PendingUnlock {
     pub attempts: u8,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Default)]
 pub struct UnlockRateLimit {
     pub failures: u32,
     pub last_failure: Option<Instant>,
-}
-
-impl Default for UnlockRateLimit {
-    fn default() -> Self {
-        Self {
-            failures: 0,
-            last_failure: None,
-        }
-    }
 }

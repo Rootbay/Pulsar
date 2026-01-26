@@ -1,28 +1,27 @@
-import { derived } from 'svelte/store';
-import { appSettings } from './appSettings.svelte';
-import { defaultKeybinds } from '../config/keybinds';
+import { appSettings, settingsManager } from './appSettings.svelte';
+import { defaultKeybinds, type Keybind } from '../config/keybinds';
 
-function createKeybindsStore() {
-  const { subscribe } = derived(appSettings, ($appSettings) => $appSettings.keybinds);
+export const keybinds = {
+  subscribe(fn: (value: Keybind[]) => void) {
+    return appSettings.subscribe((settings) => {
+      fn(settings.keybinds);
+    });
+  },
+  get value() {
+    return settingsManager.current.keybinds;
+  },
+  updateKeybind: (name: string, newKey: string) => {
+    settingsManager.update((settings) => {
+      const index = settings.keybinds.findIndex((kb) => kb.name === name);
+      if (index !== -1) {
+        settings.keybinds[index].key = newKey;
+      }
+    });
+  },
+  resetKeybinds: () => {
+    settingsManager.update((settings) => {
+      settings.keybinds = [...defaultKeybinds];
+    });
+  }
+};
 
-  return {
-    subscribe,
-    updateKeybind: (name: string, newKey: string) => {
-      appSettings.update((settings) => {
-        const index = settings.keybinds.findIndex((kb) => kb.name === name);
-        if (index !== -1) {
-          settings.keybinds[index].key = newKey;
-        }
-        return settings;
-      });
-    },
-    resetKeybinds: () => {
-      appSettings.update((settings) => {
-        settings.keybinds = [...defaultKeybinds];
-        return settings;
-      });
-    }
-  };
-}
-
-export const keybinds = createKeybindsStore();

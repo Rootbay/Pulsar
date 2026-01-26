@@ -18,7 +18,6 @@ thiserror = "2.0"
 
 x25519-dalek = { version = "2.0.1", features = ["static_secrets"] }
 sqlx = { version = "0.8", features = ["sqlite", "runtime-tokio", "macros"] }
-tauri-plugin-sql = { version = "2.3", features = [] }
 libsqlite3-sys = { version = "^0.28.0", features = ["bundled-sqlcipher"] }
 totp-rs = { version = "^5.0", features = ["qr"] }
 tauri-plugin-store = { version = "2.3" }

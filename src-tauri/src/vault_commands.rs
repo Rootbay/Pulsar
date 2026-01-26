@@ -66,7 +66,7 @@ fn metadata_path(db_path: &Path) -> PathBuf {
 }
 
 fn load_stored_settings(app_handle: &tauri::AppHandle) -> Result<StoredAppSettings> {
-    let store = StoreBuilder::new(app_handle, ".settings.dat".parse::<PathBuf>().unwrap())
+    let store = StoreBuilder::new(app_handle, ".settings.dat".parse::<PathBuf>().map_err(|e| Error::Internal(format!("Invalid settings path: {}", e)))?)
         .build()
         .map_err(|e| Error::Internal(e.to_string()))?;
     store.reload().map_err(|e| Error::Internal(e.to_string()))?;
@@ -119,9 +119,7 @@ async fn resolve_item_count(pool: Option<SqlitePool>, include: bool) -> Option<u
         return None;
     }
 
-    let Some(db_pool) = pool else {
-        return None;
-    };
+    let db_pool = pool?;
 
     match sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM password_items")
         .fetch_one(&db_pool)

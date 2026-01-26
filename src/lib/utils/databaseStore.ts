@@ -1,4 +1,4 @@
-import { writable, derived, type Writable, type Readable, get } from 'svelte/store';
+import { type Writable, type Readable } from 'svelte/store';
 import { invoke } from '@tauri-apps/api/core';
 import deepEqual from 'fast-deep-equal';
 import { settingsStore } from '../stores/settingsStore';
@@ -16,20 +16,32 @@ export function createDatabaseStore<T>(
   readCommand: string,
   writeCommand: string
 ): DatabaseSettingsModule<T> {
-  const initialValue = writable<T>(defaultValue);
-  const store = writable<T>(defaultValue);
+  let initialValue = $state<T>(defaultValue);
+  let currentValue = $state<T>(defaultValue);
 
-  const hasUnsavedChanges = derived([initialValue, store], ([$initialValue, $store]) => {
-    return !deepEqual($initialValue, $store);
-  });
+  // Custom subscribe for hasUnsavedChanges to match Readable<boolean>
+  const hasUnsavedChanges: Readable<boolean> = {
+    subscribe(fn) {
+      const effect = $effect.root(() => {
+        $effect(() => {
+          const isDirty = !deepEqual(initialValue, currentValue);
+          fn(isDirty);
+        });
+      });
+      return () => effect();
+    }
+  };
 
   async function load() {
     try {
       const data = await invoke<string | null>(readCommand);
       if (data) {
         const parsed = JSON.parse(data);
-        initialValue.set(parsed);
-        store.set(parsed);
+        // Use structuredClone or JSON parse/stringify to break references if needed,
+        // but for now simple assignment if T is simple object.
+        // Ensuring deep copy for initialValue is safer.
+        initialValue = JSON.parse(JSON.stringify(parsed));
+        currentValue = JSON.parse(JSON.stringify(parsed));
       }
     } catch (e) {
       console.debug(`[${moduleName}] could not load from DB:`, e);
@@ -37,10 +49,11 @@ export function createDatabaseStore<T>(
   }
 
   async function save() {
-    const current = get(store);
     try {
-      await invoke(writeCommand, { settingsJson: JSON.stringify(current) });
-      initialValue.set(JSON.parse(JSON.stringify(current)));
+      // Snapshot current value
+      const snapshot = $state.snapshot(currentValue);
+      await invoke(writeCommand, { settingsJson: JSON.stringify(snapshot) });
+      initialValue = JSON.parse(JSON.stringify(snapshot));
     } catch (e) {
       console.error(`Failed to save ${moduleName}:`, e);
       throw e;
@@ -48,8 +61,8 @@ export function createDatabaseStore<T>(
   }
 
   async function reset() {
-    const initial = get(initialValue);
-    store.set(JSON.parse(JSON.stringify(initial)));
+    // Revert to initialValue
+    currentValue = JSON.parse(JSON.stringify(initialValue));
   }
 
   settingsStore.registerModule(moduleName, {
@@ -63,12 +76,24 @@ export function createDatabaseStore<T>(
   });
 
   return {
-    subscribe: store.subscribe,
-    set: store.set,
-    update: store.update,
+    subscribe(fn) {
+      const effect = $effect.root(() => {
+        $effect(() => {
+          fn(currentValue);
+        });
+      });
+      return () => effect();
+    },
+    set(value: T) {
+      currentValue = value;
+    },
+    update(updater: (value: T) => T) {
+      currentValue = updater(currentValue);
+    },
     save,
     reset,
     load,
     hasUnsavedChanges
   };
 }
+

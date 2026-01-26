@@ -15,7 +15,6 @@ use keyring::Entry;
 use rand::rngs::OsRng;
 use rand::RngCore;
 use serde::{Deserialize, Serialize};
-use serde_json;
 use sqlx::sqlite::{SqliteConnectOptions, SqliteConnection};
 use sqlx::{Connection, Row};
 use std::path::{Path, PathBuf};
@@ -91,9 +90,9 @@ fn ensure_biometric_available(app: &AppHandle) -> Result<()> {
 #[cfg(target_os = "windows")]
 fn ensure_biometric_available(_app: &AppHandle) -> Result<()> {
     let availability = UserConsentVerifier::CheckAvailabilityAsync()
-        .map_err(|e| Error::Internal(format!("Biometric availability check failed: {}", e)))?
+        .map_err(|e| Error::Internal(format!("Biometric availability check failed: {e}")))?
         .get()
-        .map_err(|e| Error::Internal(format!("Biometric availability check failed: {}", e)))?;
+        .map_err(|e| Error::Internal(format!("Biometric availability check failed: {e}")))?;
 
     match availability {
         UserConsentVerifierAvailability::Available => Ok(()),
@@ -157,9 +156,9 @@ fn authenticate_biometric(_app: &AppHandle, reason: &str) -> Result<()> {
 
     let reason = HSTRING::from(reason);
     let result = UserConsentVerifier::RequestVerificationAsync(&reason)
-        .map_err(|e| Error::Internal(format!("Biometric authentication failed: {}", e)))?
+        .map_err(|e| Error::Internal(format!("Biometric authentication failed: {e}")))?
         .get()
-        .map_err(|e| Error::Internal(format!("Biometric authentication failed: {}", e)))?;
+        .map_err(|e| Error::Internal(format!("Biometric authentication failed: {e}")))?;
 
     match result {
         UserConsentVerificationResult::Verified => Ok(()),
@@ -726,6 +725,7 @@ async fn attach_encrypted_db(
                 let _ = fs::OpenOptions::new()
                     .create(true)
                     .write(true)
+                    .truncate(true)
                     .open(path)
                     .await;
                 sqlx::query(&attach_cmd).execute(&mut *conn).await?;

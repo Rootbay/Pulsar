@@ -43,9 +43,9 @@ pub async fn export_password_entry(
     OsRng.fill_bytes(&mut nonce);
 
     let version: u8 = 2;
-    let salt_b64 = general_purpose::STANDARD.encode(&salt);
-    let nonce_b64 = general_purpose::STANDARD.encode(&nonce);
-    let aad = format!("v{}:{}:{}", version, salt_b64, nonce_b64);
+    let salt_b64 = general_purpose::STANDARD.encode(salt);
+    let nonce_b64 = general_purpose::STANDARD.encode(nonce);
+    let aad = format!("v{version}:{salt_b64}:{nonce_b64}");
 
     let ciphertext = cipher
         .encrypt(
@@ -55,7 +55,7 @@ pub async fn export_password_entry(
                 aad: aad.as_bytes(),
             },
         )
-        .map_err(|e| Error::Encryption(format!("encryption failed: {}", e)))?;
+        .map_err(|e| Error::Encryption(format!("encryption failed: {e}")))?;
 
     key.zeroize();
 

@@ -3,6 +3,7 @@ use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 use std::path::{Path, PathBuf};
 use tokio::fs;
 use std::env;
+use zeroize::Zeroize;
 
 fn resolve_db_path(db_path: &Path) -> Result<PathBuf, String> {
     let db_path_abs: PathBuf = if db_path.is_absolute() {
@@ -10,7 +11,7 @@ fn resolve_db_path(db_path: &Path) -> Result<PathBuf, String> {
     } else {
         env::current_dir()
             .map_err(|e| {
-                eprintln!("Failed to get current dir: {}", e);
+                eprintln!("Failed to get current dir: {e}");
                 "Internal error: Could not resolve database path".to_string()
             })?
             .join(db_path)
@@ -31,8 +32,9 @@ fn build_connect_options(
         .busy_timeout(std::time::Duration::from_secs(30));
 
     if let Some(key_bytes) = password {
-        let hex_key = hex::encode(key_bytes);
-        opts = opts.pragma("key", format!("\"x'{}'\"", hex_key));
+        let mut hex_key = hex::encode(key_bytes);
+        opts = opts.pragma("key", format!("\"x'{hex_key}'\""));
+        hex_key.zeroize();
     }
 
     opts
@@ -84,7 +86,7 @@ pub async fn init_db(db_path: &Path, password: Option<&[u8]>) -> Result<SqlitePo
         fs::create_dir_all(parent)
             .await
             .map_err(|e| {
-                eprintln!("Failed to create database directory {}: {}", parent.display(), e);
+                eprintln!("Failed to create database directory {}: {e}", parent.display());
                 "Failed to access database directory".to_string()
             })?;
     }
@@ -95,7 +97,7 @@ pub async fn init_db(db_path: &Path, password: Option<&[u8]>) -> Result<SqlitePo
         .connect_with(opts)
         .await
         .map_err(|e| {
-            eprintln!("Database connection error: {}", e);
+            eprintln!("Database connection error: {e}");
             "Failed to connect to the database. Ensure the file is not locked by another process.".to_string()
         })?;
 
@@ -103,7 +105,7 @@ pub async fn init_db(db_path: &Path, password: Option<&[u8]>) -> Result<SqlitePo
         .run(&pool)
         .await
         .map_err(|e| {
-            eprintln!("Database migration error: {}", e);
+            eprintln!("Database migration error: {e}");
             "Internal error: Database migration failed".to_string()
         })?;
 
@@ -117,7 +119,7 @@ pub async fn init_db_lazy(db_path: &Path, password: Option<&[u8]>) -> Result<Sql
         fs::create_dir_all(parent)
             .await
             .map_err(|e| {
-                eprintln!("Failed to create database directory {}: {}", parent.display(), e);
+                eprintln!("Failed to create database directory {}: {e}", parent.display());
                 "Failed to access database directory".to_string()
             })?;
     }

@@ -197,8 +197,8 @@ pub async fn export_vault_backend(
 
     let export = ExportPayload {
         version: 2,
-        salt_b64: general_purpose::STANDARD.encode(&salt),
-        nonce_b64: general_purpose::STANDARD.encode(&nonce),
+        salt_b64: general_purpose::STANDARD.encode(salt),
+        nonce_b64: general_purpose::STANDARD.encode(nonce),
         ciphertext_b64: general_purpose::STANDARD.encode(&ciphertext),
     };
 
@@ -229,7 +229,7 @@ pub async fn export_vault(
     }
 
     let file_extension = if is_plaintext { "json" } else { "pulsar" };
-    let default_file_name = format!("vault_backup.{}", file_extension);
+    let default_file_name = format!("vault_backup.{file_extension}");
 
     let path = if let Some(destination) = destination {
         PathBuf::from(destination)
@@ -271,7 +271,7 @@ pub async fn export_vault(
     let mut key = [0u8; 32];
     argon2
         .hash_password_into(passphrase_value.as_bytes(), &salt, &mut key)
-        .map_err(|e| Error::Internal(format!("KDF failed: {}", e)))?;
+        .map_err(|e| Error::Internal(format!("KDF failed: {e}")))?;
 
     let cipher = XChaCha20Poly1305::new(Key::from_slice(&key));
     let mut nonce = [0u8; 24];
@@ -279,14 +279,14 @@ pub async fn export_vault(
 
     let ciphertext = cipher
         .encrypt(XNonce::from_slice(&nonce), vault_data.as_bytes())
-        .map_err(|e| Error::Encryption(format!("Encryption failed: {}", e)))?;
+        .map_err(|e| Error::Encryption(format!("Encryption failed: {e}")))?;
 
     key.zeroize();
 
     let export = ExportPayload {
         version: 2,
-        salt_b64: general_purpose::STANDARD.encode(&salt),
-        nonce_b64: general_purpose::STANDARD.encode(&nonce),
+        salt_b64: general_purpose::STANDARD.encode(salt),
+        nonce_b64: general_purpose::STANDARD.encode(nonce),
         ciphertext_b64: general_purpose::STANDARD.encode(&ciphertext),
     };
 
@@ -354,7 +354,7 @@ pub async fn import_vault(
     let mut key = [0u8; 32];
     argon2
         .hash_password_into(passphrase_value.as_bytes(), &salt, &mut key)
-        .map_err(|e| Error::Internal(format!("KDF failed: {}", e)))?;
+        .map_err(|e| Error::Internal(format!("KDF failed: {e}")))?;
 
     let cipher = XChaCha20Poly1305::new(Key::from_slice(&key));
     let decrypted_bytes = cipher
@@ -365,7 +365,7 @@ pub async fn import_vault(
 
     key.zeroize();
 
-    String::from_utf8(decrypted_bytes).map_err(|e| Error::Internal(format!("UTF-8 conversion failed: {}", e)))
+    String::from_utf8(decrypted_bytes).map_err(|e| Error::Internal(format!("UTF-8 conversion failed: {e}")))
 }
 
 #[command]
@@ -414,7 +414,7 @@ pub async fn restore_vault_backend(
                 "Plaintext backups are not supported in production builds.".to_string(),
             ));
         }
-        String::from_utf8(file_content_bytes).map_err(|e| Error::Internal(format!("UTF-8 conversion failed: {}", e)))?
+        String::from_utf8(file_content_bytes).map_err(|e| Error::Internal(format!("UTF-8 conversion failed: {e}")))?
     } else {
         let payload: ExportPayload = serde_json::from_slice(&file_content_bytes).map_err(|_| {
             Error::Validation("Failed to parse backup file. It might be invalid or not a Pulsar backup.".to_string())
@@ -435,7 +435,7 @@ pub async fn restore_vault_backend(
         let mut key = [0u8; 32];
         argon2
             .hash_password_into(passphrase_value.as_bytes(), &salt, &mut key)
-            .map_err(|e| Error::Internal(format!("KDF failed: {}", e)))?;
+            .map_err(|e| Error::Internal(format!("KDF failed: {e}")))?;
 
         let cipher = XChaCha20Poly1305::new(Key::from_slice(&key));
         let decrypted_bytes = cipher
@@ -445,7 +445,7 @@ pub async fn restore_vault_backend(
             })?;
 
         key.zeroize();
-        String::from_utf8(decrypted_bytes).map_err(|e| Error::Internal(format!("UTF-8 conversion failed: {}", e)))?
+        String::from_utf8(decrypted_bytes).map_err(|e| Error::Internal(format!("UTF-8 conversion failed: {e}")))?
     };
 
     let snapshot: VaultBackupSnapshot = serde_json::from_str(&decrypted_json)?;
@@ -527,11 +527,11 @@ pub async fn restore_vault_snapshot(
             .as_deref()
             .map(|value| encrypt(value, key.as_slice()))
             .transpose()?;
-        let password_enc = encrypt(&item.password, key.as_slice())?;
+        let password_enc = encrypt(item.password.as_str(), key.as_slice())?;
         let totp_secret_enc = item
             .totp_secret
-            .as_deref()
-            .map(|value| encrypt(value, key.as_slice()))
+            .as_ref()
+            .map(|value| encrypt(value.as_str(), key.as_slice()))
             .transpose()?;
         let custom_fields_json =
             serde_json::to_string(&item.custom_fields)?;
@@ -539,7 +539,7 @@ pub async fn restore_vault_snapshot(
         let field_order_json = item
             .field_order
             .as_ref()
-            .map(|value| serde_json::to_string(value))
+            .map(serde_json::to_string)
             .transpose()?;
         let field_order_enc = field_order_json
             .map(|value| encrypt(&value, key.as_slice()))

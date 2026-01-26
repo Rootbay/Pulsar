@@ -1,25 +1,29 @@
-import { derived } from 'svelte/store';
-import { appSettings } from './appSettings.svelte';
+import { appSettings, settingsManager } from './appSettings.svelte';
 import type { BackupSettings } from '../config/settings';
 
-function createBackupSettingsStore() {
-  const { subscribe } = derived(appSettings, ($appSettings) => $appSettings.backup);
+export const backupSettings = {
+  subscribe(fn: (value: BackupSettings) => void) {
+    return appSettings.subscribe((settings) => {
+      fn(settings.backup);
+    });
+  },
+  set(value: BackupSettings) {
+    settingsManager.update((s) => {
+      s.backup = value;
+    });
+  },
+  update(updater: (s: BackupSettings) => BackupSettings) {
+    settingsManager.update((s) => {
+      s.backup = updater(s.backup);
+    });
+  },
+  get value() {
+    return settingsManager.current.backup;
+  },
+  set value(v: BackupSettings) {
+    settingsManager.update((s) => {
+      s.backup = v;
+    });
+  }
+};
 
-  return {
-    subscribe,
-    set: (value: BackupSettings) => {
-      appSettings.update((settings) => {
-        settings.backup = value;
-        return settings;
-      });
-    },
-    update: (callback: (settings: BackupSettings) => BackupSettings) => {
-      appSettings.update((settings) => {
-        settings.backup = callback(settings.backup);
-        return settings;
-      });
-    }
-  };
-}
-
-export const backupSettings = createBackupSettingsStore();

@@ -26,12 +26,12 @@ pub fn encrypt(plaintext: &str, key: &[u8]) -> Result<String> {
 
     let ciphertext = cipher
         .encrypt(nonce, plaintext.as_bytes())
-        .map_err(|e| Error::Encryption(format!("Encryption failed: {}", e)))?;
+        .map_err(|e| Error::Encryption(format!("Encryption failed: {e}")))?;
 
     let nonce_b64 = general_purpose::STANDARD.encode(nonce_bytes);
     let ciphertext_b64 = general_purpose::STANDARD.encode(&ciphertext);
 
-    Ok(format!("{}:{}", nonce_b64, ciphertext_b64))
+    Ok(format!("{nonce_b64}:{ciphertext_b64}"))
 }
 
 pub fn encrypt_bytes(data: &[u8], key: &[u8]) -> Result<Vec<u8>> {
@@ -45,7 +45,7 @@ pub fn encrypt_bytes(data: &[u8], key: &[u8]) -> Result<Vec<u8>> {
 
     let ciphertext = cipher
         .encrypt(nonce, data)
-        .map_err(|e| Error::Encryption(format!("Encryption failed: {}", e)))?;
+        .map_err(|e| Error::Encryption(format!("Encryption failed: {e}")))?;
 
     let mut result = Vec::with_capacity(nonce_bytes.len() + ciphertext.len());
     result.extend_from_slice(&nonce_bytes);
@@ -68,7 +68,7 @@ pub fn decrypt_bytes(encrypted_data: &[u8], key: &[u8]) -> Result<Vec<u8>> {
 
     let decrypted_bytes = cipher
         .decrypt(nonce, ciphertext)
-        .map_err(|e| Error::Decryption(format!("Decryption failed: {}", e)))?;
+        .map_err(|e| Error::Decryption(format!("Decryption failed: {e}")))?;
 
     Ok(decrypted_bytes)
 }
@@ -85,7 +85,7 @@ pub fn decrypt(encrypted_payload: &str, key: &[u8]) -> Result<String> {
 
     let nonce_bytes = general_purpose::STANDARD
         .decode(nonce_b64)
-        .map_err(|e| Error::Decryption(format!("Nonce decode failed: {}", e)))?;
+        .map_err(|e| Error::Decryption(format!("Nonce decode failed: {e}")))?;
     
     if nonce_bytes.len() != 24 {
         return Err(Error::Decryption("Invalid nonce length".to_string()));
@@ -93,7 +93,7 @@ pub fn decrypt(encrypted_payload: &str, key: &[u8]) -> Result<String> {
 
     let ciphertext = general_purpose::STANDARD
         .decode(ciphertext_b64)
-        .map_err(|e| Error::Decryption(format!("Ciphertext decode failed: {}", e)))?;
+        .map_err(|e| Error::Decryption(format!("Ciphertext decode failed: {e}")))?;
 
     let key: &Key = Key::from_slice(key);
     let cipher = XChaCha20Poly1305::new(key);
@@ -101,10 +101,10 @@ pub fn decrypt(encrypted_payload: &str, key: &[u8]) -> Result<String> {
 
     let decrypted_bytes = cipher
         .decrypt(nonce, ciphertext.as_ref())
-        .map_err(|e| Error::Decryption(format!("Decryption failed: {}", e)))?;
+        .map_err(|e| Error::Decryption(format!("Decryption failed: {e}")))?;
 
     String::from_utf8(decrypted_bytes)
-        .map_err(|e| Error::Decryption(format!("UTF-8 conversion failed: {}", e)))
+        .map_err(|e| Error::Decryption(format!("UTF-8 conversion failed: {e}")))
 }
 
 #[cfg(test)]

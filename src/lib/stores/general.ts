@@ -1,19 +1,29 @@
-import { derived } from 'svelte/store';
-import { appSettings } from './appSettings.svelte';
+import { appSettings, settingsManager } from './appSettings.svelte';
 import type { GeneralSettings } from '../config/settings';
 
-function createGeneralSettingsStore() {
-  const { subscribe } = derived(appSettings, ($appSettings) => $appSettings.general);
+export const generalSettings = {
+  subscribe(fn: (value: GeneralSettings) => void) {
+    return appSettings.subscribe((settings) => {
+      fn(settings.general);
+    });
+  },
+  set(value: GeneralSettings) {
+    settingsManager.update((s) => {
+      s.general = value;
+    });
+  },
+  update(updater: (s: GeneralSettings) => GeneralSettings) {
+    settingsManager.update((s) => {
+      s.general = updater(s.general);
+    });
+  },
+  get value() {
+    return settingsManager.current.general;
+  },
+  set value(v: GeneralSettings) {
+    settingsManager.update((s) => {
+      s.general = v;
+    });
+  }
+};
 
-  return {
-    subscribe,
-    set: (value: GeneralSettings) => {
-      appSettings.update((settings) => {
-        settings.general = value;
-        return settings;
-      });
-    }
-  };
-}
-
-export const generalSettings = createGeneralSettingsStore();

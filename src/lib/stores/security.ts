@@ -1,19 +1,29 @@
-import { derived } from 'svelte/store';
-import { appSettings } from './appSettings.svelte';
+import { appSettings, settingsManager } from './appSettings.svelte';
 import type { SecuritySettings } from '../config/settings';
 
-function createSecuritySettingsStore() {
-  const { subscribe } = derived(appSettings, ($appSettings) => $appSettings.security);
+export const securitySettings = {
+  subscribe(fn: (value: SecuritySettings) => void) {
+    return appSettings.subscribe((settings) => {
+      fn(settings.security);
+    });
+  },
+  set(value: SecuritySettings) {
+    settingsManager.update((s) => {
+      s.security = value;
+    });
+  },
+  update(updater: (s: SecuritySettings) => SecuritySettings) {
+    settingsManager.update((s) => {
+      s.security = updater(s.security);
+    });
+  },
+  get value() {
+    return settingsManager.current.security;
+  },
+  set value(v: SecuritySettings) {
+    settingsManager.update((s) => {
+      s.security = v;
+    });
+  }
+};
 
-  return {
-    subscribe,
-    set: (value: SecuritySettings) => {
-      appSettings.update((settings) => {
-        settings.security = value;
-        return settings;
-      });
-    }
-  };
-}
-
-export const securitySettings = createSecuritySettingsStore();

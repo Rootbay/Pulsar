@@ -1,25 +1,29 @@
-import { derived } from 'svelte/store';
-import { appSettings } from './appSettings.svelte';
+import { appSettings, settingsManager } from './appSettings.svelte';
 import type { AutofillSettings } from '../config/settings';
 
-function createAutofillSettingsStore() {
-  const { subscribe } = derived(appSettings, ($appSettings) => $appSettings.autofill);
+export const autofillSettings = {
+  subscribe(fn: (value: AutofillSettings) => void) {
+    return appSettings.subscribe((settings) => {
+      fn(settings.autofill);
+    });
+  },
+  set(value: AutofillSettings) {
+    settingsManager.update((s) => {
+      s.autofill = value;
+    });
+  },
+  update(updater: (s: AutofillSettings) => AutofillSettings) {
+    settingsManager.update((s) => {
+      s.autofill = updater(s.autofill);
+    });
+  },
+  get value() {
+    return settingsManager.current.autofill;
+  },
+  set value(v: AutofillSettings) {
+    settingsManager.update((s) => {
+      s.autofill = v;
+    });
+  }
+};
 
-  return {
-    subscribe,
-    set: (value: AutofillSettings) => {
-      appSettings.update((settings) => {
-        settings.autofill = value;
-        return settings;
-      });
-    },
-    update: (callback: (settings: AutofillSettings) => AutofillSettings) => {
-      appSettings.update((settings) => {
-        settings.autofill = callback(settings.autofill);
-        return settings;
-      });
-    }
-  };
-}
-
-export const autofillSettings = createAutofillSettingsStore();

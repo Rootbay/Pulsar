@@ -1,25 +1,29 @@
-import { derived } from 'svelte/store';
-import { appSettings } from './appSettings.svelte';
+import { appSettings, settingsManager } from './appSettings.svelte';
 import type { AdvancedSettings } from '../config/settings';
 
-function createAdvancedSettingsStore() {
-  const { subscribe } = derived(appSettings, ($appSettings) => $appSettings.advanced);
+export const advancedSettings = {
+  subscribe(fn: (value: AdvancedSettings) => void) {
+    return appSettings.subscribe((settings) => {
+      fn(settings.advanced);
+    });
+  },
+  set(value: AdvancedSettings) {
+    settingsManager.update((s) => {
+      s.advanced = value;
+    });
+  },
+  update(updater: (s: AdvancedSettings) => AdvancedSettings) {
+    settingsManager.update((s) => {
+      s.advanced = updater(s.advanced);
+    });
+  },
+  get value() {
+    return settingsManager.current.advanced;
+  },
+  set value(v: AdvancedSettings) {
+    settingsManager.update((s) => {
+      s.advanced = v;
+    });
+  }
+};
 
-  return {
-    subscribe,
-    set: (value: AdvancedSettings) => {
-      appSettings.update((settings) => {
-        settings.advanced = value;
-        return settings;
-      });
-    },
-    update: (callback: (settings: AdvancedSettings) => AdvancedSettings) => {
-      appSettings.update((settings) => {
-        settings.advanced = callback(settings.advanced);
-        return settings;
-      });
-    }
-  };
-}
-
-export const advancedSettings = createAdvancedSettingsStore();

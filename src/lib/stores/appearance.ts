@@ -1,49 +1,50 @@
-import { derived, readable } from 'svelte/store';
-import { appSettings } from './appSettings.svelte';
+import { appSettings, settingsManager } from './appSettings.svelte';
 import { defaultAppearanceSettings, type AppearanceSettings } from '../config/settings';
 
-function createAppearanceSettingsStore() {
-  const { subscribe } = derived(appSettings, ($appSettings) => $appSettings.appearance);
-
-  const hasUnsavedChanges = readable(false, (setReadable) => {
-    let initialSettings: AppearanceSettings;
-    const unsubscribe = appSettings.subscribe(($appSettings) => {
-      const currentSettings = $appSettings.appearance;
-      if (!initialSettings) {
-        initialSettings = currentSettings;
+const hasUnsavedChanges = {
+  subscribe(fn: (changed: boolean) => void, invalidate?: (value?: boolean) => void) {
+    let initialSettings: string | undefined;
+    return appSettings.subscribe((settings) => {
+      const current = settings.appearance;
+      const currentStr = JSON.stringify(current);
+      if (initialSettings === undefined) {
+        initialSettings = currentStr;
       }
-      setReadable(JSON.stringify(currentSettings) !== JSON.stringify(initialSettings));
+      fn(currentStr !== initialSettings);
     });
-    return unsubscribe;
-  });
+  }
+};
 
-  return {
-    subscribe,
-    set: (value: AppearanceSettings) => {
-      appSettings.update((settings) => {
-        settings.appearance = value;
-        return settings;
-      });
-    },
-    update: (callback: (settings: AppearanceSettings) => AppearanceSettings) => {
-      appSettings.update((settings) => {
-        settings.appearance = callback(settings.appearance);
-        return settings;
-      });
-    },
-    save: () => {
-      appSettings.update((s) => s); // Dummy update to trigger appSettings save
-    },
-    reset: () => {
-      appSettings.update((settings) => {
-        settings.appearance = defaultAppearanceSettings;
-        return settings;
-      });
-    },
-    hasUnsavedChanges
-  };
-}
+export const appearanceSettings = {
+  subscribe(fn: (value: AppearanceSettings) => void) {
+    return appSettings.subscribe((settings) => {
+      fn(settings.appearance);
+    });
+  },
+  get value() {
+    return settingsManager.current.appearance;
+  },
+  set(value: AppearanceSettings) {
+    settingsManager.update((s) => {
+      s.appearance = value;
+    });
+  },
+  update(updater: (s: AppearanceSettings) => AppearanceSettings) {
+    settingsManager.update((s) => {
+      s.appearance = updater(s.appearance);
+    });
+  },
+  save: () => {
+    // Trigger save
+    settingsManager.update((s) => s);
+  },
+  reset: () => {
+    settingsManager.update((settings) => {
+      settings.appearance = defaultAppearanceSettings;
+    });
+  },
+  hasUnsavedChanges
+};
 
-export type AppearanceSettingsStore = ReturnType<typeof createAppearanceSettingsStore>;
+export type AppearanceSettingsStore = typeof appearanceSettings;
 
-export const appearanceSettings = createAppearanceSettingsStore();

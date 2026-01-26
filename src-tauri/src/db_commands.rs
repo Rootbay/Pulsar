@@ -1,5 +1,5 @@
 use crate::state::AppState;
-use crate::types::{Button, PasswordItem, RecipientKey, CustomField, Attachment};
+use crate::types::{Button, PasswordItem, RecipientKey, CustomField, Attachment, SecretString};
 use crate::encryption::{encrypt, decrypt, encrypt_bytes, decrypt_bytes};
 use crate::error::{Error, Result};
 use tauri::State;
@@ -8,7 +8,6 @@ use sqlx::SqlitePool;
 use chrono::Utc;
 use zeroize::Zeroizing;
 use validator::Validate;
-use serde_json;
 use std::fs;
 use std::io::Write;
 use std::path::Path;
@@ -27,11 +26,9 @@ pub fn validate_password_item_fields(item: &PasswordItem) -> std::result::Result
         }
     }
 
-    let is_placeholder_password = item.password.trim().is_empty() || item.password == "N/A";
-    if !is_placeholder_password {
-        if item.password.len() < 8 {
-            return Err(validator::ValidationError::new("password_too_short"));
-        }
+    let is_placeholder_password = item.password.trim().is_empty() || item.password.as_str() == "N/A";
+    if !is_placeholder_password && item.password.len() < 8 {
+        return Err(validator::ValidationError::new("password_too_short"));
     }
 
     if let Some(url) = &item.url {
@@ -51,6 +48,7 @@ pub fn validate_password_item_fields(item: &PasswordItem) -> std::result::Result
 
 
 async fn get_key(state: &State<'_, AppState>) -> Result<Zeroizing<Vec<u8>>> {
+
     let guard = state.key.lock().await;
     let opt = guard.clone();
     drop(guard);
@@ -322,8 +320,10 @@ pub async fn save_password_item(
     let username_enc = helper.encrypt_opt(item.username.as_ref())?;
     let url_enc = helper.encrypt_opt(item.url.as_ref())?;
     let notes_enc = helper.encrypt_opt(item.notes.as_ref())?;
-    let password_enc = helper.encrypt(&item.password)?;
-    let totp_secret_enc = helper.encrypt_opt(item.totp_secret.as_ref())?;
+    let password_enc = helper.encrypt(item.password.as_str())?;
+    let totp_secret_enc = item.totp_secret.as_ref()
+        .map(|s| helper.encrypt(s.as_str()))
+        .transpose()?;
     
     let custom_fields_json = serde_json::to_string(&item.custom_fields)?;
     let custom_fields_enc = helper.encrypt(&custom_fields_json)?;
@@ -404,10 +404,10 @@ async fn decrypt_password_item_row(row: &sqlx::sqlite::SqliteRow, key: &[u8], db
     let notes = notes_enc.map(|n| decrypt(n.as_str(), key)).transpose()?;
 
     let password_enc: String = row.get("password");
-    let password = decrypt(&password_enc, key)?;
+    let password = SecretString::new(decrypt(&password_enc, key)?);
 
     let totp_secret_enc: Option<String> = row.get("totp_secret");
-    let totp_secret = totp_secret_enc.map(|t| decrypt(t.as_str(), key)).transpose()?;
+    let totp_secret = totp_secret_enc.map(|t| decrypt(t.as_str(), key)).transpose()?.map(SecretString::new);
 
     let custom_fields_enc: Option<String> = row.get("custom_fields");
     let custom_fields = custom_fields_enc
@@ -532,8 +532,10 @@ pub async fn update_password_item(
     let username_enc = helper.encrypt_opt(item.username.as_ref())?;
     let url_enc = helper.encrypt_opt(item.url.as_ref())?;
     let notes_enc = helper.encrypt_opt(item.notes.as_ref())?;
-    let password_enc = helper.encrypt(&item.password)?;
-    let totp_secret_enc = helper.encrypt_opt(item.totp_secret.as_ref())?;
+    let password_enc = helper.encrypt(item.password.as_str())?;
+    let totp_secret_enc = item.totp_secret.as_ref()
+        .map(|s| helper.encrypt(s.as_str()))
+        .transpose()?;
     
     let custom_fields_json = serde_json::to_string(&item.custom_fields)?;
     let custom_fields_enc = helper.encrypt(&custom_fields_json)?;
@@ -563,6 +565,7 @@ pub async fn update_password_item(
         .await?;
     Ok(())
 }
+
 
 
 #[tauri::command]

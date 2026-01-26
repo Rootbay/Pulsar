@@ -1,7 +1,7 @@
 use crate::state::AppState;
 use crate::error::{Error, Result};
+use crate::types::{SecretString};
 use serde::{Deserialize, Serialize};
-use serde_json;
 use sqlx::SqlitePool;
 use tauri::State;
 use zeroize::{Zeroize, Zeroizing};
@@ -46,7 +46,7 @@ async fn load_devices(pool: &SqlitePool, key: &[u8]) -> Result<Vec<DeviceRecord>
         } else {
             let json = decrypt(&enc_json, key)?;
             serde_json::from_str(&json)
-                .map_err(|e| Error::Internal(format!("Failed to parse device registry: {}", e)))
+                .map_err(|e| Error::Internal(format!("Failed to parse device registry: {e}")))
         }
     } else {
         Ok(Vec::new())
@@ -82,7 +82,7 @@ pub async fn register_device(state: &State<'_, AppState>) -> Result<()> {
         "Unknown"
     };
 
-    let device_id = format!("{}-{}", hostname, platform);
+    let device_id = format!("{hostname}-{platform}");
     let now = chrono::Utc::now().to_rfc3339();
 
     let mut found = false;
@@ -191,10 +191,10 @@ pub async fn get_security_report(state: State<'_, AppState>) -> Result<SecurityR
     let items = crate::db_commands::get_password_items_impl(&pool, key.as_slice()).await?;
 
     use std::collections::HashMap;
-    let mut password_map: HashMap<String, Vec<i64>> = HashMap::new();
+    let mut password_map: HashMap<SecretString, Vec<i64>> = HashMap::new();
 
     for item in items {
-        if !item.password.is_empty() && item.password != "N/A" {
+        if !item.password.as_str().is_empty() && item.password.as_str() != "N/A" {
             password_map.entry(item.password.clone()).or_default().push(item.id);
         }
     }
@@ -229,4 +229,3 @@ pub async fn run_integrity_check(state: State<'_, AppState>) -> Result<String> {
         .await?;
     Ok(result.0)
 }
-

@@ -65,25 +65,17 @@ fn metadata_path(db_path: &Path) -> PathBuf {
         .join(meta_name)
 }
 
-fn load_stored_settings(app_handle: &tauri::AppHandle) -> Result<StoredAppSettings> {
-    use tauri::Manager;
-    let settings_path = app_handle.path().app_data_dir().map_err(|e| Error::Internal(e.to_string()))?.join(".settings.dat");
-    let store = StoreBuilder::new(app_handle, settings_path)
-        .build()
-        .map_err(|e| Error::Internal(e.to_string()))?;
-    store.reload().map_err(|e| Error::Internal(e.to_string()))?;
+async fn load_stored_settings(app_handle: &tauri::AppHandle) -> Result<StoredAppSettings> {
+    use crate::settings::get_all_settings_internal;
+    
+    let settings_json = get_all_settings_internal(app_handle).await?;
 
-    let Some(value) = store.get("settings") else {
+    let Some(raw) = settings_json else {
         return Ok(StoredAppSettings::default());
     };
 
-    if let Some(raw) = value.as_str() {
-        serde_json::from_str::<StoredAppSettings>(raw)
-            .map_err(|e| Error::Internal(format!("Failed to parse stored settings: {e}")))
-    } else {
-        serde_json::from_value::<StoredAppSettings>(value.clone())
-            .map_err(|e| Error::Internal(format!("Failed to parse stored settings value: {e}")))
-    }
+    serde_json::from_str::<StoredAppSettings>(&raw)
+        .map_err(|e| Error::Internal(format!("Failed to parse stored settings: {e}")))
 }
 
 fn gather_ordered_paths(
@@ -140,7 +132,7 @@ pub async fn list_vaults(
     app_handle: tauri::AppHandle,
     state: State<'_, AppState>,
 ) -> Result<Vec<VaultInfo>> {
-    let stored_settings = load_stored_settings(&app_handle)?;
+    let stored_settings = load_stored_settings(&app_handle).await?;
 
     let active_path = { state.db_path.lock().await.clone() };
     let active_pool = { state.db.lock().await.clone() };

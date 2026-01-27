@@ -31,6 +31,7 @@
   import { exportVaultBackup, importVaultBackup, notifyVaultRefresh } from '$lib/utils/backup';
   import { i18n, t as translate, type Locale } from '$lib/i18n.svelte';
   import { callBackend } from '$lib/utils/backend';
+  import PassphraseDialog from '$lib/components/ui/PassphraseDialog.svelte';
 
   const locale = $derived(i18n.locale);
   const t = (key: string, vars = {}) => translate(locale, key as any, vars);
@@ -84,7 +85,185 @@
   let loadingVaults = $state(false);
   let busyAction = $state<'import' | 'create' | 'backup' | 'restore' | 'export' | null>(null);
 
+  let passphraseDialogOpen = $state(false);
+  let passphraseDialogTitle = $state('');
+  let passphraseDialogDescription = $state('');
+  let passphraseDialogConfirmLabel = $state('');
+  let passphraseDialogAction = $state<((passphrase: string) => Promise<void>) | null>(null);
+
   const relativeTimeFormatter = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' });
+
+  function openPassphraseDialog(
+    title: string,
+    description: string,
+    confirmLabel: string,
+    action: (passphrase: string) => Promise<void>
+  ) {
+    passphraseDialogTitle = title;
+    passphraseDialogDescription = description;
+    passphraseDialogConfirmLabel = confirmLabel;
+    passphraseDialogAction = action;
+    passphraseDialogOpen = true;
+  }
+
+  async function handleImportVault(): Promise<void> {
+    if (busyAction) {
+      return;
+    }
+
+    try {
+      const sourcePath = await callBackend<string>('pick_open_file');
+      
+      openPassphraseDialog(
+        t('settingsVaultImportAction'),
+        t('settingsVaultImportPassphrasePrompt'),
+        t('settingsVaultImportAction'),
+        async (passphrase) => {
+          busyAction = 'import';
+          try {
+            await importVaultBackup(passphrase, { sourcePath });
+            toast.success(t('settingsVaultImportSuccess'));
+            notifyVaultRefresh('import');
+            await refreshVaults();
+          } catch (cause) {
+            console.error('Failed to import vault:', cause);
+            toast.error(resolveErrorMessage(cause, t('settingsVaultImportFailed')));
+          } finally {
+            busyAction = null;
+          }
+        }
+      );
+    } catch (cause) {
+      if (isDialogCancelled(cause)) {
+        return;
+      }
+      console.error('Failed to pick file:', cause);
+    }
+  }
+
+  async function handleCreateVault(): Promise<void> {
+    if (busyAction) {
+      return;
+    }
+
+    busyAction = 'create';
+
+    try {
+      const picked = await callBackend<string>('pick_save_file');
+      const withExt: string = picked.endsWith('.psec') ? picked : `${picked}.psec`;
+      const sep = withExt.includes('\\') ? '\\' : '/';
+      const lastSep = withExt.lastIndexOf(sep);
+      const baseDir = lastSep === -1 ? '' : withExt.slice(0, lastSep);
+      const baseName = lastSep === -1 ? withExt : withExt.slice(lastSep + 1);
+      const stem = baseName.endsWith('.psec') ? baseName.slice(0, -5) : baseName;
+      const folder = baseDir ? `${baseDir}${sep}${stem}` : stem;
+      const finalPath = `${folder}${sep}${stem}.psec`;
+
+      await callBackend('switch_database', { dbPath: finalPath });
+      await addRecentDatabase(finalPath);
+
+      toast.success(t('settingsVaultCreateSuccess'));
+      notifyVaultRefresh('create');
+      await refreshVaults({ preserveSelection: false });
+    } catch (cause) {
+      if (isDialogCancelled(cause)) {
+        return;
+      }
+
+      console.error('Failed to create vault:', cause);
+      toast.error(resolveErrorMessage(cause, t('settingsVaultCreateFailed')));
+    } finally {
+      busyAction = null;
+    }
+  }
+
+  async function runBackup(): Promise<void> {
+    if (busyAction) {
+      return;
+    }
+
+    openPassphraseDialog(
+      t('settingsVaultBackupNow'),
+      t('settingsVaultBackupPassphrasePrompt'),
+      t('settingsVaultBackupNow'),
+      async (passphrase) => {
+        busyAction = 'backup';
+        try {
+          const message = await exportVaultBackup(passphrase);
+          toast.success(message);
+          notifyVaultRefresh('backup');
+          await refreshVaults();
+        } catch (cause) {
+          console.error('Failed to run backup:', cause);
+          toast.error(resolveErrorMessage(cause, t('settingsVaultBackupFailed')));
+        } finally {
+          busyAction = null;
+        }
+      }
+    );
+  }
+
+  async function restoreVault(): Promise<void> {
+    if (busyAction) {
+      return;
+    }
+
+    try {
+      const sourcePath = await callBackend<string>('pick_open_file');
+      
+      openPassphraseDialog(
+        t('settingsVaultRestore'),
+        t('settingsVaultRestorePassphrasePrompt'),
+        t('settingsVaultRestore'),
+        async (passphrase) => {
+          busyAction = 'restore';
+          try {
+            await importVaultBackup(passphrase, { sourcePath });
+            toast.success(t('settingsVaultRestoreSuccess'));
+            notifyVaultRefresh('restore');
+            await refreshVaults();
+          } catch (cause) {
+            console.error('Failed to restore vault:', cause);
+            toast.error(resolveErrorMessage(cause, t('settingsVaultRestoreFailed')));
+          } finally {
+            busyAction = null;
+          }
+        }
+      );
+    } catch (cause) {
+      if (isDialogCancelled(cause)) {
+        return;
+      }
+      console.error('Failed to pick file:', cause);
+    }
+  }
+
+  async function exportVault(): Promise<void> {
+    if (busyAction) {
+      return;
+    }
+
+    openPassphraseDialog(
+      t('settingsVaultExport'),
+      t('settingsVaultExportPassphrasePrompt'),
+      t('settingsVaultExport'),
+      async (passphrase) => {
+        const exportPlaintext = window.confirm(t('settingsVaultExportConfirmPlaintext'));
+        busyAction = 'export';
+        try {
+          const message = await exportVaultBackup(passphrase, { plaintext: exportPlaintext });
+          toast.success(message);
+          notifyVaultRefresh('export');
+          await refreshVaults();
+        } catch (cause) {
+          console.error('Failed to export vault:', cause);
+          toast.error(resolveErrorMessage(cause, t('settingsVaultExportFailed')));
+        } finally {
+          busyAction = null;
+        }
+      }
+    );
+  }
 
   function isDialogCancelled(error: unknown): boolean {
     return typeof error === 'string' && error.toLowerCase().includes('cancelled');
@@ -273,156 +452,6 @@
     }
 
     void refreshVaults();
-  }
-
-  async function handleImportVault(): Promise<void> {
-    if (busyAction) {
-      return;
-    }
-
-    busyAction = 'import';
-
-    try {
-      const sourcePath = await callBackend<string>('pick_open_file');
-      const passphrase = window.prompt(t('settingsVaultImportPassphrasePrompt'));
-
-      if (!passphrase?.trim()) {
-        return;
-      }
-
-      await importVaultBackup(passphrase.trim(), { sourcePath });
-      toast.success(t('settingsVaultImportSuccess'));
-      notifyVaultRefresh('import');
-      await refreshVaults();
-    } catch (cause) {
-      if (isDialogCancelled(cause)) {
-        return;
-      }
-
-      console.error('Failed to import vault:', cause);
-      toast.error(resolveErrorMessage(cause, t('settingsVaultImportFailed')));
-    } finally {
-      busyAction = null;
-    }
-  }
-
-  async function handleCreateVault(): Promise<void> {
-    if (busyAction) {
-      return;
-    }
-
-    busyAction = 'create';
-
-    try {
-      const picked = await callBackend<string>('pick_save_file');
-      const withExt: string = picked.endsWith('.psec') ? picked : `${picked}.psec`;
-      const sep = withExt.includes('\\') ? '\\' : '/';
-      const lastSep = withExt.lastIndexOf(sep);
-      const baseDir = lastSep === -1 ? '' : withExt.slice(0, lastSep);
-      const baseName = lastSep === -1 ? withExt : withExt.slice(lastSep + 1);
-      const stem = baseName.endsWith('.psec') ? baseName.slice(0, -5) : baseName;
-      const folder = baseDir ? `${baseDir}${sep}${stem}` : stem;
-      const finalPath = `${folder}${sep}${stem}.psec`;
-
-      await callBackend('switch_database', { dbPath: finalPath });
-      await addRecentDatabase(finalPath);
-
-      toast.success(t('settingsVaultCreateSuccess'));
-      notifyVaultRefresh('create');
-      await refreshVaults({ preserveSelection: false });
-    } catch (cause) {
-      if (isDialogCancelled(cause)) {
-        return;
-      }
-
-      console.error('Failed to create vault:', cause);
-      toast.error(resolveErrorMessage(cause, t('settingsVaultCreateFailed')));
-    } finally {
-      busyAction = null;
-    }
-  }
-
-  async function runBackup(): Promise<void> {
-    if (busyAction) {
-      return;
-    }
-
-    busyAction = 'backup';
-
-    try {
-      const passphrase = window.prompt(t('settingsVaultBackupPassphrasePrompt'));
-      if (!passphrase?.trim()) {
-        return;
-      }
-
-      const message = await exportVaultBackup(passphrase.trim());
-      toast.success(message);
-      notifyVaultRefresh('backup');
-      await refreshVaults();
-    } catch (cause) {
-      console.error('Failed to run backup:', cause);
-      toast.error(resolveErrorMessage(cause, t('settingsVaultBackupFailed')));
-    } finally {
-      busyAction = null;
-    }
-  }
-
-  async function restoreVault(): Promise<void> {
-    if (busyAction) {
-      return;
-    }
-
-    busyAction = 'restore';
-
-    try {
-      const sourcePath = await callBackend<string>('pick_open_file');
-      const passphrase = window.prompt(t('settingsVaultRestorePassphrasePrompt'));
-
-      if (!passphrase?.trim()) {
-        return;
-      }
-
-      await importVaultBackup(passphrase.trim(), { sourcePath });
-      toast.success(t('settingsVaultRestoreSuccess'));
-      notifyVaultRefresh('restore');
-      await refreshVaults();
-    } catch (cause) {
-      if (isDialogCancelled(cause)) {
-        return;
-      }
-
-      console.error('Failed to restore vault:', cause);
-      toast.error(resolveErrorMessage(cause, t('settingsVaultRestoreFailed')));
-    } finally {
-      busyAction = null;
-    }
-  }
-
-  async function exportVault(): Promise<void> {
-    if (busyAction) {
-      return;
-    }
-
-    busyAction = 'export';
-
-    try {
-      const passphrase = window.prompt(t('settingsVaultExportPassphrasePrompt'));
-      if (!passphrase?.trim()) {
-        return;
-      }
-
-      const exportPlaintext = window.confirm(t('settingsVaultExportConfirmPlaintext'));
-
-      const message = await exportVaultBackup(passphrase.trim(), { plaintext: exportPlaintext });
-      toast.success(message);
-      notifyVaultRefresh('export');
-      await refreshVaults();
-    } catch (cause) {
-      console.error('Failed to export vault:', cause);
-      toast.error(resolveErrorMessage(cause, t('settingsVaultExportFailed')));
-    } finally {
-      busyAction = null;
-    }
   }
 
   onMount(() => {
@@ -740,3 +769,16 @@
     </CardContent>
   </Card>
 </div>
+
+<PassphraseDialog
+  bind:open={passphraseDialogOpen}
+  title={passphraseDialogTitle}
+  description={passphraseDialogDescription}
+  confirmLabel={passphraseDialogConfirmLabel}
+  onConfirm={async (passphrase) => {
+    if (passphraseDialogAction) {
+      await passphraseDialogAction(passphrase);
+    }
+  }}
+  busy={busyAction !== null}
+/>

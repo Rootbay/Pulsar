@@ -41,7 +41,6 @@
       await callBackend('simulate_autotype');
       toast.success(t('Auto-type simulation completed.'));
       testResults = [
-        { message: 'Hotkey registration: Success', status: 'success' },
         { message: 'Keystroke simulation: Success', status: 'success' }
       ];
     } catch (error) {

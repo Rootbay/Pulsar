@@ -63,9 +63,13 @@ pub async fn apply_system_settings(app_handle: tauri::AppHandle) -> Result<()> {
 
 #[tauri::command]
 pub async fn get_all_settings(app_handle: tauri::AppHandle) -> Result<Option<String>> {
+    get_all_settings_internal(&app_handle).await
+}
+
+pub async fn get_all_settings_internal(app_handle: &tauri::AppHandle) -> Result<Option<String>> {
     use tauri::Manager;
     let settings_path = app_handle.path().app_data_dir().map_err(|e| Error::Internal(e.to_string()))?.join(".settings.dat");
-    let store = StoreBuilder::new(&app_handle, settings_path)
+    let store = StoreBuilder::new(app_handle, settings_path)
         .build()
         .map_err(|e| Error::Internal(e.to_string()))?;
     store.reload().map_err(|e| Error::Internal(e.to_string()))?;

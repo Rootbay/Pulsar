@@ -1,20 +1,15 @@
 <script lang="ts">
   import { settings } from '$lib/stores/appSettings.svelte';
+  import { callBackend } from '$lib/utils/backend';
+  import { toast } from '$lib/components/ui/sonner';
   import type { AdvancedSettings } from '$lib/config/settings';
   import { Button } from '$lib/components/ui/button';
-  import {
-    Card,
-    CardContent,
-    CardDescription,
-    CardHeader,
-    CardTitle
-  } from '$lib/components/ui/card';
+  import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '$lib/components/ui/card';
   import { Label } from '$lib/components/ui/label';
-  import { Select, SelectContent, SelectItem, SelectTrigger } from '$lib/components/ui/select';
   import { Switch } from '$lib/components/ui/switch';
   import { Input } from '$lib/components/ui/input';
-  import { ShieldAlert, Gauge, TriangleAlert, Cpu, Database, X, ShieldCheck } from '@lucide/svelte';
-  import { i18n, t as translate, type I18nKey } from '$lib/i18n.svelte';
+  import { ShieldAlert, Gauge, TriangleAlert, X, ShieldCheck } from '@lucide/svelte';
+  import { i18n, t as translate } from '$lib/i18n.svelte';
   import { cn } from '$lib/utils';
 
   interface Props {
@@ -68,19 +63,26 @@
   }
 
   function handleWipeInput(e: Event & { currentTarget: HTMLInputElement }) {
-      wipeConfirmationText = e.currentTarget.value;
+    wipeConfirmationText = e.currentTarget.value;
   }
 
   async function handleWipeVault() {
-      if (!canWipeVault) return;
-      if (confirm(t('Are you absolutely sure you want to wipe the vault? This cannot be undone.'))) {
-          console.log('Wiping vault...');
+    if (!canWipeVault) return;
+    if (confirm(t('Are you absolutely sure you want to wipe the vault? This cannot be undone.'))) {
+      try {
+        await callBackend('wipe_vault_database');
+        toast.success(t('Vault wiped successfully.'));
+        wipeConfirmationText = '';
+      } catch (error) {
+        console.error('Failed to wipe vault:', error);
+        toast.error(t('Failed to wipe vault.'));
       }
+    }
   }
 
   const memoryToggles = [
-      { key: 'lockMemoryPages', title: 'Lock Memory Pages' },
-      { key: 'secureMemoryAllocation', title: 'Secure Memory Allocation' }
+    { key: 'lockMemoryPages', title: 'Lock Memory Pages' },
+    { key: 'secureMemoryAllocation', title: 'Secure Memory Allocation' }
   ];
 </script>
 
@@ -101,7 +103,13 @@
         </CardDescription>
       </div>
       {#if onclose}
-        <Button variant="ghost" size="icon" onclick={onclose} aria-label="Close settings" class="ml-auto">
+        <Button
+          variant="ghost"
+          size="icon"
+          onclick={onclose}
+          aria-label="Close settings"
+          class="ml-auto"
+        >
           <X size={20} />
         </Button>
       {/if}
@@ -112,7 +120,9 @@
       >
         <TriangleAlert class="mt-0.5 h-4 w-4" aria-hidden="true" />
         <p>
-          {t('Increasing these parameters strengthens security but also slows down authentication.')}
+          {t(
+            'Increasing these parameters strengthens security but also slows down authentication.'
+          )}
         </p>
       </div>
 
@@ -155,7 +165,9 @@
               class="bg-secondary accent-primary h-1.5 flex-1 appearance-none rounded-full"
               oninput={(e) => updateSetting('timeCost', parseInt(e.currentTarget.value))}
             />
-            <span class="text-muted-foreground w-16 text-right text-sm">{currentSettings.timeCost}</span>
+            <span class="text-muted-foreground w-16 text-right text-sm"
+              >{currentSettings.timeCost}</span
+            >
           </div>
         </div>
 
@@ -174,7 +186,9 @@
               class="bg-secondary accent-primary h-1.5 flex-1 appearance-none rounded-full"
               oninput={(e) => updateSetting('memoryCost', parseInt(e.currentTarget.value))}
             />
-            <span class="text-muted-foreground w-20 text-right text-sm">{currentSettings.memoryCost}&nbsp;MB</span>
+            <span class="text-muted-foreground w-20 text-right text-sm"
+              >{currentSettings.memoryCost}&nbsp;MB</span
+            >
           </div>
         </div>
 
@@ -192,7 +206,9 @@
               class="bg-secondary accent-primary h-1.5 flex-1 appearance-none rounded-full"
               oninput={(e) => updateSetting('parallelism', parseInt(e.currentTarget.value))}
             />
-            <span class="text-muted-foreground w-20 text-right text-sm">{currentSettings.parallelism}</span>
+            <span class="text-muted-foreground w-20 text-right text-sm"
+              >{currentSettings.parallelism}</span
+            >
           </div>
         </div>
       </div>

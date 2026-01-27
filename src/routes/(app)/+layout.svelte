@@ -127,9 +127,9 @@
     if (selectedPasswordItem) {
       const refreshedItem = vaultStore.items.find((item) => item.id === selectedPasswordItem?.id);
       if (refreshedItem) {
-         await handlePasswordSelected(refreshedItem);
+        await handlePasswordSelected(refreshedItem);
       } else {
-         selectedPasswordItem = null;
+        selectedPasswordItem = null;
       }
     }
   }
@@ -156,12 +156,12 @@
     await vaultStore.loadItems();
 
     if (selectedPasswordItem) {
-       const refreshedItem = vaultStore.items.find((item) => item.id === selectedPasswordItem?.id);
-       if (refreshedItem) {
-         await handlePasswordSelected(refreshedItem);
-       } else {
-         selectedPasswordItem = null;
-       }
+      const refreshedItem = vaultStore.items.find((item) => item.id === selectedPasswordItem?.id);
+      if (refreshedItem) {
+        await handlePasswordSelected(refreshedItem);
+      } else {
+        selectedPasswordItem = null;
+      }
     }
   }
 
@@ -198,15 +198,15 @@
 
   async function handlePasswordSelected(item: PasswordItemOverview | null) {
     if (!item) {
-        selectedPasswordItem = null;
-        return;
+      selectedPasswordItem = null;
+      return;
     }
     try {
-        const fullItem = await vaultStore.getItemDetails(item.id);
-        selectedPasswordItem = fullItem;
+      const fullItem = await vaultStore.getItemDetails(item.id);
+      selectedPasswordItem = fullItem;
     } catch (err) {
-        console.error("Failed to fetch password details", err);
-        toast.error("Failed to load item details");
+      console.error('Failed to fetch password details', err);
+      toast.error('Failed to load item details');
     }
   }
 
@@ -216,9 +216,9 @@
     }
 
     if (!('password' in item)) {
-         await handlePasswordSelected(item);
+      await handlePasswordSelected(item);
     } else {
-        selectedPasswordItem = item;
+      selectedPasswordItem = item;
     }
 
     await tick();

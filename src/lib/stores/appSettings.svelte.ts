@@ -57,7 +57,7 @@ class SettingsStore {
               loaded = firstPass;
             }
           } catch {
-             console.warn('Settings corrupted, using defaults');
+            console.warn('Settings corrupted, using defaults');
           }
 
           if (loaded && typeof loaded === 'object') {
@@ -77,48 +77,51 @@ class SettingsStore {
   }
 
   #mergeDefaults(loaded: Partial<AllSettings>): AllSettings {
-     const merged = { ...defaultAllSettings };
-     
-     for (const key of Object.keys(defaultAllSettings) as (keyof AllSettings)[]) {
-         if (loaded[key]) {
-             if (typeof defaultAllSettings[key] === 'object' && !Array.isArray(defaultAllSettings[key]) && loaded[key]) {
-                 // @ts-ignore
-                 merged[key] = { ...defaultAllSettings[key], ...loaded[key] };
-             } else {
-                 // @ts-ignore
-                 merged[key] = loaded[key];
-             }
-         }
-     }
-     return merged;
+    const merged = { ...defaultAllSettings };
+
+    for (const key of Object.keys(defaultAllSettings) as (keyof AllSettings)[]) {
+      if (loaded[key]) {
+        if (
+          typeof defaultAllSettings[key] === 'object' &&
+          !Array.isArray(defaultAllSettings[key]) &&
+          loaded[key]
+        ) {
+          // @ts-ignore
+          merged[key] = { ...defaultAllSettings[key], ...loaded[key] };
+        } else {
+          // @ts-ignore
+          merged[key] = loaded[key];
+        }
+      }
+    }
+    return merged;
   }
 
   save() {
     if (this.#saveTimeout) clearTimeout(this.#saveTimeout);
-    
+
     this.#saveTimeout = setTimeout(async () => {
-        this.isSaving = true;
-        try {
-          await callBackend('set_all_settings', { settings: JSON.stringify(this.state) });
-        } catch (error) {
-          console.error('Failed to save settings:', error);
-        } finally {
-          this.isSaving = false;
-        }
+      this.isSaving = true;
+      try {
+        await callBackend('set_all_settings', { settings: JSON.stringify(this.state) });
+      } catch (error) {
+        console.error('Failed to save settings:', error);
+      } finally {
+        this.isSaving = false;
+      }
     }, 500);
   }
 
   update<K extends keyof AllSettings>(key: K, value: AllSettings[K]) {
-      this.state[key] = value;
-      this.save();
+    this.state[key] = value;
+    this.save();
   }
-  
+
   setState(newState: AllSettings) {
-      this.state = newState;
-      this.save();
+    this.state = newState;
+    this.save();
   }
 }
 
 export const settings = new SettingsStore();
 export const initAppSettings = () => settings.initPromise;
-

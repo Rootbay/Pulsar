@@ -206,9 +206,7 @@
           >
             <div class="space-y-1">
               <p class="text-foreground text-sm font-semibold">
-                {option.key === 'highContrast'
-                  ? t('High Contrast')
-                  : t('Reduced Motion')}
+                {option.key === 'highContrast' ? t('High Contrast') : t('Reduced Motion')}
               </p>
               <p class="text-muted-foreground text-sm">
                 {option.key === 'highContrast'

@@ -20,33 +20,33 @@ async function filterNonExistentDatabases(paths: string[]): Promise<string[]> {
 }
 
 export async function addRecentDatabase(path: string) {
-    try {
-      void callBackend('check_file_exists', { path })
-        .then((exists) => {
-          if (!exists) {
-            console.warn(`Recent path does not yet exist (will be trimmed later): ${path}`);
-          }
-        })
-        .catch(() => {});
-    } catch {
-      // ignore
-    }
+  try {
+    void callBackend('check_file_exists', { path })
+      .then((exists) => {
+        if (!exists) {
+          console.warn(`Recent path does not yet exist (will be trimmed later): ${path}`);
+        }
+      })
+      .catch(() => {});
+  } catch {
+    // ignore
+  }
 
-    const current = settings.state.recentDatabases || [];
-    const filteredPaths = current.filter((p) => p !== path);
-    settings.state.recentDatabases = [path, ...filteredPaths].slice(0, 5);
-    settings.save();
+  const current = settings.state.recentDatabases || [];
+  const filteredPaths = current.filter((p) => p !== path);
+  settings.state.recentDatabases = [path, ...filteredPaths].slice(0, 5);
+  settings.save();
 }
 
 export function removeRecentDatabase(path: string) {
-    const current = settings.state.recentDatabases || [];
-    settings.state.recentDatabases = current.filter((p) => p !== path);
-    settings.save();
+  const current = settings.state.recentDatabases || [];
+  settings.state.recentDatabases = current.filter((p) => p !== path);
+  settings.save();
 }
 
 export function clearRecentDatabases() {
-    settings.state.recentDatabases = [];
-    settings.save();
+  settings.state.recentDatabases = [];
+  settings.save();
 }
 
 export async function pruneRecentDatabases() {

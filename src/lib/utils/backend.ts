@@ -21,9 +21,10 @@ export async function callBackend<T>(
 
     console.error(`Backend error in ${command} [${errorCode}]:`, errorMessage);
 
-    const isSilent = command.startsWith('is_') || 
-                     command.startsWith('check_') || 
-                     errorMessage.toLowerCase().includes('cancel');
+    const isSilent =
+      command.startsWith('is_') ||
+      command.startsWith('check_') ||
+      errorMessage.toLowerCase().includes('cancel');
 
     if (!isSilent) {
       toast.error(errorMessage);

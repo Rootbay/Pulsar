@@ -51,7 +51,6 @@ class LoginTotpStore {
     this.#configured = value;
   }
 
-  // Compatibility with old writable if needed, but we should update callers
   setSecret(value: string | null) {
     this.#secret = value;
   }

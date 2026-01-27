@@ -73,7 +73,6 @@ const supportedLocaleList = Object.keys(dictionaries) as Locale[];
 const supportedLocaleByLower = new Map(
   supportedLocaleList.map((locale) => [locale.toLowerCase(), locale])
 );
-const missingKeyWarnings = new Set<string>();
 
 function normalizeLocale(raw: string | null | undefined): Locale | null {
   if (!raw) return null;
@@ -128,7 +127,7 @@ export function t(
 ): string {
   const dictionary = dictionaries[locale] ?? dictionaries.en;
   const template = dictionary[key] ?? dictionaries.en[key] ?? key;
-  
+
   return template.replace(/\{(\w+)\}/g, (match, token) => {
     if (Object.prototype.hasOwnProperty.call(vars, token)) {
       return String(vars[token]);
@@ -138,11 +137,13 @@ export function t(
 }
 
 export const currentLocale = {
-    get value() { return i18n.locale; },
-    subscribe(fn: (v: Locale) => void) {
-        fn(i18n.locale);
-        return $effect.root(() => {
-            $effect(() => fn(i18n.locale));
-        });
-    }
+  get value() {
+    return i18n.locale;
+  },
+  subscribe(fn: (v: Locale) => void) {
+    fn(i18n.locale);
+    return $effect.root(() => {
+      $effect(() => fn(i18n.locale));
+    });
+  }
 };

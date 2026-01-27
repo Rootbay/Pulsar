@@ -117,14 +117,14 @@ class VaultStore {
   }
 
   async getItemDetails(id: number): Promise<PasswordItem | null> {
-    const existing = this.#items.find(i => i.id === id);
+    const existing = this.#items.find((i) => i.id === id);
     if (existing && 'password' in existing) {
-        return existing as PasswordItem;
+      return existing as PasswordItem;
     }
 
     const fullItem = await callBackend<PasswordItem | null>('get_password_item_by_id', { id });
     if (fullItem) {
-        this.updateItem(fullItem);
+      this.updateItem(fullItem);
     }
     return fullItem;
   }
@@ -133,9 +133,9 @@ class VaultStore {
     this.#activeVaultId = vaultId;
     const existing = settings.state.vaultSettingsById[vaultId];
     settings.state.vaultSettingsById[vaultId] = {
-        ...defaultVaultSettings,
-        ...existing,
-        ...defaults
+      ...defaultVaultSettings,
+      ...existing,
+      ...defaults
     };
     settings.save();
   }
@@ -143,21 +143,21 @@ class VaultStore {
   updateSettings(updater: (settings: VaultSettings) => VaultSettings) {
     const id = this.#activeVaultId;
     if (!id) return;
-    
+
     const existing = settings.state.vaultSettingsById[id];
     settings.state.vaultSettingsById[id] = updater({
-        ...defaultVaultSettings,
-        ...existing
+      ...defaultVaultSettings,
+      ...existing
     });
     settings.save();
   }
 
   clearVault(vaultId: string) {
     if (vaultId in settings.state.vaultSettingsById) {
-        const newMap = { ...settings.state.vaultSettingsById };
-        delete newMap[vaultId];
-        settings.state.vaultSettingsById = newMap;
-        settings.save();
+      const newMap = { ...settings.state.vaultSettingsById };
+      delete newMap[vaultId];
+      settings.state.vaultSettingsById = newMap;
+      settings.save();
     }
     if (this.#activeVaultId === vaultId) {
       this.#activeVaultId = null;

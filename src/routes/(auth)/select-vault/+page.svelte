@@ -84,8 +84,7 @@
       await addRecentDatabase(path);
     } catch (cause: unknown) {
       console.error('Failed to load database:', cause);
-      error =
-        ((cause as Record<string, unknown>).message as string) || t('failedToLoadVault');
+      error = ((cause as Record<string, unknown>).message as string) || t('failedToLoadVault');
 
       const message =
         ((cause as Record<string, unknown>).message as string) || cause?.toString() || '';
@@ -110,8 +109,7 @@
       }
     } catch (cause: unknown) {
       console.error('Elevated copy failed:', cause);
-      error =
-        ((cause as Record<string, unknown>).message as string) || t('elevatedCopyFailed');
+      error = ((cause as Record<string, unknown>).message as string) || t('elevatedCopyFailed');
     }
   };
 

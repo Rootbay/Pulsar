@@ -121,34 +121,21 @@ export interface GeneralSettings {
 
 export const defaultGeneralSettings: GeneralSettings = {
   appLanguage: 'system',
-  defaultVaultOnStartup: '16 characters',
+  defaultVaultOnStartup: 'last_used',
   startOnSystemBoot: true,
   showInSystemTray: true,
-  defaultViewOnOpen: '16 characters',
+  defaultViewOnOpen: 'all_items',
   enable2FAForUnlock: false,
   totpEnabled: true
 };
 
-export interface GeneratorSettings {
-  passwordLength: number;
-  options: {
-    uppercase: boolean;
-    lowercase: boolean;
-    digits: boolean;
-    symbols: boolean;
-    ambiguous: boolean;
-    similar: boolean;
-    pronounceable: boolean;
-  };
-}
-
 export const defaultGeneratorSettings: GeneratorSettings = {
-  passwordLength: 47,
+  passwordLength: 16,
   options: {
-    uppercase: false,
+    uppercase: true,
     lowercase: true,
-    digits: false,
-    symbols: false,
+    digits: true,
+    symbols: true,
     ambiguous: false,
     similar: false,
     pronounceable: false

@@ -78,8 +78,8 @@
     ($vaults) => $vaults.filter((vault) => vault.encrypted).length
   );
 
-  const WEAK_PASSWORDS = 23;
-  const DUPLICATES = 5;
+  let weakPasswordsCount = $state(0);
+  let duplicatePasswordsCount = $state(0);
 
   let loadingVaults = $state(false);
   let busyAction = $state<'import' | 'create' | 'backup' | 'restore' | 'export' | null>(null);
@@ -164,6 +164,22 @@
     return t('settingsVaultUnknown');
   }
 
+  async function fetchSecurityReport() {
+    try {
+      const report = await callBackend<{
+        reusedPasswords: Array<{ count: number }>;
+        weakPasswordsCount: number;
+      }>('get_security_report');
+      weakPasswordsCount = report.weakPasswordsCount;
+      duplicatePasswordsCount = report.reusedPasswords.reduce(
+        (sum, group) => sum + (group.count - 1),
+        0
+      );
+    } catch (e) {
+      console.error('Failed to fetch security report:', e);
+    }
+  }
+
   async function refreshVaults({ preserveSelection = true } = {}): Promise<void> {
     loadingVaults = true;
 
@@ -182,6 +198,7 @@
       }));
 
       vaultsStore.set(mapped);
+      await fetchSecurityReport();
 
       if (!mapped.length) {
         selectedVaultId.set(null);
@@ -413,12 +430,20 @@
   });
 
   $effect(() => {
-      const id = get(selectedVaultId);
-      if (id && activeVaultSettings) {
-          vaultsStore.update(vaults => vaults.map(v => 
-              v.id === id ? { ...v, name: activeVaultSettings.name, settings: { ...v.settings, ...activeVaultSettings } } : v
-          ));
-      }
+    const id = get(selectedVaultId);
+    if (id && activeVaultSettings) {
+      vaultsStore.update((vaults) =>
+        vaults.map((v) =>
+          v.id === id
+            ? {
+                ...v,
+                name: activeVaultSettings.name,
+                settings: { ...v.settings, ...activeVaultSettings }
+              }
+            : v
+        )
+      );
+    }
   });
 </script>
 
@@ -695,13 +720,13 @@
           <p class="text-muted-foreground text-xs">
             {t('settingsVaultStatWeakPasswords')}
           </p>
-          <p class="text-destructive text-2xl font-semibold">{WEAK_PASSWORDS}</p>
+          <p class="text-destructive text-2xl font-semibold">{weakPasswordsCount}</p>
         </div>
         <div class="border-border/60 bg-background/80 rounded-xl border p-4">
           <p class="text-muted-foreground text-xs">
             {t('settingsVaultStatDuplicateEntries')}
           </p>
-          <p class="text-chart-warning text-2xl font-semibold">{DUPLICATES}</p>
+          <p class="text-chart-warning text-2xl font-semibold">{duplicatePasswordsCount}</p>
         </div>
         <div class="border-border/60 bg-background/80 rounded-xl border p-4">
           <p class="text-muted-foreground text-xs">

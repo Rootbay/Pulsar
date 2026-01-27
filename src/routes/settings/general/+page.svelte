@@ -42,18 +42,13 @@
 
   const selectOptions: Record<NonLanguageSelectKey, { value: string; label: string }[]> = {
     defaultVaultOnStartup: [
-      { value: '8 characters', label: '8 characters' },
-      { value: '12 characters', label: '12 characters' },
-      { value: '16 characters', label: '16 characters' },
-      { value: '20 characters', label: '20 characters' },
-      { value: '32 characters', label: '32 characters' }
+      { value: 'last_used', label: t('settingsGeneralDefaultVaultLastUsed') || 'Last used vault' },
+      { value: 'none', label: t('settingsGeneralDefaultVaultNone') || 'None' }
     ],
     defaultViewOnOpen: [
-      { value: '8 characters', label: '8 characters' },
-      { value: '12 characters', label: '12 characters' },
-      { value: '16 characters', label: '16 characters' },
-      { value: '20 characters', label: '20 characters' },
-      { value: '32 characters', label: '32 characters' }
+      { value: 'all_items', label: t('settingsGeneralDefaultViewAll') || 'All Items' },
+      { value: 'favorites', label: t('settingsGeneralDefaultViewFavorites') || 'Favorites' },
+      { value: 'recent', label: t('settingsGeneralDefaultViewRecent') || 'Recent' }
     ]
   };
 

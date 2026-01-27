@@ -16,9 +16,7 @@
   import type { ClipboardSettings } from '$lib/config/settings';
   import { settings } from '$lib/stores/appSettings.svelte';
   import { i18n, t as translate } from '$lib/i18n.svelte';
-  import {
-    clipboardService
-  } from '$lib/utils/clipboardService.svelte';
+  import { clipboardService } from '$lib/utils/clipboardService.svelte';
   import {
     CircleCheck,
     ClipboardCheck,
@@ -47,12 +45,7 @@
       : `${currentSettings.clearAfterDuration} seconds`
   );
 
-  const auditLogEntries = [
-    { id: 1, action: 'Password for gmail.com', time: '2 minutes ago', status: 'copied' },
-    { id: 2, action: 'Username: john.doe@email.com', time: '15 minutes ago', status: 'copied' },
-    { id: 3, action: 'Password for github.com', time: '1 hour ago', status: 'copied' },
-    { id: 4, action: 'API Key: sk-proj-...', time: '3 hours ago', status: 'copied' }
-  ] satisfies Array<{ id: number; action: string; time: string; status: string }>;
+  const auditLogEntries: Array<{ id: number; action: string; time: string; status: string }> = [];
 
   const handleSetTimeout = async (seconds: number) => {
     try {
@@ -152,8 +145,7 @@
         <Switch
           checked={clipboardIntegration}
           aria-label="Toggle clipboard integration"
-          disabled={!clipboardService.state.integrationAvailable ||
-            clipboardService.state.applying}
+          disabled={!clipboardService.state.integrationAvailable || clipboardService.state.applying}
           onclick={() => handleSwitchChange('clipboardIntegration')}
         />
       </div>
@@ -277,8 +269,7 @@
         <Switch
           checked={onlyUnlocked}
           aria-label="Toggle only allow on unlocked session"
-          disabled={!clipboardService.state.integrationAvailable ||
-            clipboardService.state.applying}
+          disabled={!clipboardService.state.integrationAvailable || clipboardService.state.applying}
           onclick={() => handleSwitchChange('onlyUnlocked')}
         />
       </div>
@@ -343,8 +334,7 @@
           type="button"
           variant="destructive"
           class="flex items-center gap-2"
-          disabled={!clipboardService.state.integrationAvailable ||
-            clipboardService.state.applying}
+          disabled={!clipboardService.state.integrationAvailable || clipboardService.state.applying}
           onclick={handleClearClipboard}
         >
           <Trash2 class="size-4" />
@@ -373,21 +363,27 @@
             </p>
           </div>
           <div class="max-h-64 space-y-2 overflow-y-auto pr-1">
-            {#each auditLogEntries as entry (entry.id)}
-              <div
-                class="border-border/60 bg-muted/10 flex items-center justify-between gap-3 rounded-lg border px-3 py-2"
-                in:fade={{ delay: entry.id * 50 }}
-              >
-                <div class="flex items-center gap-3">
-                  <CircleCheck class="text-chart-success size-4" />
-                  <div class="text-foreground text-sm">
-                    <p class="font-medium">{entry.action}</p>
-                    <p class="text-muted-foreground text-xs">{entry.time}</p>
+            {#if auditLogEntries.length === 0}
+              <p class="text-muted-foreground py-4 text-center text-sm italic">
+                {t('No recent activity to show.')}
+              </p>
+            {:else}
+              {#each auditLogEntries as entry (entry.id)}
+                <div
+                  class="border-border/60 bg-muted/10 flex items-center justify-between gap-3 rounded-lg border px-3 py-2"
+                  in:fade={{ delay: entry.id * 50 }}
+                >
+                  <div class="flex items-center gap-3">
+                    <CircleCheck class="text-chart-success size-4" />
+                    <div class="text-foreground text-sm">
+                      <p class="font-medium">{entry.action}</p>
+                      <p class="text-muted-foreground text-xs">{entry.time}</p>
+                    </div>
                   </div>
+                  <Badge variant="secondary" class="text-xs capitalize">{entry.status}</Badge>
                 </div>
-                <Badge variant="secondary" class="text-xs capitalize">{entry.status}</Badge>
-              </div>
-            {/each}
+              {/each}
+            {/if}
           </div>
         </div>
       {/if}

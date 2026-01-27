@@ -19,9 +19,7 @@
     ],
     "plugins": {
       "updater": {
-        "endpoints": [
-          "https://github.com/xeintdm/pulsar/releases/latest/download/latest.json"
-        ],
+        "endpoints": ["https://github.com/xeintdm/pulsar/releases/latest/download/latest.json"],
         "pubkey": "RWSvz7FCGHfoSFYKYNVLIH7vD5fHayDBth9GtjlApOE//1P7fDHm7Ejv"
       }
     },

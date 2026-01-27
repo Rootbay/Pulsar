@@ -62,11 +62,11 @@
   }
 
   function updateKeybind(name: string, newKey: string) {
-      const index = settings.state.keybinds.findIndex(k => k.name === name);
-      if (index !== -1) {
-          settings.state.keybinds[index].key = newKey;
-          settings.save();
-      }
+    const index = settings.state.keybinds.findIndex((k) => k.name === name);
+    if (index !== -1) {
+      settings.state.keybinds[index].key = newKey;
+      settings.save();
+    }
   }
 
   function handleKeydown(event: KeyboardEvent, keybindName: string) {

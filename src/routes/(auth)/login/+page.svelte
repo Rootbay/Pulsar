@@ -15,6 +15,7 @@
     CardTitle
   } from '$lib/components/ui/card';
   import { appState } from '$lib/stores';
+  import { settings } from '$lib/stores/appSettings.svelte';
   import { i18n, t as translate, type I18nKey } from '$lib/i18n.svelte';
   import { Lock, Eye, EyeOff, ArrowLeft, FingerprintPattern, TriangleAlert } from '@lucide/svelte';
   import { onMount } from 'svelte';
@@ -71,6 +72,17 @@
         appState.totpRequired = false;
         appState.totpVerified = true;
         appState.isLocked = false;
+
+        // Set default view
+        const defaultView = settings.state.general.defaultViewOnOpen;
+        if (defaultView === 'recent') {
+          appState.filterCategory = 'recent';
+        } else if (defaultView === 'favorites') {
+          appState.filterCategory = 'favorites';
+        } else {
+          appState.filterCategory = 'all';
+        }
+
         await goto('/', { replaceState: true });
       }
     } catch (error: unknown) {
@@ -120,14 +132,24 @@
         appState.totpRequired = false;
         appState.totpVerified = true;
         appState.isLocked = false;
+
+        // Set default view
+        const defaultView = settings.state.general.defaultViewOnOpen;
+        if (defaultView === 'recent') {
+          appState.filterCategory = 'recent';
+        } else if (defaultView === 'favorites') {
+          appState.filterCategory = 'favorites';
+        } else {
+          appState.filterCategory = 'all';
+        }
+
         await goto('/', { replaceState: true });
       }
     } catch (error: unknown) {
       console.error('Unlock failed:', error);
       appState.totpRequired = false;
       appState.totpVerified = false;
-      loginError =
-        ((error as Record<string, unknown>).message as string) || t('loginUnknownError');
+      loginError = ((error as Record<string, unknown>).message as string) || t('loginUnknownError');
     } finally {
       isUnlocking = false;
     }
@@ -220,9 +242,7 @@
                 type="button"
                 class="text-muted-foreground hover:text-foreground absolute inset-y-0 right-0 flex items-center px-3"
                 onclick={() => (showPassword = !showPassword)}
-                aria-label={showPassword
-                  ? t('loginHidePassword')
-                  : t('loginShowPassword')}
+                aria-label={showPassword ? t('loginHidePassword') : t('loginShowPassword')}
                 tabindex="-1"
               >
                 {#if showPassword}

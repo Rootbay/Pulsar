@@ -188,9 +188,7 @@
   async function handleExportEncrypted() {
     openModal({
       title: t('Export encrypted data?'),
-      description: t(
-        'Export your vault in encrypted form. Keep the generated file secure.'
-      ),
+      description: t('Export your vault in encrypted form. Keep the generated file secure.'),
       confirmLabel: t('Export encrypted'),
       requiresMasterPassword: true,
       onConfirm: async (passphrase) => {
@@ -257,7 +255,9 @@
 
   function updateRetention(event: Event) {
     const value = Number((event.target as HTMLInputElement).value);
-    const retention = Number.isNaN(value) ? backupSettings.retentionCount : Math.min(Math.max(value, 1), 100);
+    const retention = Number.isNaN(value)
+      ? backupSettings.retentionCount
+      : Math.min(Math.max(value, 1), 100);
     settings.state.backup.retentionCount = retention;
     settings.save();
   }
@@ -270,7 +270,7 @@
   function openProvider(provider: string) {
     settings.state.backup.selectedProvider = provider;
     settings.save();
-    
+
     openModal({
       title: t('Configure {provider}', { provider }),
       description: t('Provide credentials for your {provider} connection.', { provider }),
@@ -287,9 +287,7 @@
       class="border-border/60 bg-card/80 supports-backdrop-filter:bg-card/70 backdrop-blur"
     >
       <AlertTitle>
-        {feedback.type === 'error'
-          ? t('Something went wrong')
-          : t('Action completed')}
+        {feedback.type === 'error' ? t('Something went wrong') : t('Action completed')}
       </AlertTitle>
       <AlertDescription>{feedback.message}</AlertDescription>
     </Alert>

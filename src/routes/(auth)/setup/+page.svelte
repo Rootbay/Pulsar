@@ -55,9 +55,7 @@
   ];
 
   const strengthLabelText = $derived(
-    newMasterPassword
-      ? t(STRENGTH_LABEL_KEYS[strengthResult.score])
-      : t('setupStrengthNone')
+    newMasterPassword ? t(STRENGTH_LABEL_KEYS[strengthResult.score]) : t('setupStrengthNone')
   );
   const strengthColorClass = $derived(
     newMasterPassword ? STRENGTH_COLORS[strengthResult.score] : 'text-muted-foreground'

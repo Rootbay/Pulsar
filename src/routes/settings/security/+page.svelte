@@ -1022,9 +1022,7 @@
             </p>
             <p class="text-muted-foreground text-sm">
               {loginTotpStore.configured
-                ? t(
-                    'Unlocking requires both your master password and an authenticator token.'
-                  )
+                ? t('Unlocking requires both your master password and an authenticator token.')
                 : t(
                     'Generate a secret to require an authenticator token when unlocking the vault.'
                   )}
@@ -1475,9 +1473,7 @@
           {t('Clipboard Clear Timeout')}
         </Label>
         <p class="text-muted-foreground text-sm">
-          {t(
-            'Automatically clear sensitive data from your clipboard after the selected duration.'
-          )}
+          {t('Automatically clear sensitive data from your clipboard after the selected duration.')}
         </p>
         <Select
           type="single"
@@ -1942,9 +1938,7 @@
             variant="ghost"
             size="icon"
             class="absolute top-1/2 right-1 -translate-y-1/2"
-            aria-label={showKdfPassword
-              ? t('Hide current password')
-              : t('Show current password')}
+            aria-label={showKdfPassword ? t('Hide current password') : t('Show current password')}
             onclick={toggleKdfPasswordVisibility}
           >
             {#if showKdfPassword}
@@ -1961,9 +1955,7 @@
       >
         <TriangleAlert class="text-primary mt-0.5 h-4 w-4" aria-hidden="true" />
         <p>
-          {t(
-            'Updating Argon2 parameters will re-encrypt the vault and may take a few moments.'
-          )}
+          {t('Updating Argon2 parameters will re-encrypt the vault and may take a few moments.')}
         </p>
       </div>
 

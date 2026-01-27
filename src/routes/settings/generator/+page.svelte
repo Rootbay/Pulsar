@@ -248,7 +248,9 @@
 
   function removePreset(name: string) {
     if (confirm(`Are you sure you want to delete preset "${name}"?`)) {
-      settings.state.passwordPresets = settings.state.passwordPresets.filter(p => p.name !== name);
+      settings.state.passwordPresets = settings.state.passwordPresets.filter(
+        (p) => p.name !== name
+      );
       settings.save();
     }
   }
@@ -261,7 +263,7 @@
 
   function removeRule(url: string) {
     if (confirm(`Are you sure you want to delete rule for "${url}"?`)) {
-      settings.state.siteRules = settings.state.siteRules.filter(r => r.url !== url);
+      settings.state.siteRules = settings.state.siteRules.filter((r) => r.url !== url);
       settings.save();
     }
   }
@@ -283,10 +285,10 @@
   function handleSaveEdit(updatedItem: PasswordPreset | SiteRule) {
     if (editModalType === 'preset' && itemToEdit && isPreset(itemToEdit) && isPreset(updatedItem)) {
       const originalName = itemToEdit.name;
-      const index = settings.state.passwordPresets.findIndex(p => p.name === originalName);
+      const index = settings.state.passwordPresets.findIndex((p) => p.name === originalName);
       if (index !== -1) {
-          settings.state.passwordPresets[index] = updatedItem;
-          settings.save();
+        settings.state.passwordPresets[index] = updatedItem;
+        settings.save();
       }
     } else if (
       editModalType === 'rule' &&
@@ -295,10 +297,10 @@
       isRule(updatedItem)
     ) {
       const originalUrl = itemToEdit.url;
-      const index = settings.state.siteRules.findIndex(r => r.url === originalUrl);
+      const index = settings.state.siteRules.findIndex((r) => r.url === originalUrl);
       if (index !== -1) {
-          settings.state.siteRules[index] = updatedItem;
-          settings.save();
+        settings.state.siteRules[index] = updatedItem;
+        settings.save();
       }
     }
     closeModal();

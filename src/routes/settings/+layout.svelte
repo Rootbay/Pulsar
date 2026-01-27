@@ -113,7 +113,7 @@
           >
             <Bell class="size-4" />
           </button>
-          
+
           <Avatar class="h-8 w-8">
             <AvatarImage src="/logo.png" alt="Avatar" />
             <AvatarFallback>PV</AvatarFallback>

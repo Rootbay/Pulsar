@@ -1,4 +1,4 @@
-export type FilterCategory = 'all' | 'recent';
+export type FilterCategory = 'all' | 'recent' | 'favorites';
 
 class AppState {
   selectedTag = $state<string | null>(null);

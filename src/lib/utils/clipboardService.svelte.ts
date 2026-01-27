@@ -77,7 +77,7 @@ class ClipboardService {
       if (currentSettings.blockHistory && message.toLowerCase().includes('not supported')) {
         settings.state.clipboard.blockHistory = false;
         settings.save();
-        
+
         const sanitized = settings.state.clipboard;
         try {
           const status = await this.applyPolicy(sanitized);
@@ -105,7 +105,7 @@ class ClipboardService {
       const status = await this.applyPolicy(next);
       settings.state.clipboard = next;
       settings.save();
-      
+
       this.updateFromStatus(status);
     } catch (error) {
       const message = this.extractErrorMessage(error);
@@ -133,14 +133,17 @@ class ClipboardService {
 }
 
 export const clipboardService = new ClipboardService();
-
-// Deprecated export for backward compatibility during migration
 export const initClipboardService = () => clipboardService.init();
-export const updateClipboardSettings = (p: Partial<ClipboardSettings>) => clipboardService.updateSettings(p);
+export const updateClipboardSettings = (p: Partial<ClipboardSettings>) =>
+  clipboardService.updateSettings(p);
 export const clearClipboardNow = () => clipboardService.clearNow();
 export const clipboardIntegrationState = {
-    get value() { return clipboardService.state; }
+  get value() {
+    return clipboardService.state;
+  }
 };
 export const clipboardServiceReady = {
-    get value() { return clipboardService.ready; }
+  get value() {
+    return clipboardService.ready;
+  }
 };

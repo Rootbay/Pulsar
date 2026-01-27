@@ -12,6 +12,7 @@
   import { Switch } from '$lib/components/ui/switch';
   import { TriangleAlert, CircleCheck, Play, CircleX } from '@lucide/svelte';
   import { i18n, t as translate, type Locale } from '$lib/i18n.svelte';
+  import { toast } from '$lib/components/ui/sonner';
 
   const locale = $derived(i18n.locale);
   const t = (key: string, vars = {}) => translate(locale, key as any, vars);
@@ -27,11 +28,14 @@
     settings.save();
   };
 
-  const testResults = [
-    { message: 'Hotkey registration: Success', status: 'success' },
-    { message: 'Keystroke simulation: Success', status: 'success' },
-    { message: 'Browser focus detection: Failed', status: 'failure' }
-  ] satisfies Array<{ message: string; status: 'success' | 'failure' }>;
+  function handleSimulateAutoType() {
+    toast.info(t('Auto-type simulation started.'), {
+      description: t('This is a test of the auto-type engine.')
+    });
+    // In a real implementation, this would call a backend command to simulate keystrokes
+  }
+
+  const testResults: Array<{ message: string; status: 'success' | 'failure' }> = [];
 
   function translateTestMessage(message: string, locale: Locale): string {
     if (locale === 'sv') {
@@ -151,7 +155,7 @@
       <div
         class="border-border/60 bg-muted/20 flex flex-col gap-4 rounded-lg border p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between"
       >
-        <Button type="button" class="w-full sm:w-auto">
+        <Button type="button" class="w-full sm:w-auto" onclick={handleSimulateAutoType}>
           <Play class="mr-2 size-4" />
           {t('Simulate Auto-type')}
         </Button>
@@ -170,16 +174,22 @@
           {t('Test results')}
         </h3>
         <div class="space-y-3">
-          {#each testResults as result (result.message)}
-            <div class="text-foreground flex items-center gap-3 text-sm">
-              {#if result.status === 'success'}
-                <CircleCheck class="text-chart-success size-4" />
-              {:else}
-                <CircleX class="text-destructive size-4" />
-              {/if}
-              <span>{translateTestMessage(result.message, locale)}</span>
-            </div>
-          {/each}
+          {#if testResults.length === 0}
+            <p class="text-muted-foreground py-2 text-sm italic">
+              {t('No tests run yet.')}
+            </p>
+          {:else}
+            {#each testResults as result (result.message)}
+              <div class="text-foreground flex items-center gap-3 text-sm">
+                {#if result.status === 'success'}
+                  <CircleCheck class="text-chart-success size-4" />
+                {:else}
+                  <CircleX class="text-destructive size-4" />
+                {/if}
+                <span>{translateTestMessage(result.message, locale)}</span>
+              </div>
+            {/each}
+          {/if}
         </div>
       </div>
     </CardContent>

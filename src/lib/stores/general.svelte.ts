@@ -11,9 +11,11 @@ class GeneralSettingsStore {
     settings.save();
   }
 
-  toggle(key: {
-    [K in keyof GeneralSettings]: GeneralSettings[K] extends boolean ? K : never;
-  }[keyof GeneralSettings]) {
+  toggle(
+    key: {
+      [K in keyof GeneralSettings]: GeneralSettings[K] extends boolean ? K : never;
+    }[keyof GeneralSettings]
+  ) {
     this.update(key, !this.state[key]);
   }
 }

@@ -170,7 +170,7 @@
     const currentSettings = settings.state.security;
     void currentSettings.autoLockInactivity;
     void currentSettings.lockGraceSeconds;
-    
+
     if (!locked) {
       resetInactivityTimer();
     } else {

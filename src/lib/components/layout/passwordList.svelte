@@ -49,7 +49,7 @@
     onselect?: (item: PasswordItemOverview | null) => void;
     oncreateEntry?: () => void;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    oneditEntry?: (item: any) => void; 
+    oneditEntry?: (item: any) => void;
     onremoveEntry?: (item: PasswordItemOverview) => void;
   }
 

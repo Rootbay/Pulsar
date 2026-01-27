@@ -22,13 +22,24 @@ export async function load() {
   }
 
   const recentDbPaths = settings.state.recentDatabases;
-  if (recentDbPaths.length > 0 && !activePath) {
-    const latestDbPath = recentDbPaths[0];
+  const defaultVault = settings.state.general.defaultVaultOnStartup;
+
+  if (defaultVault !== 'none' && recentDbPaths.length > 0 && !activePath) {
+    // If defaultVault is 'last_used' or a specific path, we use it.
+    // For now, we only support 'last_used' or 'none'.
+    const targetPath = defaultVault === 'last_used' ? recentDbPaths[0] : defaultVault;
+
     try {
-      await callBackend('switch_database', { dbPath: latestDbPath });
-      activePath = latestDbPath;
+      if (targetPath && targetPath !== 'last_used' && targetPath !== 'none') {
+        await callBackend('switch_database', { dbPath: targetPath });
+        activePath = targetPath;
+      } else if (defaultVault === 'last_used') {
+        const latestDbPath = recentDbPaths[0];
+        await callBackend('switch_database', { dbPath: latestDbPath });
+        activePath = latestDbPath;
+      }
     } catch (e) {
-      console.error(`Failed to switch to latest database ${latestDbPath}:`, e);
+      console.error(`Failed to switch to target database ${targetPath}:`, e);
     }
   }
 

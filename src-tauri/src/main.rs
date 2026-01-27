@@ -39,7 +39,8 @@ async fn get_active_db_path(state: State<'_, AppState>) -> Result<Option<String>
 
 #[tauri::command]
 async fn switch_database(db_path: PathBuf, app_state: State<'_, AppState>) -> Result<()> {
-    // Check if the requested database is already active and loaded.
+    let _rekey_lock = app_state.rekey.lock().await;
+
     {
         let path_guard = app_state.db_path.lock().await;
         if let Some(active_path) = path_guard.as_ref() {
@@ -52,58 +53,6 @@ async fn switch_database(db_path: PathBuf, app_state: State<'_, AppState>) -> Re
         }
     }
 
-    // Capture current key and locking state before we close the old pool.
-    let key_opt = {
-        let guard = app_state.key.lock().await;
-        guard.clone()
-    };
-    let key_slice_opt: Option<&[u8]> = key_opt.as_ref().map(|z| z.as_slice());
-    
-    // Use the rekey lock to serialize database switching operations.
-    let _rekey_lock = app_state.rekey.lock().await;
-
-    // Close the old database pool first to release file locks.
-    {
-        let mut guard = app_state.db.lock().await;
-        if let Some(old_pool) = guard.take() {
-            old_pool.close().await;
-        }
-    }
-
-    // Small delay to ensure the OS has released any file system handles.
-    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-
-    // Initialize the new database pool.
-    match crate::db::init_db(&db_path, key_slice_opt).await {
-        Ok(new_pool) => {
-            // Update the app state with the new pool and database path.
-            let mut guard = app_state.db.lock().await;
-            *guard = Some(new_pool);
-            
-            let mut path_guard = app_state.db_path.lock().await;
-            *path_guard = Some(db_path.clone());
-        }
-        Err(e) => {
-            // If it failed because it's encrypted or not a database yet, 
-            // we still want to set the db_path so that it can be unlocked/initialized later.
-            let mut path_guard = app_state.db_path.lock().await;
-            *path_guard = Some(db_path.clone());
-
-            // If we have no key and it failed, it's likely just encrypted, which is fine at this stage.
-            if key_slice_opt.is_none() {
-                eprintln!("Database at {} is encrypted or requires initialization.", db_path.display());
-            } else {
-                eprintln!(
-                    "Failed to initialize database at {}: {}",
-                    db_path.display(),
-                    e
-                );
-                return Err(Error::Internal(e));
-            }
-        }
-    };
-
-    // Clear session-specific keys to ensure security.
     {
         let mut kg = app_state.key.lock().await;
         *kg = None;
@@ -115,6 +64,33 @@ async fn switch_database(db_path: PathBuf, app_state: State<'_, AppState>) -> Re
             key.key.zeroize();
         }
     }
+
+    {
+        let mut guard = app_state.db.lock().await;
+        if let Some(old_pool) = guard.take() {
+            old_pool.close().await;
+        }
+    }
+
+    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+
+    match crate::db::init_db_lazy(&db_path, None, true).await {
+        Ok(new_pool) => {
+            let mut guard = app_state.db.lock().await;
+            *guard = Some(new_pool);
+            
+            let mut path_guard = app_state.db_path.lock().await;
+            *path_guard = Some(db_path.clone());
+        }
+        Err(e) => {
+            eprintln!(
+                "Failed to initialize database pool at {}: {}",
+                db_path.display(),
+                e
+            );
+            return Err(Error::Internal(e));
+        }
+    };
 
     Ok(())
 }

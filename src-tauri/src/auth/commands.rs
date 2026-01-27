@@ -398,7 +398,6 @@ async fn finalize_unlock(
 ) -> Result<()> {
     let db_path = get_db_path(state).await?;
 
-    // Ensure any existing pool is closed first
     {
         let mut db_guard = state.db.lock().await;
         if let Some(pool) = db_guard.take() {
@@ -406,15 +405,12 @@ async fn finalize_unlock(
         }
     }
 
-    // Small delay to ensure OS handles are released
     tokio::time::sleep(Duration::from_millis(50)).await;
 
-    let new_pool = crate::db::init_db_lazy(db_path.as_path(), Some(key_z.as_slice()))
+    let new_pool = crate::db::init_db_lazy(db_path.as_path(), Some(key_z.as_slice()), false)
         .await
         .map_err(Error::Internal)?;
 
-    // Run migrations after unlocking to ensure the schema is up to date.
-    // This is necessary because init_db_lazy doesn't run them, and eager init_db fails on encrypted databases.
     if let Err(e) = sqlx::migrate!().run(&new_pool).await {
         eprintln!("Database migration error during unlock: {}", e);
         return Err(Error::Database(e.into()));
@@ -438,20 +434,14 @@ async fn finalize_unlock(
         }
     }
 
-    // Register device in background to not block the main unlock flow
     let state_clone = state.inner().clone();
     tauri::async_runtime::spawn(async move {
-        // We need to re-acquire the state or pass the necessary parts
-        // but since register_device needs State, it's simpler to just try it here.
-        // For now, keeping it as is but with a shorter timeout.
+        match tokio::time::timeout(Duration::from_secs(5), register_device(&state_clone)).await {
+            Ok(Ok(())) => {}
+            Ok(Err(e)) => eprintln!("Failed to register device: {}", e),
+            Err(_) => eprintln!("Failed to register device: timed out"),
+        }
     });
-    
-    // Original behavior but safer
-    match tokio::time::timeout(Duration::from_secs(3), register_device(state)).await {
-        Ok(Ok(())) => {} 
-        Ok(Err(e)) => eprintln!("Failed to register device: {}", e),
-        Err(_) => eprintln!("Failed to register device: timed out"),
-    }
 
     Ok(())
 }
@@ -503,7 +493,6 @@ pub async fn set_master_password(
         mac_tag_b64: None,
     };
 
-    // Close the current pool to release file locks
     if let Some(pool) = { state.db.lock().await.take() } {
         close_pool_with_timeout(pool, Duration::from_secs(10)).await?;
     }
@@ -523,7 +512,6 @@ pub async fn set_master_password(
         .busy_timeout(Duration::from_secs(20));
     
     let mut last_err: Option<Error> = None;
-    // Attempt rekeying with connection pooling and proper closing
     match connect_with_timeout(&connect_options, Duration::from_secs(10)).await {
         Ok(mut conn) => {
             attach_encrypted_db(&mut conn, &temp_db_path, &hex_key).await?;
@@ -629,7 +617,7 @@ pub async fn unlock(
                         }
                         tokio::time::sleep(Duration::from_millis(1000)).await;
                         rekey_plaintext_db(db_path.as_path(), key_z.as_slice()).await?;
-                        connect_with_key(db_path.as_path(), key_z.as_slice()).await? // Retry connection
+                        connect_with_key(db_path.as_path(), key_z.as_slice()).await?
                     } else {
                         return Err(err);
                     }

@@ -143,7 +143,6 @@
 
 <style>
   .itemImgContainer {
-    /* Force a perfectly square box regardless of layout stretching */
     width: var(--favicon-size, 29px);
     height: var(--favicon-size, 29px);
     min-width: var(--favicon-size, 29px);
@@ -152,7 +151,6 @@
     max-height: var(--favicon-size, 29px);
     flex: 0 0 auto;
     border-radius: calc(var(--favicon-size, 29px) / 2);
-    /* Ensure a consistent white background behind favicons (including SVGs) */
     background: #ffffff;
     display: grid;
     place-items: center;
@@ -161,7 +159,6 @@
     box-sizing: border-box;
   }
 
-  /* Ensure nav/list variant background matches header size exactly */
   .itemImgContainer.list-variant {
     width: 30px;
     height: 30px;
@@ -185,7 +182,6 @@
     -ms-user-select: none;
   }
 
-  /* Nudge raster URL icons in main (default) variant for visual centering */
   .itemImgContainer:not(.list-variant) .itemImg.raster {
     width: 18px;
     height: 18px;
@@ -194,7 +190,6 @@
     margin-left: 0;
   }
 
-  /* Match icon size/position in nav list (list variant) */
   .itemImgContainer.list-variant .itemImg.raster {
     width: 18px;
     height: 18px;
@@ -222,7 +217,6 @@
     z-index: 0;
   }
 
-  /* Fallback inline SVG plate */
   .tag-icon-plate.default {
     width: 17px;
     height: 17px;
@@ -249,13 +243,11 @@
     display: block;
   }
 
-  /* offset for list variant */
   .list-variant .tag-icon-content :global(svg) {
     margin-top: -1px;
     margin-left: -1px;
   }
 
-  /* Subtle pulse when color changes */
   .tag-icon-container:global(.color-pulse) .tag-icon-content {
     animation: colorPulse 280ms ease-out;
   }

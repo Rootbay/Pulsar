@@ -2,9 +2,7 @@ use std::path::{PathBuf, Path};
 use tauri::Window;
 use tokio::sync::oneshot;
 use tauri_plugin_dialog::DialogExt;
-use std::process::Command;
 use std::env;
-use std::fs;
 use crate::error::{Error, Result};
 
 #[tauri::command]
@@ -61,6 +59,10 @@ pub async fn elevated_copy(src: String) -> Result<String> {
     let src_path = Path::new(&src);
     let file_name = src_path.file_name().and_then(|s| s.to_str()).ok_or_else(|| Error::Internal("Invalid source filename".to_string()))?;
     let dest_path = app_dir.join(file_name);
+
+    if tokio::fs::copy(&src, &dest_path).await.is_ok() {
+        return Ok(dest_path.to_string_lossy().into_owned());
+    }
 
     let sanitized_src = src.replace("'", "''");
     let sanitized_dest = dest_path.to_string_lossy().replace("'", "''");

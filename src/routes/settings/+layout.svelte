@@ -16,10 +16,12 @@
     Database,
     SlidersHorizontal,
     WandSparkles,
-    Globe
+    Globe,
+    ArrowLeft
   } from '@lucide/svelte';
   import { currentLocale, t } from '$lib/i18n';
   import type { I18nKey } from '$lib/i18n';
+  import { goto } from '$app/navigation';
 
   let { children } = $props();
 
@@ -81,6 +83,16 @@
       class="border-border/60 bg-background/80 supports-backdrop-filter:bg-background/70 sticky top-0 z-10 w-full border-b backdrop-blur"
     >
       <div class="mx-auto flex h-14 max-w-400 items-center gap-3 px-4">
+        <Button
+          variant="ghost"
+          size="icon"
+          class="text-muted-foreground hover:bg-muted hidden md:inline-flex"
+          onclick={() => goto('/')}
+          aria-label={t(locale, 'back')}
+        >
+          <ArrowLeft class="size-4" />
+        </Button>
+
         <button
           class="text-muted-foreground hover:bg-muted inline-flex items-center justify-center rounded-md p-2 md:hidden"
           aria-label={t(locale, 'Open menu')}
@@ -112,7 +124,7 @@
             disabled={!$settingsStore}>{t(locale, 'Save')}</Button
           >
           <Avatar class="h-8 w-8">
-            <AvatarImage src="/svelte.svg" alt="Avatar" />
+            <AvatarImage src="/logo.png" alt="Avatar" />
             <AvatarFallback>PV</AvatarFallback>
           </Avatar>
         </div>

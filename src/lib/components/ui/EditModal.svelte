@@ -1,5 +1,5 @@
 <script lang="ts">
-  import Input from './Input.svelte';
+  import Input from './FieldInput.svelte';
   import Switch from './Switch.svelte';
   import { currentLocale, t as translate, type I18nKey } from '$lib/i18n';
   import { X } from '@lucide/svelte';

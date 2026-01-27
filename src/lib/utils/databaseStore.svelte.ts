@@ -19,7 +19,6 @@ export function createDatabaseStore<T>(
   let initialValue = $state<T>(defaultValue);
   let currentValue = $state<T>(defaultValue);
 
-  // Custom subscribe for hasUnsavedChanges to match Readable<boolean>
   const hasUnsavedChanges: Readable<boolean> = {
     subscribe(fn) {
       const effect = $effect.root(() => {
@@ -37,9 +36,6 @@ export function createDatabaseStore<T>(
       const data = await invoke<string | null>(readCommand);
       if (data) {
         const parsed = JSON.parse(data);
-        // Use structuredClone or JSON parse/stringify to break references if needed,
-        // but for now simple assignment if T is simple object.
-        // Ensuring deep copy for initialValue is safer.
         initialValue = JSON.parse(JSON.stringify(parsed));
         currentValue = JSON.parse(JSON.stringify(parsed));
       }
@@ -50,7 +46,6 @@ export function createDatabaseStore<T>(
 
   async function save() {
     try {
-      // Snapshot current value
       const snapshot = $state.snapshot(currentValue);
       await invoke(writeCommand, { settingsJson: JSON.stringify(snapshot) });
       initialValue = JSON.parse(JSON.stringify(snapshot));
@@ -61,7 +56,6 @@ export function createDatabaseStore<T>(
   }
 
   async function reset() {
-    // Revert to initialValue
     currentValue = JSON.parse(JSON.stringify(initialValue));
   }
 
@@ -96,4 +90,3 @@ export function createDatabaseStore<T>(
     hasUnsavedChanges
   };
 }
-

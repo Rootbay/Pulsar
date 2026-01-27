@@ -71,6 +71,8 @@
   const sectionOrder: SectionTitle[] = ['Pinned', 'Today', 'Yesterday', 'Earlier'];
   const PIN_TAG_NAMES = new Set(['pinned', 'pin']);
   const RECENT_FILTER = 'recent' as const;
+  const DAY_IN_MS = 24 * 60 * 60 * 1000;
+  const RECENT_DAY_WINDOW = 7;
 
   let selectedItemId = $state<number | null>(null);
   let showSkeleton = $state(false);
@@ -95,7 +97,9 @@
 
   const sectionedItems = $derived.by(() => partitionItems(filteredItems));
 
-  const currentSkeletonKey = $derived(() => `${appState.selectedTag ?? 'all'}|${appState.filterCategory}`);
+  const currentSkeletonKey = $derived(
+    () => `${appState.selectedTag ?? 'all'}|${appState.filterCategory}`
+  );
 
   let lastDispatchedId: number | null = null;
   $effect(() => {
@@ -407,7 +411,7 @@
                 variant="ghost"
                 size="icon"
                 class="clearSearchBtn text-muted-foreground hover:text-foreground h-8 w-8 shrink-0"
-                onclick={() => vaultStore.searchTerm = ''}
+                onclick={() => (vaultStore.searchTerm = '')}
                 aria-label="Clear search"
               >
                 <X class="h-4 w-4" />
@@ -423,7 +427,7 @@
               variant="ghost"
               size="sm"
               aria-selected={appState.filterCategory === 'all'}
-              onclick={() => appState.filterCategory = 'all'}
+              onclick={() => (appState.filterCategory = 'all')}
             >
               All <span class="count">({itemsCount})</span>
             </Button>
@@ -434,7 +438,7 @@
               variant="ghost"
               size="sm"
               aria-selected={appState.filterCategory === RECENT_FILTER}
-              onclick={() => appState.filterCategory = RECENT_FILTER}
+              onclick={() => (appState.filterCategory = RECENT_FILTER)}
             >
               Recently
             </Button>

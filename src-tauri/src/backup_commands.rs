@@ -22,7 +22,6 @@ use tauri::AppHandle;
 use tauri::State;
 use tauri_plugin_dialog::DialogExt;
 use tokio::sync::oneshot;
-use tokio::io::AsyncWriteExt;
 use zeroize::{Zeroize, Zeroizing};
 
 async fn get_key(state: &State<'_, AppState>) -> Result<Zeroizing<Vec<u8>>> {
@@ -80,14 +79,24 @@ async fn write_sensitive_bytes(path: &Path, bytes: &[u8]) -> Result<()> {
             .truncate(true)
             .mode(0o600)
             .open(&tmp_path).await?;
-        // Note: tokio doesn't have a direct set_permissions on File, but we set mode in OpenOptions
         tokio::io::AsyncWriteExt::write_all(&mut file, bytes).await?;
         file.sync_all().await?;
     }
 
-    #[cfg(not(unix))]
+    #[cfg(windows)]
     {
         let mut file = tokio::fs::OpenOptions::new()
+            .create(true)
+            .write(true)
+            .truncate(true)
+            .open(&tmp_path).await?;
+        tokio::io::AsyncWriteExt::write_all(&mut file, bytes).await?;
+        file.sync_all().await?;
+    }
+    
+    #[cfg(not(any(unix, windows)))]
+    {
+         let mut file = tokio::fs::OpenOptions::new()
             .create(true)
             .write(true)
             .truncate(true)

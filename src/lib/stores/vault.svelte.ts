@@ -38,9 +38,6 @@ class VaultStore {
     return { ...defaultVaultSettings, ...existing };
   }
 
-  /**
-   * Filtered and searched items based on appState and searchTerm.
-   */
   filteredItems = $derived.by(() => {
     const normalizedSearch = this.#searchTerm.trim().toLowerCase();
     const tag = appState.selectedTag;
@@ -50,17 +47,15 @@ class VaultStore {
     const PIN_TAG_NAMES = ['pinned', 'pin'];
 
     return this.#items.filter((item) => {
-      // 1. Tag filtering
       if (tag !== null) {
-        const itemTags = item.tags?.split(',').map(t => t.trim().toLowerCase()) ?? [];
+        const itemTags = item.tags?.split(',').map((t) => t.trim().toLowerCase()) ?? [];
         if (!itemTags.includes(tag.toLowerCase())) return false;
       }
 
-      // 2. Category/Recent filtering
       if (category === 'recent') {
-        const itemTags = item.tags?.split(',').map(t => t.trim().toLowerCase()) ?? [];
-        const isPinned = itemTags.some(t => PIN_TAG_NAMES.includes(t));
-        
+        const itemTags = item.tags?.split(',').map((t) => t.trim().toLowerCase()) ?? [];
+        const isPinned = itemTags.some((t) => PIN_TAG_NAMES.includes(t));
+
         if (!isPinned) {
           const updatedAt = item.updated_at ? new Date(item.updated_at).getTime() : 0;
           const now = Date.now();
@@ -68,13 +63,12 @@ class VaultStore {
         }
       }
 
-      // 3. Search filtering
       if (normalizedSearch) {
         const title = item.title?.toLowerCase() ?? '';
         const username = item.username?.toLowerCase() ?? '';
         const tags = item.tags?.toLowerCase() ?? '';
         const url = item.url?.toLowerCase() ?? '';
-        
+
         return (
           title.includes(normalizedSearch) ||
           username.includes(normalizedSearch) ||
@@ -158,20 +152,19 @@ class VaultStore {
   }
 
   updateItem(updatedItem: PasswordItem) {
-    const index = this.#items.findIndex(item => item.id === updatedItem.id);
+    const index = this.#items.findIndex((item) => item.id === updatedItem.id);
     if (index !== -1) {
       this.#items[index] = updatedItem;
     }
   }
 
   removeItem(id: number) {
-    this.#items = this.#items.filter(item => item.id !== id);
+    this.#items = this.#items.filter((item) => item.id !== id);
   }
 }
 
 export const vaultStore = new VaultStore();
 
-// Legacy compatibility wrapper
 export const vaultSettings = {
   subscribe(fn: (value: VaultSettings) => void) {
     return $effect.root(() => {

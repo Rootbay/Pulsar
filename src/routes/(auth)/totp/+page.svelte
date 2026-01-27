@@ -16,9 +16,7 @@
     CardTitle
   } from '$lib/components/ui/card';
   import { Copy, RefreshCw } from '@lucide/svelte';
-  import {
-    appState
-  } from '$lib/stores';
+  import { appState } from '$lib/stores';
   import { loginTotpSecret } from '$lib/stores/totp';
   import { currentLocale, t } from '$lib/i18n';
   import { ArrowLeft } from '@lucide/svelte';
@@ -49,7 +47,13 @@
   $effect(() => {
     if (
       browser &&
-      !(appState.totpRequired && !appState.totpVerified && appState.isDatabaseLoaded && !appState.isLocked && !appState.needsPasswordSetup)
+      !(
+        appState.totpRequired &&
+        !appState.totpVerified &&
+        appState.isDatabaseLoaded &&
+        !appState.isLocked &&
+        !appState.needsPasswordSetup
+      )
     ) {
       goto('/', { replaceState: true });
     }

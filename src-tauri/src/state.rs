@@ -24,6 +24,7 @@ impl Default for ClipboardPolicyState {
     }
 }
 
+#[derive(Clone)]
 pub struct AppState {
     pub db: Arc<Mutex<Option<SqlitePool>>>,
     pub key: Arc<Mutex<Option<Zeroizing<Vec<u8>>>>>,

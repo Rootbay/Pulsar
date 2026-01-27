@@ -11,11 +11,11 @@ zxcvbnOptions.setOptions({
 });
 
 export interface PasswordHealth {
-  score: number; // 0-4
+  score: number;
   crackTimeDisplay: string;
   suggestions: string[];
   warning: string;
-  isBreached: boolean | null; // null = not checked, false = safe, true = pwned
+  isBreached: boolean | null;
   breachCount: number;
 }
 

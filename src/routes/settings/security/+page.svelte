@@ -17,7 +17,7 @@
   import { Label } from '$lib/components/ui/label';
   import { Select, SelectContent, SelectItem, SelectTrigger } from '$lib/components/ui/select';
   import { Switch } from '$lib/components/ui/switch';
-  import Input from '$lib/components/ui/Input.svelte';
+  import Input from '$lib/components/ui/FieldInput.svelte';
   import { Badge } from '$lib/components/ui/badge';
   import { Alert, AlertTitle, AlertDescription } from '$lib/components/ui/alert';
   import { Spinner } from '$lib/components/ui/spinner/index.js';

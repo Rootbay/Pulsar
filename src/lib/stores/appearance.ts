@@ -1,5 +1,19 @@
+import { writable, derived } from 'svelte/store';
+import * as fastDeepEqual from 'fast-deep-equal';
+const deepEqual = fastDeepEqual.default;
 import { appSettings, settingsManager } from './appSettings.svelte';
 import { defaultAppearanceSettings, type AppearanceSettings } from '../config/settings';
+
+const baselineStore = writable<AppearanceSettings | null>(null);
+
+appSettings.subscribe((settings) => {
+  if (settings && settings.appearance) {
+    baselineStore.update((curr) => {
+      if (curr === null) return structuredClone(settings.appearance);
+      return curr;
+    });
+  }
+});
 
 export const appearanceSettings = {
   subscribe(fn: (value: AppearanceSettings) => void) {
@@ -21,23 +35,21 @@ export const appearanceSettings = {
     });
   },
   save: () => {
-    // Trigger save
-    settingsManager.update((s) => s);
+    baselineStore.set(structuredClone(settingsManager.current.appearance));
   },
   reset: () => {
-    settingsManager.update((settings) => {
-      settings.appearance = defaultAppearanceSettings;
-    });
+    baselineStore.subscribe((val) => {
+      if (val) {
+        settingsManager.update((s) => {
+          s.appearance = structuredClone(val);
+        });
+      }
+    })();
   },
-  get hasUnsavedChanges() {
-    // Using a getter with Svelte 5 reactivity
-    const current = settingsManager.current.appearance;
-    // We would need a way to track the initial state. 
-    // Since settingsManager initializes from backend, we can capture the first loaded state there.
-    // For now, let's keep it simple or implement a proper comparison if needed.
-    return false; // Placeholder for improved logic if initial state is tracked
-  }
+  hasUnsavedChanges: derived([appSettings, baselineStore], ([$appSettings, $baseline]) => {
+    if (!$baseline || !$appSettings?.appearance) return false;
+    return !deepEqual($appSettings.appearance, $baseline);
+  })
 };
 
 export type AppearanceSettingsStore = typeof appearanceSettings;
-

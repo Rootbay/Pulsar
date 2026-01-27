@@ -29,6 +29,7 @@
   let showImportPopup = $state(false);
   let lastAttemptedPath = $state<string | null>(null);
   let triedElevated = $state(false);
+  let isLoading = $state(false);
 
   const importProgressMessages = $derived<Record<ImportVaultProgressStage, string>>({
     decrypting: t(locale, 'decryptingBackup'),
@@ -55,17 +56,17 @@
       return;
     }
 
-    console.log('Attempting to load database:', path);
+    if (isLoading) return;
+
     error = null;
     lastAttemptedPath = path;
     appState.totpVerified = false;
+    isLoading = true;
 
     try {
       await callBackend('switch_database', { dbPath: path });
-      console.log('Database switched successfully');
-      
+
       const isConfigured = await callBackend<boolean>('is_master_password_configured');
-      console.log('Is master password configured:', isConfigured);
 
       if (isConfigured) {
         appState.isLocked = true;
@@ -77,7 +78,6 @@
 
       appState.isDatabaseLoaded = true;
       recentDatabases.addRecentDatabase(path);
-      console.log('appState updated, isDatabaseLoaded:', appState.isDatabaseLoaded);
     } catch (cause: unknown) {
       console.error('Failed to load database:', cause);
       error =
@@ -89,6 +89,8 @@
         triedElevated = true;
         void attemptElevatedCopy();
       }
+    } finally {
+      isLoading = false;
     }
   };
 
@@ -119,14 +121,11 @@
 
   const selectExistingVault = async () => {
     try {
-      console.log('Opening file dialog...');
       const picked = await open({
         title: t(locale, 'selectVaultDialogTitle'),
         filters: [{ name: t(locale, 'vaultFileFilterName'), extensions: ['psec'] }],
         multiple: false
       });
-
-      console.log('Picked from dialog:', picked);
 
       if (picked) {
         const path = typeof picked === 'string' ? picked : (picked as any).path;
@@ -263,7 +262,8 @@
     <div class="grid w-full gap-6 md:grid-cols-3">
       <button
         type="button"
-        class="group border-border/60 bg-card/50 hover:border-primary/50 hover:bg-primary/5 flex cursor-pointer flex-col items-start rounded-2xl border p-6 text-left transition-all"
+        class="group border-border/60 bg-card/50 hover:border-primary/50 hover:bg-primary/5 flex cursor-pointer flex-col items-start rounded-2xl border p-6 text-left transition-all disabled:pointer-events-none disabled:opacity-50"
+        disabled={isLoading}
         onclick={createNewVault}
       >
         <div
@@ -285,7 +285,8 @@
 
       <button
         type="button"
-        class="group border-border/60 bg-card/50 hover:border-primary/50 hover:bg-primary/5 flex cursor-pointer flex-col items-start rounded-2xl border p-6 text-left transition-all"
+        class="group border-border/60 bg-card/50 hover:border-primary/50 hover:bg-primary/5 flex cursor-pointer flex-col items-start rounded-2xl border p-6 text-left transition-all disabled:pointer-events-none disabled:opacity-50"
+        disabled={isLoading}
         onclick={selectExistingVault}
       >
         <div
@@ -307,7 +308,8 @@
 
       <button
         type="button"
-        class="group border-border/60 bg-card/50 hover:border-primary/50 hover:bg-primary/5 flex cursor-pointer flex-col items-start rounded-2xl border p-6 text-left transition-all"
+        class="group border-border/60 bg-card/50 hover:border-primary/50 hover:bg-primary/5 flex cursor-pointer flex-col items-start rounded-2xl border p-6 text-left transition-all disabled:pointer-events-none disabled:opacity-50"
+        disabled={isLoading}
         onclick={handleImportFile}
       >
         <div
@@ -342,7 +344,8 @@
             {#each $recentDatabases as dbPath (dbPath)}
               <button
                 type="button"
-                class="border-border/40 bg-card/30 hover:border-primary/30 hover:bg-primary/5 group flex w-full cursor-pointer items-center justify-between rounded-xl border px-4 py-3 transition-all"
+                class="border-border/40 bg-card/30 hover:border-primary/30 hover:bg-primary/5 group flex w-full cursor-pointer items-center justify-between rounded-xl border px-4 py-3 transition-all disabled:pointer-events-none disabled:opacity-50"
+                disabled={isLoading}
                 onclick={() => selectRecentDatabase(dbPath)}
               >
                 <div class="flex items-center gap-3">
@@ -377,7 +380,7 @@
       </div>
 
       <div class="space-y-4">
-        {#if error || importProgress || importMessage}
+        {#if error || importProgress || importMessage || isLoading}
           <div class="flex items-center gap-2 px-1">
             <FileWarning class="text-muted-foreground h-4 w-4" />
             <h2 class="text-foreground text-sm font-semibold tracking-wider uppercase">
@@ -386,6 +389,17 @@
           </div>
 
           <div class="space-y-3">
+            {#if isLoading}
+              <div
+                class="border-primary/40 bg-primary/5 flex items-center gap-3 rounded-xl border p-4"
+              >
+                <Spinner class="text-primary h-4 w-4" />
+                <p class="text-foreground text-sm font-medium">
+                  {t(locale, 'settingsVaultLoading')}
+                </p>
+              </div>
+            {/if}
+
             {#if error}
               <div class="border-destructive/40 bg-destructive/10 rounded-xl border p-4">
                 <p class="text-destructive text-sm leading-relaxed font-medium">{error}</p>

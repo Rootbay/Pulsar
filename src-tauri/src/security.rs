@@ -20,14 +20,14 @@ pub struct DeviceRecord {
     pub is_current: bool,
 }
 
-async fn get_key(state: &State<'_, AppState>) -> Result<Zeroizing<Vec<u8>>> {
+async fn get_key(state: &AppState) -> Result<Zeroizing<Vec<u8>>> {
     let guard = state.key.lock().await;
     let opt = guard.clone();
     drop(guard);
     opt.ok_or(Error::VaultLocked)
 }
 
-async fn get_db_pool(state: &State<'_, AppState>) -> Result<SqlitePool> {
+async fn get_db_pool(state: &AppState) -> Result<SqlitePool> {
     let guard = state.db.lock().await;
     guard
         .clone()
@@ -63,7 +63,7 @@ async fn save_devices(pool: &SqlitePool, key: &[u8], devices: &[DeviceRecord]) -
     Ok(())
 }
 
-pub async fn register_device(state: &State<'_, AppState>) -> Result<()> {
+pub async fn register_device(state: &AppState) -> Result<()> {
     let key = get_key(state).await?;
     let pool = get_db_pool(state).await?;
     let mut devices = load_devices(&pool, key.as_slice()).await?;

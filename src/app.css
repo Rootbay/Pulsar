@@ -40,7 +40,6 @@
   --sidebar-width: 16rem;
   --passwordList-width: 320px;
 
-  /* Password list (secondary sidebar) defaults */
   --passwordlist-base: var(--sidebar);
   --passwordlist-item: color-mix(in oklch, var(--sidebar) 80%, var(--background) 20%);
   --passwordlist-hover-bg: color-mix(in oklch, var(--sidebar) 65%, var(--background) 35%);
@@ -49,7 +48,6 @@
 .dark {
   --background: oklch(0.145 0 0);
   --foreground: oklch(0.985 0 0);
-  /* Main content background */
   --card: #0f0f0f;
   --card-foreground: oklch(0.985 0 0);
   --popover: oklch(0.205 0 0);
@@ -71,7 +69,6 @@
   --chart-3: oklch(0.769 0.188 70.08);
   --chart-4: oklch(0.627 0.265 303.9);
   --chart-5: oklch(0.645 0.246 16.439);
-  /* Left sidebar (vaults) */
   --sidebar: #121212;
   --sidebar-foreground: oklch(0.985 0 0);
   --sidebar-primary: oklch(0.488 0.243 264.376);
@@ -82,8 +79,6 @@
   --sidebar-ring: oklch(0.556 0 0);
   --sidebar-width: 16rem;
   --passwordList-width: 320px;
-
-  /* Second sidebar (password list) explicit colors */
   --passwordlist-base: #111111;
   --passwordlist-item: #151516;
   --passwordlist-hover-bg: #17171b;

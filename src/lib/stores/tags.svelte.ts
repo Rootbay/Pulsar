@@ -44,7 +44,7 @@ class TagStore {
       icon: tag.icon,
       color: tag.color
     });
-    const index = this.#tags.findIndex(t => t.id === tag.id);
+    const index = this.#tags.findIndex((t) => t.id === tag.id);
     if (index !== -1) {
       this.#tags[index] = tag;
     }
@@ -52,7 +52,7 @@ class TagStore {
 
   async remove(id: number) {
     await callBackend('delete_button', { id });
-    this.#tags = this.#tags.filter(t => t.id !== id);
+    this.#tags = this.#tags.filter((t) => t.id !== id);
   }
 
   async renameTagAcrossItems(oldTag: string, newTag: string) {
@@ -63,7 +63,6 @@ class TagStore {
     await callBackend('remove_tag_from_password_items', { tag });
   }
 
-  // Legacy compatibility for components using $tagStore
   subscribe(fn: (value: TagButton[]) => void) {
     fn(this.#tags);
     return $effect.root(() => {

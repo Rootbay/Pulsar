@@ -266,9 +266,11 @@
 </div>
 
 {#if appState.showSettingsPopup}
-  <div class="bg-background/80 fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-sm sm:p-8">
+  <div
+    class="bg-background/80 fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-sm sm:p-8"
+  >
     <div class="max-h-full w-full max-w-4xl overflow-y-auto rounded-2xl shadow-2xl">
-      <Settings onclose={() => appState.showSettingsPopup = false} />
+      <Settings onclose={() => (appState.showSettingsPopup = false)} />
     </div>
   </div>
 {/if}

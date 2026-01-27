@@ -1,7 +1,6 @@
 <script lang="ts">
   import { iconPaths } from '$lib/icons';
   import { appState } from '$lib/stores';
-  import { goto } from '$app/navigation';
   import Icon from '$lib/components/ui/Icon.svelte';
   import { Globe, Plus, Settings } from '@lucide/svelte';
   import {
@@ -63,7 +62,7 @@
 
 <SidebarRoot collapsible="none" class="bg-sidebar backdrop-blur">
   <SidebarHeader class="flex items-center justify-center py-5">
-    <img src="/svelte.svg" alt="Pulsar logo" class="size-8" />
+    <img src="/logo.png" alt="Pulsar Logo" class="h-8 w-8" />
   </SidebarHeader>
 
   <SidebarContent class="flex flex-1 flex-col items-center gap-6 px-2 pb-6">
@@ -144,19 +143,23 @@
 
   <SidebarFooter class="border-border/40 mt-auto w-full border-t pt-4">
     <SidebarMenu class="items-center">
-      <SidebarMenuItem>
+      <SidebarMenuItem class="cursor-pointer">
         <SidebarMenuButton
           size="lg"
           aria-label="Open settings"
           tooltipContent="Settings"
-          class="text-sidebar-foreground/70 hover:text-sidebar-foreground h-11.5 w-11.5 justify-center rounded-lg transition"
-          onclick={() => goto('/settings/general')}
+          style="cursor: pointer;"
+          class="text-sidebar-foreground/70 hover:text-sidebar-foreground h-11.5 w-11.5 cursor-pointer justify-center rounded-lg transition"
         >
-          <Settings
-            style="w-5 h-5"
-            className="size-5 opacity-70 transition-opacity group-hover/menu-item:opacity-100"
-          />
-          <span class="sr-only">Settings</span>
+          {#snippet child({ props })}
+            <a href="/settings/general" {...props}>
+              <Settings
+                style="w-5 h-5"
+                className="size-5 opacity-70 transition-opacity group-hover/menu-item:opacity-100"
+              />
+              <span class="sr-only">Settings</span>
+            </a>
+          {/snippet}
         </SidebarMenuButton>
       </SidebarMenuItem>
     </SidebarMenu>

@@ -151,7 +151,6 @@
     gap: 10px;
     width: 100%;
     min-height: 48px;
-    /* Keep standard padding; extra left space added via .titleIcon margin-left */
     padding: 10px 12px;
     border-radius: var(--radius, 12px);
     background: #151516;
@@ -161,7 +160,7 @@
       color 260ms ease,
       background-color 150ms ease-out,
       box-shadow 150ms ease-out;
-    cursor: pointer; /* view mode clickable */
+    cursor: pointer;
   }
 
   .inputContainer:hover {
@@ -192,12 +191,10 @@
     cursor: inherit;
   }
 
-  /* editable mode uses text cursor */
   .inputContainer.editable {
     cursor: text;
   }
 
-  /* When showing placeholder-like value (empty or "N/A") */
   .inputContainer.has-placeholder-value input,
   .inputContainer.has-placeholder-value textarea {
     color: #9aa0a6;
@@ -257,16 +254,13 @@
   .titleIcon {
     align-self: center;
     margin-top: 0;
-    /* Additive offsets: +2px from border, +3px before input */
     margin-left: 2px;
-    /* Extra spacing between SVG and input (adds 3px beyond the standard gap) */
     margin-right: 3px;
     display: flex;
     align-items: center;
     transition: color 260ms ease;
   }
 
-  /* For multiline inputs (e.g., Notes), keep icon fixed at top */
   .inputContainer.multiline-expanded .titleIcon,
   .inputContainer.multiline-collapsed .titleIcon {
     align-self: flex-start;
@@ -282,12 +276,10 @@
     cursor: text;
   }
 
-  /* Fixed height for single-line inputs */
   .inputContainer.singleline {
     height: 56px;
   }
 
-  /* Non-editable (read-only) inputs should not show text cursor */
   .inputContainer:not(.editable) {
     cursor: default;
   }

@@ -5,18 +5,7 @@ import { SIDEBAR_KEYBOARD_SHORTCUT } from './constants.js';
 type Getter<T> = () => T;
 
 export type SidebarStateProps = {
-  /**
-   * A getter function that returns the current open state of the sidebar.
-   * We use a getter function here to support `bind:open` on the `Sidebar.Provider`
-   * component.
-   */
   open: Getter<boolean>;
-
-  /**
-   * A function that sets the open state of the sidebar. To support `bind:open`, we need
-   * a source of truth for changing the open state to ensure it will be synced throughout
-   * the sub-components and any `bind:` references.
-   */
   setOpen: (open: boolean) => void;
 };
 

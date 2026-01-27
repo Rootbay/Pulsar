@@ -5,7 +5,7 @@ import { SecurityService, type PasswordHealth } from '../utils/security';
 interface SecurityDashboardState {
   analyzedCount: number;
   breachedCount: number;
-  weakCount: number; // Score < 3
+  weakCount: number;
   reusedCount: number;
   items: Record<number, PasswordHealth>;
   isScanning: boolean;

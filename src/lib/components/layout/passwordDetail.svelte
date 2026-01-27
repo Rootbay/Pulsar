@@ -6,7 +6,7 @@
   import { isTotpDisplayField } from '$lib/types/password-fields';
   import { iconPaths } from '$lib/icons';
   import { callBackend } from '$lib/utils/backend';
-  import Input from '../ui/Input.svelte';
+  import Input from '../ui/FieldInput.svelte';
   import { Button } from '../ui/button';
   import { Select, SelectContent, SelectItem, SelectTrigger } from '../ui/select';
   import { Skeleton } from '../ui/skeleton';

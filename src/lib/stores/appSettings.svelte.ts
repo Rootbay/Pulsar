@@ -127,7 +127,7 @@ class SettingsManager {
       $effect.root(() => {
         $effect(() => {
           if (this.#isInitialized) {
-            void this.#state; // Subscribe
+            void this.#state;
             this.scheduleSave();
           }
         });
@@ -142,7 +142,7 @@ class SettingsManager {
 
   async save() {
     if (this.#isSaving) {
-      this.scheduleSave(); // Retry after current save finishes
+      this.scheduleSave();
       return;
     }
 

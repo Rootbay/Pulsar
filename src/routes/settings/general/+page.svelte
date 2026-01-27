@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
+  import { settingsStore } from '$lib/stores';
   import { generalSettings } from '$lib/stores/general';
   import type { AppLanguage, GeneralSettings } from '$lib/config/settings';
   import KeyboardShortcutsPopup from '$lib/components/KeyboardShortcutsPopup.svelte';
@@ -38,6 +40,10 @@
     return generalSettings.subscribe((value) => {
       currentGeneralSettings = value;
     });
+  });
+
+  onMount(() => {
+    settingsStore.registerModule('general', generalSettings);
   });
 
   let showKeyboardShortcutsPopup = $state(false);

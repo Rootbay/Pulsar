@@ -6,7 +6,7 @@
   import { flip } from 'svelte/animate';
   import { cubicOut } from 'svelte/easing';
   import { Eye, EyeOff, ArrowDownUp, Copy, ShieldAlert, ShieldCheck, Shield } from '@lucide/svelte';
-  import Input from '$lib/components/ui/Input.svelte';
+  import Input from '$lib/components/ui/FieldInput.svelte';
   import { Button } from '$lib/components/ui/button';
   import { Badge } from '$lib/components/ui/badge';
   import { Skeleton } from '$lib/components/ui/skeleton';

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import Input from './Input.svelte';
+  import Input from './FieldInput.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
   import { iconPaths } from '$lib/icons';
 
@@ -191,7 +191,6 @@
   .formSection {
     width: 100%;
   }
-  /* sectionTitle removed per request */
 
   .itemColorContainer {
     width: 100%;

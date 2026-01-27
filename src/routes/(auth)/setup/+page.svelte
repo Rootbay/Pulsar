@@ -14,9 +14,7 @@
   import { Input } from '$lib/components/ui/input';
   import { Label } from '$lib/components/ui/label';
   import { Progress } from '$lib/components/ui/progress';
-  import {
-    appState
-  } from '$lib/stores';
+  import { appState } from '$lib/stores';
   import { currentLocale, t } from '$lib/i18n';
   import { ArrowLeft } from '@lucide/svelte';
 

@@ -139,8 +139,6 @@
     margin-bottom: 5px;
   }
 
-  /* .title-image removed */
-
   .detail-header h2 {
     margin: 0;
     font-weight: 400;
@@ -156,7 +154,7 @@
   .title-container {
     position: relative;
   }
-  /* Ensure favicon (and its fallback icon) sits above the pulse background */
+
   .title-container :global(.itemImgContainer) {
     position: relative;
     z-index: 1;

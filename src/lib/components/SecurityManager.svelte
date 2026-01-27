@@ -169,7 +169,7 @@
   $effect(() => {
     const locked = appState.isLocked;
     const settings = $securitySettings;
-    void settings; // Silence unused warning, needed for reactivity
+    void settings;
     if (!locked) {
       resetInactivityTimer();
     } else {

@@ -110,7 +110,11 @@ pub async fn init_db(db_path: &Path, password: Option<&[u8]>) -> Result<SqlitePo
     Ok(pool)
 }
 
-pub async fn init_db_lazy(db_path: &Path, password: Option<&[u8]>) -> Result<SqlitePool, String> {
+pub async fn init_db_lazy(
+    db_path: &Path,
+    password: Option<&[u8]>,
+    create_if_missing: bool,
+) -> Result<SqlitePool, String> {
     let db_path_abs = resolve_db_path(db_path)?;
 
     if let Some(parent) = db_path_abs.parent() {
@@ -122,7 +126,7 @@ pub async fn init_db_lazy(db_path: &Path, password: Option<&[u8]>) -> Result<Sql
             })?;
     }
 
-    let opts = build_connect_options(db_path_abs.as_path(), password, false);
+    let opts = build_connect_options(db_path_abs.as_path(), password, create_if_missing);
 
     Ok(build_pool_options().connect_lazy_with(opts))
 }

@@ -2,7 +2,7 @@
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "pulsar",
   "version": "0.1.0",
-  "identifier": "com.slurpjuice.pulsar",
+  "identifier": "com.rootbay.pulsar",
   "build": {
     "beforeDevCommand": "bun dev",
     "devUrl": "http://localhost:1420",
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "pulsar",
+        "title": "Pulsar",
         "width": 1150,
         "height": 650
       }

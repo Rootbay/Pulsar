@@ -78,7 +78,6 @@
       transform 220ms ease;
   }
 
-  /* Pulse the first tag briefly when it changes */
   .tag-icon-container.first-pulse {
     animation: firstTagPulse 320ms ease-out;
   }

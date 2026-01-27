@@ -14,9 +14,7 @@
     CardHeader,
     CardTitle
   } from '$lib/components/ui/card';
-  import {
-    appState
-  } from '$lib/stores';
+  import { appState } from '$lib/stores';
   import { currentLocale, t } from '$lib/i18n';
   import { Lock, Eye, EyeOff, ArrowLeft, FingerprintPattern, TriangleAlert } from '@lucide/svelte';
   import { onMount } from 'svelte';

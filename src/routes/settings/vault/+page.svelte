@@ -1,6 +1,5 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { derived, get, writable, type Readable } from 'svelte/store';
   import { toast } from '$lib/components/ui/sonner';
   import { vaultStore } from '$lib/stores/vault.svelte';
   import { addRecentDatabase, removeRecentDatabase } from '$lib/stores/recentDatabases.svelte';
@@ -60,24 +59,16 @@
     settings: VaultSettings;
   }
 
-  const vaultsStore = writable<Vault[]>([]);
-  const selectedVaultId = writable<string | null>(null);
+  let vaults = $state<Vault[]>([]);
+  let selectedVaultId = $state<string | null>(null);
 
   let activeVaultSettings = $derived(vaultStore.settings);
 
-  const selectedVault: Readable<Vault | undefined> = derived(
-    [vaultsStore, selectedVaultId],
-    ([$vaults, id]) => $vaults.find((vault) => vault.id === id)
-  );
+  const selectedVault = $derived(vaults.find((vault) => vault.id === selectedVaultId));
 
-  const totalItems = derived(vaultsStore, ($vaults) =>
-    $vaults.reduce((sum, vault) => sum + (vault.itemCount ?? 0), 0)
-  );
+  const totalItems = $derived(vaults.reduce((sum, vault) => sum + (vault.itemCount ?? 0), 0));
 
-  const encryptedCount = derived(
-    vaultsStore,
-    ($vaults) => $vaults.filter((vault) => vault.encrypted).length
-  );
+  const encryptedCount = $derived(vaults.filter((vault) => vault.encrypted).length);
 
   let weakPasswordsCount = $state(0);
   let duplicatePasswordsCount = $state(0);
@@ -376,22 +367,22 @@
         settings: vault.settings
       }));
 
-      vaultsStore.set(mapped);
+      vaults = mapped;
       await fetchSecurityReport();
 
       if (!mapped.length) {
-        selectedVaultId.set(null);
+        selectedVaultId = null;
         return;
       }
 
-      const currentSelection = preserveSelection ? get(selectedVaultId) : null;
+      const currentSelection = preserveSelection ? selectedVaultId : null;
       const fallback = mapped[0].id;
       const nextSelection =
         currentSelection && mapped.some((vault) => vault.id === currentSelection)
           ? currentSelection
           : fallback;
 
-      selectedVaultId.set(nextSelection);
+      selectedVaultId = nextSelection;
 
       const active = mapped.find((vault) => vault.id === nextSelection);
       if (active) {
@@ -406,12 +397,12 @@
   }
 
   function selectVault(id: string): void {
-    const vault = get(vaultsStore).find((entry) => entry.id === id);
+    const vault = vaults.find((entry) => entry.id === id);
     if (!vault) {
       return;
     }
 
-    selectedVaultId.set(id);
+    selectedVaultId = id;
     vaultStore.selectVault(id, { ...vault.settings, name: vault.name });
   }
 
@@ -431,7 +422,7 @@
   }
 
   function removeVault(id: string): void {
-    const vault = get(vaultsStore).find((entry) => entry.id === id);
+    const vault = vaults.find((entry) => entry.id === id);
     if (!vault) {
       return;
     }
@@ -439,16 +430,15 @@
     vaultStore.clearVault(id);
     removeRecentDatabase(vault.path);
 
-    vaultsStore.update((entries) => entries.filter((entry) => entry.id !== id));
+    vaults = vaults.filter((entry) => entry.id !== id);
 
-    const remaining = get(vaultsStore);
-    if (!remaining.length) {
-      selectedVaultId.set(null);
+    if (!vaults.length) {
+      selectedVaultId = null;
       return;
     }
 
-    if (get(selectedVaultId) === id) {
-      selectVault(remaining[0].id);
+    if (selectedVaultId === id) {
+      selectVault(vaults[0].id);
     }
 
     void refreshVaults();
@@ -459,18 +449,16 @@
   });
 
   $effect(() => {
-    const id = get(selectedVaultId);
+    const id = selectedVaultId;
     if (id && activeVaultSettings) {
-      vaultsStore.update((vaults) =>
-        vaults.map((v) =>
-          v.id === id
-            ? {
-                ...v,
-                name: activeVaultSettings.name,
-                settings: { ...v.settings, ...activeVaultSettings }
-              }
-            : v
-        )
+      vaults = vaults.map((v) =>
+        v.id === id
+          ? {
+              ...v,
+              name: activeVaultSettings.name,
+              settings: { ...v.settings, ...activeVaultSettings }
+            }
+          : v
       );
     }
   });
@@ -526,19 +514,19 @@
             >
               {t('settingsVaultLoading')}
             </div>
-          {:else if !$vaultsStore.length}
+          {:else if !vaults.length}
             <div
               class="border-border/60 bg-muted/20 text-muted-foreground rounded-xl border p-4 text-sm"
             >
               {t('settingsVaultEmptyState')}
             </div>
           {:else}
-            {#each $vaultsStore as vault (vault.id)}
+            {#each vaults as vault (vault.id)}
               <button
                 type="button"
                 class={cn(
                   'border-border/60 bg-background/80 flex w-full flex-col gap-3 rounded-xl border p-4 text-left transition',
-                  $selectedVault?.id === vault.id
+                  selectedVault?.id === vault.id
                     ? 'border-primary/60 bg-primary/10 text-primary shadow-sm'
                     : 'hover:border-primary/40 hover:bg-muted/40'
                 )}
@@ -596,17 +584,17 @@
               variant="ghost"
               size="icon"
               class="text-muted-foreground hover:text-destructive size-8"
-              aria-label={$selectedVault
-                ? t('settingsVaultRemoveAria', { name: $selectedVault.name })
+              aria-label={selectedVault
+                ? t('settingsVaultRemoveAria', { name: selectedVault.name })
                 : t('settingsVaultRemoveAriaFallback')}
-              onclick={() => $selectedVault && removeVault($selectedVault.id)}
-              disabled={!$selectedVault || busyAction !== null}
+              onclick={() => selectedVault && removeVault(selectedVault.id)}
+              disabled={!selectedVault || busyAction !== null}
             >
               <Trash2 class="size-4" aria-hidden="true" />
             </Button>
           </div>
 
-          {#if $selectedVault}
+          {#if selectedVault}
             <div class="space-y-3">
               <Label for="vault-name" class="text-foreground text-sm font-medium">
                 {t('settingsVaultDisplayName')}
@@ -635,7 +623,7 @@
                 <Switch
                   checked={activeVaultSettings.totp}
                   aria-label="Toggle per-entry TOTP storage"
-                  onclick={() => updateVaultSetting('totp')}
+                  onCheckedChange={() => updateVaultSetting('totp')}
                   disabled={busyAction !== null}
                 />
               </div>
@@ -654,7 +642,7 @@
                 <Switch
                   checked={activeVaultSettings.backups}
                   aria-label="Toggle automatic backups"
-                  onclick={() => updateVaultSetting('backups')}
+                  onCheckedChange={() => updateVaultSetting('backups')}
                   disabled={busyAction !== null}
                 />
               </div>
@@ -673,7 +661,7 @@
                 <Switch
                   checked={activeVaultSettings.compression}
                   aria-label="Toggle compression"
-                  onclick={() => updateVaultSetting('compression')}
+                  onCheckedChange={() => updateVaultSetting('compression')}
                   disabled={busyAction !== null}
                 />
               </div>
@@ -743,7 +731,7 @@
           <p class="text-muted-foreground text-xs">
             {t('settingsVaultStatTotalItems')}
           </p>
-          <p class="text-foreground text-2xl font-semibold">{$totalItems}</p>
+          <p class="text-foreground text-2xl font-semibold">{totalItems}</p>
         </div>
         <div class="border-border/60 bg-background/80 rounded-xl border p-4">
           <p class="text-muted-foreground text-xs">
@@ -762,7 +750,7 @@
             {t('settingsVaultStatEncrypted')}
           </p>
           <p class="text-chart-success text-2xl font-semibold">
-            {$encryptedCount}/{$vaultsStore.length}
+            {encryptedCount}/{vaults.length}
           </p>
         </div>
       </div>

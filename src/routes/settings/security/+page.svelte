@@ -465,6 +465,24 @@
     refreshTotpStatus();
   });
 
+  $effect(() => {
+    if (appState.isLocked) {
+      currentPassword = '';
+      newPassword = '';
+      confirmPassword = '';
+      kdfCurrentPassword = '';
+      biometricPassword = '';
+      pendingTotpSecret = null;
+      pendingProvisioningUri = null;
+      totpVerificationCode = '';
+      healthReport = null;
+      
+      passwordModalOpen = false;
+      kdfModalOpen = false;
+      biometricModalOpen = false;
+    }
+  });
+
   onDestroy(() => {
     clearCopyTimeouts();
   });
@@ -1387,7 +1405,7 @@
         <Switch
           checked={currentSettings.lockOnSuspend}
           aria-label="Toggle lock on suspend"
-          onclick={() => toggleSetting('lockOnSuspend')}
+          onCheckedChange={() => toggleSetting('lockOnSuspend')}
         />
       </div>
 
@@ -1405,7 +1423,7 @@
         <Switch
           checked={currentSettings.lockOnMinimize}
           aria-label="Toggle lock on minimise"
-          onclick={() => toggleSetting('lockOnMinimize')}
+          onCheckedChange={() => toggleSetting('lockOnMinimize')}
         />
       </div>
 
@@ -1527,7 +1545,7 @@
           checked={isBiometricsEnabled}
           disabled={isBiometricActionLoading}
           aria-label="Toggle biometric unlock"
-          onclick={handleBiometricToggle}
+          onCheckedChange={handleBiometricToggle}
         />
       </div>
 
@@ -1545,7 +1563,7 @@
         <Switch
           checked={currentSettings.sessionPersistence}
           aria-label="Toggle session persistence"
-          onclick={() => toggleSetting('sessionPersistence')}
+          onCheckedChange={() => toggleSetting('sessionPersistence')}
         />
       </div>
     </CardContent>
@@ -1592,7 +1610,7 @@
             <Switch
               checked={currentSettings[toggle.key] as boolean}
               aria-label={`Toggle ${toggle.title}`}
-              onclick={() => toggleSetting(toggle.key)}
+              onCheckedChange={() => toggleSetting(toggle.key)}
             />
           </div>
         {/each}

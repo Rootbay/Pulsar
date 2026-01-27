@@ -142,6 +142,24 @@ async fn write_sensitive_bytes(path: &Path, bytes: &[u8]) -> Result<()> {
         file.sync_all().await?;
     }
 
-    fs::rename(&tmp_path, path).await?;
-    Ok(())
-}
+        if let Err(err) = fs::rename(&tmp_path, path).await {
+
+            if err.kind() == std::io::ErrorKind::Other || err.raw_os_error() == Some(17) || err.raw_os_error() == Some(18) {
+
+                fs::copy(&tmp_path, path).await?;
+
+                let _ = fs::remove_file(&tmp_path).await;
+
+            } else {
+
+                return Err(Error::Io(err));
+
+            }
+
+        }
+
+        Ok(())
+
+    }
+
+    

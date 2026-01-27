@@ -463,7 +463,16 @@ pub async fn set_master_password(
 
     let argon_params = Argon2ParamsConfig::default();
 
-    let mut derived_key = derive_key(password.as_str(), &salt, &argon_params)?;
+    let salt_clone = salt.to_vec();
+    let password_clone = password.clone();
+    let argon_params_clone = argon_params.clone();
+
+    let mut derived_key = tauri::async_runtime::spawn_blocking(move || {
+        derive_key(password_clone.as_str(), &salt_clone, &argon_params_clone)
+    })
+    .await
+    .map_err(|e| Error::Internal(format!("Runtime error: {}", e)))??;
+
     drop(password);
     let key_z = Zeroizing::new(derived_key.to_vec());
     derived_key.zeroize();
@@ -570,7 +579,16 @@ pub async fn unlock(
     let argon_params = meta.argon2_params();
     validate_argon_params(&argon_params)?;
 
-    let derived_key = derive_key(password.as_str(), &salt, &argon_params)?;
+    let salt_clone = salt.to_vec();
+    let password_clone = password.clone();
+    let argon_params_clone = argon_params.clone();
+    
+    let derived_key = tauri::async_runtime::spawn_blocking(move || {
+        derive_key(password_clone.as_str(), &salt_clone, &argon_params_clone)
+    })
+    .await
+    .map_err(|e| Error::Internal(format!("Runtime error: {}", e)))??;
+
     drop(password);
     let key_z = Zeroizing::new(derived_key.to_vec());
     let cipher = XChaCha20Poly1305::new(Key::from_slice(&key_z));
@@ -773,7 +791,16 @@ pub async fn rotate_master_password(
     let argon_params = metadata.argon2_params();
     validate_argon_params(&argon_params)?;
 
-    let mut current_key_bytes = derive_key(current_password.as_str(), &salt, &argon_params)?;
+    let salt_clone = salt.to_vec();
+    let current_password_clone = current_password.clone();
+    let argon_params_clone = argon_params.clone();
+
+    let mut current_key_bytes = tauri::async_runtime::spawn_blocking(move || {
+        derive_key(current_password_clone.as_str(), &salt_clone, &argon_params_clone)
+    })
+    .await
+    .map_err(|e| Error::Internal(format!("Runtime error: {}", e)))??;
+
     let current_key_z = Zeroizing::new(current_key_bytes.to_vec());
     current_key_bytes.zeroize();
 
@@ -790,7 +817,16 @@ pub async fn rotate_master_password(
     let mut new_salt = [0u8; 16];
     OsRng.fill_bytes(&mut new_salt);
 
-    let mut new_key_bytes = derive_key(new_password.as_str(), &new_salt, &argon_params)?;
+    let new_salt_clone = new_salt.to_vec();
+    let new_password_clone = new_password.clone();
+    let argon_params_new_clone = argon_params.clone();
+
+    let mut new_key_bytes = tauri::async_runtime::spawn_blocking(move || {
+        derive_key(new_password_clone.as_str(), &new_salt_clone, &argon_params_new_clone)
+    })
+    .await
+    .map_err(|e| Error::Internal(format!("Runtime error: {}", e)))??;
+
     let new_key_z = Zeroizing::new(new_key_bytes.to_vec());
     new_key_bytes.zeroize();
 
@@ -928,7 +964,16 @@ pub async fn update_argon2_params(
     let (salt, nonce, ciphertext) = decode_metadata(&metadata)?;
     let current_params = metadata.argon2_params();
 
-    let mut current_key_bytes = derive_key(current_password.as_str(), &salt, &current_params)?;
+    let salt_clone = salt.to_vec();
+    let current_password_clone = current_password.clone();
+    let current_params_clone = current_params.clone();
+
+    let mut current_key_bytes = tauri::async_runtime::spawn_blocking(move || {
+        derive_key(current_password_clone.as_str(), &salt_clone, &current_params_clone)
+    })
+    .await
+    .map_err(|e| Error::Internal(format!("Runtime error: {}", e)))??;
+
     let current_key_z = Zeroizing::new(current_key_bytes.to_vec());
     current_key_bytes.zeroize();
 
@@ -945,7 +990,16 @@ pub async fn update_argon2_params(
     let mut new_salt = [0u8; 16];
     OsRng.fill_bytes(&mut new_salt);
 
-    let mut new_key_bytes = derive_key(current_password.as_str(), &new_salt, &new_params)?;
+    let new_salt_clone = new_salt.to_vec();
+    let current_password_new_clone = current_password.clone();
+    let new_params_clone = new_params.clone();
+
+    let mut new_key_bytes = tauri::async_runtime::spawn_blocking(move || {
+        derive_key(current_password_new_clone.as_str(), &new_salt_clone, &new_params_clone)
+    })
+    .await
+    .map_err(|e| Error::Internal(format!("Runtime error: {}", e)))??;
+
     let new_key_z = Zeroizing::new(new_key_bytes.to_vec());
     new_key_bytes.zeroize();
 
@@ -1166,7 +1220,16 @@ pub async fn enable_biometrics(
     let (salt, nonce, ciphertext) = decode_metadata(&meta)?;
     let argon_params = meta.argon2_params();
 
-    let mut derived_key = derive_key(password.as_str(), &salt, &argon_params)?;
+    let salt_clone = salt.to_vec();
+    let password_clone = password.clone();
+    let argon_params_clone = argon_params.clone();
+
+    let mut derived_key = tauri::async_runtime::spawn_blocking(move || {
+        derive_key(password_clone.as_str(), &salt_clone, &argon_params_clone)
+    })
+    .await
+    .map_err(|e| Error::Internal(format!("Runtime error: {}", e)))??;
+
     let key_z = Zeroizing::new(derived_key.to_vec());
     derived_key.zeroize();
     let cipher = XChaCha20Poly1305::new(Key::from_slice(&key_z));

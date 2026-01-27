@@ -55,6 +55,13 @@ async fn switch_database(db_path: PathBuf, app_state: State<'_, AppState>) -> Re
     }
 
     {
+        let mut guard = app_state.db.lock().await;
+        if let Some(old_pool) = guard.take() {
+            old_pool.close().await;
+        }
+    }
+
+    {
         let mut kg = app_state.key.lock().await;
         *kg = None;
     }
@@ -63,13 +70,6 @@ async fn switch_database(db_path: PathBuf, app_state: State<'_, AppState>) -> Re
         let mut pending = app_state.pending_key.lock().await;
         if let Some(mut key) = pending.take() {
             key.key.zeroize();
-        }
-    }
-
-    {
-        let mut guard = app_state.db.lock().await;
-        if let Some(old_pool) = guard.take() {
-            old_pool.close().await;
         }
     }
 

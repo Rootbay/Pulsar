@@ -441,7 +441,7 @@
                 <Switch
                   checked={options[option.key]}
                   aria-label={option.label}
-                  onclick={() => toggleOption(option.key)}
+                  onCheckedChange={() => toggleOption(option.key)}
                 />
               </div>
             {/each}
@@ -480,7 +480,7 @@
               <Switch
                 checked={options[option.key]}
                 aria-label={option.label}
-                onclick={() => toggleOption(option.key)}
+                onCheckedChange={() => toggleOption(option.key)}
               />
             </div>
           {/each}

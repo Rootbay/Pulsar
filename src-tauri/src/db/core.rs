@@ -85,7 +85,7 @@ pub async fn init_db_lazy(
     let db_path_abs = resolve_db_path(db_path)?;
 
     if let Some(parent) = db_path_abs.parent() {
-        fs::create_dir_all(parent)
+        tokio::fs::create_dir_all(parent)
             .await
             .map_err(|e| {
                 eprintln!("Failed to create database directory {}: {e}", parent.display());

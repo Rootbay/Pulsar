@@ -76,6 +76,8 @@
     if (!appState.isLocked) {
       loadPasswordItems();
       profileSettings.load();
+    } else {
+      selectedPasswordItem = null;
     }
   });
 

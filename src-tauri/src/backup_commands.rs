@@ -105,7 +105,14 @@ async fn write_sensitive_bytes(path: &Path, bytes: &[u8]) -> Result<()> {
         file.sync_all().await?;
     }
 
-    tokio::fs::rename(&tmp_path, path).await?;
+    if let Err(err) = tokio::fs::rename(&tmp_path, path).await {
+        if err.kind() == std::io::ErrorKind::Other || err.raw_os_error() == Some(17) || err.raw_os_error() == Some(18) {
+            tokio::fs::copy(&tmp_path, path).await?;
+            let _ = tokio::fs::remove_file(&tmp_path).await;
+        } else {
+            return Err(Error::Io(err));
+        }
+    }
     Ok(())
 }
 
@@ -185,12 +192,20 @@ pub async fn export_vault_backend(
     let mut salt = [0u8; 16];
     OsRng.fill_bytes(&mut salt);
 
-    let params = Params::new(64 * 1024, 3, 1, None).map_err(|e| Error::Internal(e.to_string()))?;
-    let argon2 = Argon2::new(Algorithm::Argon2id, Version::V0x13, params);
-    let mut export_key = [0u8; 32];
-    argon2
-        .hash_password_into(passphrase_value.as_bytes(), &salt, &mut export_key)
-        .map_err(|e| Error::Internal(format!("KDF failed: {}", e)))?;
+    let salt_clone = salt.to_vec();
+    let passphrase_clone = passphrase_value.clone();
+    
+    let mut export_key = tauri::async_runtime::spawn_blocking(move || {
+        let params = Params::new(64 * 1024, 3, 1, None).map_err(|e| Error::Internal(e.to_string()))?;
+        let argon2 = Argon2::new(Algorithm::Argon2id, Version::V0x13, params);
+        let mut key = [0u8; 32];
+        argon2
+            .hash_password_into(passphrase_clone.as_bytes(), &salt_clone, &mut key)
+            .map_err(|e| Error::Internal(format!("KDF failed: {}", e)))?;
+        Ok(key)
+    })
+    .await
+    .map_err(|e| Error::Internal(format!("Runtime error: {}", e)))??;
 
     let cipher = XChaCha20Poly1305::new(Key::from_slice(&export_key));
     let mut nonce = [0u8; 24];
@@ -273,12 +288,20 @@ pub async fn export_vault(
     let mut salt = [0u8; 16];
     OsRng.fill_bytes(&mut salt);
 
-    let params = Params::new(64 * 1024, 3, 1, None).map_err(|e| Error::Internal(e.to_string()))?;
-    let argon2 = Argon2::new(Algorithm::Argon2id, Version::V0x13, params);
-    let mut key = [0u8; 32];
-    argon2
-        .hash_password_into(passphrase_value.as_bytes(), &salt, &mut key)
-        .map_err(|e| Error::Internal(format!("KDF failed: {e}")))?;
+    let salt_clone = salt.to_vec();
+    let passphrase_clone = passphrase_value.clone();
+
+    let mut key = tauri::async_runtime::spawn_blocking(move || {
+        let params = Params::new(64 * 1024, 3, 1, None).map_err(|e| Error::Internal(e.to_string()))?;
+        let argon2 = Argon2::new(Algorithm::Argon2id, Version::V0x13, params);
+        let mut key = [0u8; 32];
+        argon2
+            .hash_password_into(passphrase_clone.as_bytes(), &salt_clone, &mut key)
+            .map_err(|e| Error::Internal(format!("KDF failed: {e}")))?;
+        Ok(key)
+    })
+    .await
+    .map_err(|e| Error::Internal(format!("Runtime error: {}", e)))??;
 
     let cipher = XChaCha20Poly1305::new(Key::from_slice(&key));
     let mut nonce = [0u8; 24];
@@ -356,12 +379,20 @@ pub async fn import_vault(
         .decode(payload.ciphertext_b64)
         .map_err(|e| Error::Internal(e.to_string()))?;
 
-    let params = Params::new(64 * 1024, 3, 1, None).map_err(|e| Error::Internal(e.to_string()))?;
-    let argon2 = Argon2::new(Algorithm::Argon2id, Version::V0x13, params);
-    let mut key = [0u8; 32];
-    argon2
-        .hash_password_into(passphrase_value.as_bytes(), &salt, &mut key)
-        .map_err(|e| Error::Internal(format!("KDF failed: {e}")))?;
+    let salt_clone = salt.clone();
+    let passphrase_clone = passphrase_value.clone();
+
+    let mut key = tauri::async_runtime::spawn_blocking(move || {
+        let params = Params::new(64 * 1024, 3, 1, None).map_err(|e| Error::Internal(e.to_string()))?;
+        let argon2 = Argon2::new(Algorithm::Argon2id, Version::V0x13, params);
+        let mut key = [0u8; 32];
+        argon2
+            .hash_password_into(passphrase_clone.as_bytes(), &salt_clone, &mut key)
+            .map_err(|e| Error::Internal(format!("KDF failed: {e}")))?;
+        Ok(key)
+    })
+    .await
+    .map_err(|e| Error::Internal(format!("Runtime error: {}", e)))??;
 
     let cipher = XChaCha20Poly1305::new(Key::from_slice(&key));
     let decrypted_bytes = cipher
@@ -437,12 +468,20 @@ pub async fn restore_vault_backend(
             .decode(payload.ciphertext_b64)
             .map_err(|e| Error::Internal(e.to_string()))?;
 
-        let params = Params::new(64 * 1024, 3, 1, None).map_err(|e| Error::Internal(e.to_string()))?;
-        let argon2 = Argon2::new(Algorithm::Argon2id, Version::V0x13, params);
-        let mut key = [0u8; 32];
-        argon2
-            .hash_password_into(passphrase_value.as_bytes(), &salt, &mut key)
-            .map_err(|e| Error::Internal(format!("KDF failed: {e}")))?;
+        let salt_clone = salt.clone();
+        let passphrase_clone = passphrase_value.clone();
+
+        let mut key = tauri::async_runtime::spawn_blocking(move || {
+            let params = Params::new(64 * 1024, 3, 1, None).map_err(|e| Error::Internal(e.to_string()))?;
+            let argon2 = Argon2::new(Algorithm::Argon2id, Version::V0x13, params);
+            let mut key = [0u8; 32];
+            argon2
+                .hash_password_into(passphrase_clone.as_bytes(), &salt_clone, &mut key)
+                .map_err(|e| Error::Internal(format!("KDF failed: {e}")))?;
+            Ok(key)
+        })
+        .await
+        .map_err(|e| Error::Internal(format!("Runtime error: {}", e)))??;
 
         let cipher = XChaCha20Poly1305::new(Key::from_slice(&key));
         let decrypted_bytes = cipher

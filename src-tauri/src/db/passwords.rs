@@ -267,10 +267,20 @@ pub async fn update_password_item(
 pub async fn delete_password_item(state: State<'_, AppState>, id: i64) -> Result<()> {
     get_key(&state).await?;
     let db_pool = get_db_pool(&state).await?;
+    
+    let mut tx = db_pool.begin().await?;
+
+    sqlx::query("DELETE FROM attachments WHERE item_id = ?")
+        .bind(id)
+        .execute(&mut *tx)
+        .await?;
+
     sqlx::query("DELETE FROM password_items WHERE id = ?")
         .bind(id)
-        .execute(&db_pool)
+        .execute(&mut *tx)
         .await?;
+    
+    tx.commit().await?;
     Ok(())
 }
 

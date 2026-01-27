@@ -28,14 +28,29 @@
     settings.save();
   };
 
-  function handleSimulateAutoType() {
-    toast.info(t('Auto-type simulation started.'), {
-      description: t('This is a test of the auto-type engine.')
-    });
-    // In a real implementation, this would call a backend command to simulate keystrokes
-  }
+  let testResults = $state<Array<{ message: string; status: 'success' | 'failure' }>>([]);
 
-  const testResults: Array<{ message: string; status: 'success' | 'failure' }> = [];
+  async function handleSimulateAutoType() {
+    toast.info(t('Auto-type simulation started.'), {
+      description: t('Please focus a text field. Simulation will start in 2 seconds.')
+    });
+    
+    testResults = [];
+    
+    try {
+      await callBackend('simulate_autotype');
+      toast.success(t('Auto-type simulation completed.'));
+      testResults = [
+        { message: 'Hotkey registration: Success', status: 'success' },
+        { message: 'Keystroke simulation: Success', status: 'success' }
+      ];
+    } catch (error) {
+      toast.error(t('Auto-type simulation failed.'));
+      testResults = [
+        { message: 'Keystroke simulation: Failed', status: 'failure' }
+      ];
+    }
+  }
 
   function translateTestMessage(message: string, locale: Locale): string {
     if (locale === 'sv') {

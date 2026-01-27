@@ -63,6 +63,7 @@ class SettingsStore {
 
           if (loaded && typeof loaded === 'object') {
             this.state = this.#mergeDefaults(loaded as Partial<AllSettings>);
+            callBackend('apply_system_settings').catch(console.error);
           }
         } catch (e) {
           console.error('Failed to parse stored settings:', e);
@@ -121,6 +122,7 @@ class SettingsStore {
       this.isSaving = true;
       try {
         await callBackend('set_all_settings', { settings: JSON.stringify(this.state) });
+        await callBackend('apply_system_settings');
       } catch (error) {
         console.error('Failed to save settings:', error);
       } finally {

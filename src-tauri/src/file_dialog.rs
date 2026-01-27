@@ -49,6 +49,53 @@ pub async fn check_file_exists(path: String) -> Result<bool> {
 }
 
 #[tauri::command]
+pub async fn open_app_data_folder(app_handle: tauri::AppHandle) -> Result<()> {
+    use tauri::Manager;
+    let app_dir = app_handle.path().app_data_dir().map_err(|e| Error::Internal(e.to_string()))?;
+    if !app_dir.exists() {
+        tokio::fs::create_dir_all(&app_dir).await.map_err(|e| Error::Internal(e.to_string()))?;
+    }
+    
+    #[cfg(target_os = "windows")]
+    {
+        std::process::Command::new("explorer")
+            .arg(app_dir)
+            .spawn()
+            .map_err(|e| Error::Internal(e.to_string()))?;
+    }
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .arg(app_dir)
+            .spawn()
+            .map_err(|e| Error::Internal(e.to_string()))?;
+    }
+    #[cfg(target_os = "linux")]
+    {
+        std::process::Command::new("xdg-open")
+            .arg(app_dir)
+            .spawn()
+            .map_err(|e| Error::Internal(e.to_string()))?;
+    }
+    
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn clear_app_logs(app_handle: tauri::AppHandle) -> Result<()> {
+    use tauri::Manager;
+    let app_dir = app_handle.path().app_data_dir().map_err(|e| Error::Internal(e.to_string()))?;
+    let logs_dir = app_dir.join("logs");
+    
+    if logs_dir.exists() {
+        tokio::fs::remove_dir_all(&logs_dir).await.map_err(|e| Error::Internal(e.to_string()))?;
+        tokio::fs::create_dir_all(&logs_dir).await.map_err(|e| Error::Internal(e.to_string()))?;
+    }
+    
+    Ok(())
+}
+
+#[tauri::command]
 pub async fn elevated_copy(src: String) -> Result<String> {
     let local_appdata = env::var("LOCALAPPDATA").map_err(|e| Error::Internal(format!("Failed to get LOCALAPPDATA: {}", e)))?;
     let app_dir = Path::new(&local_appdata).join("Pulsar");

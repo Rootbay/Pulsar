@@ -1,4 +1,5 @@
 import { browser } from '$app/environment';
+import { appState } from './appState.svelte';
 
 class LoginTotpStore {
   #secret = $state<string | null>(null);
@@ -6,30 +7,11 @@ class LoginTotpStore {
 
   constructor() {
     if (browser) {
-      const storedSecret = localStorage.getItem('pulsar.loginTotpSecret');
-      if (storedSecret) {
-        try {
-          this.#secret = JSON.parse(storedSecret);
-        } catch {
-          this.#secret = null;
-        }
-      }
-
-      const storedConfigured = localStorage.getItem('pulsar.loginTotpConfigured');
-      if (storedConfigured) {
-        try {
-          this.#configured = JSON.parse(storedConfigured);
-        } catch {
-          this.#configured = false;
-        }
-      }
-
       $effect.root(() => {
         $effect(() => {
-          localStorage.setItem('pulsar.loginTotpSecret', JSON.stringify(this.#secret));
-        });
-        $effect(() => {
-          localStorage.setItem('pulsar.loginTotpConfigured', JSON.stringify(this.#configured));
+          if (appState.isLocked) {
+            this.reset();
+          }
         });
       });
     }
@@ -58,6 +40,12 @@ class LoginTotpStore {
   setConfigured(value: boolean) {
     this.#configured = value;
   }
+
+  reset() {
+    this.#secret = null;
+    this.#configured = false;
+  }
 }
 
 export const loginTotpStore = new LoginTotpStore();
+

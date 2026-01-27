@@ -5,8 +5,22 @@ use rand::{rngs::OsRng, RngCore};
 use crate::error::{Error, Result};
 use crate::encryption::{encrypt, decrypt};
 
+pub use system::simulate_autotype;
+
 const SETTINGS_KEYRING_SERVICE: &str = "pulsar-settings";
 const SETTINGS_KEYRING_USER: &str = "encryption-key";
+
+#[derive(serde::Deserialize)]
+struct AllSettings {
+    general: GeneralSettings,
+}
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct GeneralSettings {
+    start_on_system_boot: bool,
+    show_in_system_tray: bool,
+}
 
 fn get_or_create_settings_key() -> Result<Vec<u8>> {
     let entry = Entry::new(SETTINGS_KEYRING_SERVICE, SETTINGS_KEYRING_USER).map_err(|e| Error::Internal(e.to_string()))?;
@@ -23,6 +37,28 @@ fn get_or_create_settings_key() -> Result<Vec<u8>> {
         }
         Err(e) => Err(Error::Internal(e.to_string())),
     }
+}
+
+#[tauri::command]
+pub async fn apply_system_settings(app_handle: tauri::AppHandle) -> Result<()> {
+    if let Some(settings_json) = get_all_settings(app_handle.clone()).await? {
+        if let Ok(settings) = serde_json::from_str::<AllSettings>(&settings_json) {
+            system::set_autostart(settings.general.start_on_system_boot)?;
+            
+            if settings.general.show_in_system_tray {
+                if app_handle.tray_by_id("main").is_none() {
+                    let _ = crate::tray::setup_tray(&app_handle);
+                } else if let Some(tray) = app_handle.tray_by_id("main") {
+                    let _ = tray.set_visible(true);
+                }
+            } else {
+                if let Some(tray) = app_handle.tray_by_id("main") {
+                    let _ = tray.set_visible(false);
+                }
+            }
+        }
+    }
+    Ok(())
 }
 
 #[tauri::command]

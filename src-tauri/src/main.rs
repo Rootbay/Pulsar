@@ -12,6 +12,7 @@ mod security;
 mod settings;
 mod state;
 mod totp;
+mod tray;
 mod types;
 mod vault_commands;
 
@@ -130,6 +131,7 @@ fn main() {
             auth::configure_login_totp,
             auth::disable_login_totp,
             auth::is_login_totp_configured,
+            auth::get_login_totp_secret,
             auth::get_argon2_params,
             auth::rotate_master_password,
             auth::update_argon2_params,
@@ -179,6 +181,8 @@ fn main() {
             file_dialog::pick_save_file,
             file_dialog::elevated_copy,
             file_dialog::check_file_exists,
+            file_dialog::open_app_data_folder,
+            file_dialog::clear_app_logs,
             backup_commands::export_vault,
             backup_commands::export_vault_backend,
             backup_commands::import_vault,
@@ -193,6 +197,8 @@ fn main() {
             security::run_integrity_check,
             settings::get_all_settings,
             settings::set_all_settings,
+            settings::apply_system_settings,
+            settings::simulate_autotype,
             clipboard::get_clipboard_capabilities,
             clipboard::apply_clipboard_policy,
             clipboard::clear_clipboard,

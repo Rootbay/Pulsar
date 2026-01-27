@@ -1076,6 +1076,28 @@ pub async fn is_login_totp_configured(state: State<'_, AppState>) -> Result<bool
 }
 
 #[tauri::command]
+pub async fn get_login_totp_secret(state: State<'_, AppState>) -> Result<Option<String>> {
+    let key_opt = {
+        let guard = state.key.lock().await;
+        guard.clone()
+    };
+    let key_z = key_opt.ok_or(Error::VaultLocked)?;
+    let db_pool = get_db_pool(&state).await?;
+
+    let secret_enc: Option<String> =
+        sqlx::query_scalar("SELECT value FROM configuration WHERE key = 'login_totp_secret'")
+            .fetch_optional(&db_pool)
+            .await?;
+
+    if let Some(enc) = secret_enc {
+        let decrypted = decrypt(&enc, key_z.as_slice())?;
+        Ok(Some(decrypted))
+    } else {
+        Ok(None)
+    }
+}
+
+#[tauri::command]
 pub async fn lock(app: tauri::AppHandle, state: State<'_, AppState>) -> Result<()> {
     {
         let mut key_guard = state.key.lock().await;

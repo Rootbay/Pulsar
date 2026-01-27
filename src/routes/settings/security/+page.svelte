@@ -323,7 +323,10 @@
     try {
       const configured = await callBackend<boolean>('is_login_totp_configured');
       loginTotpStore.configured = configured;
-      if (!configured) {
+      if (configured) {
+        const secret = await callBackend<string | null>('get_login_totp_secret');
+        loginTotpStore.secret = secret;
+      } else {
         loginTotpStore.secret = null;
       }
     } catch (error) {
@@ -1596,11 +1599,32 @@
       </div>
 
       <div class="grid gap-3 sm:grid-cols-2">
-        <Button variant="outline" class="justify-start gap-3" onclick={() => {}}>
+        <Button
+          variant="outline"
+          class="justify-start gap-3"
+          onclick={async () => {
+            try {
+              await callBackend('open_app_data_folder');
+            } catch (error) {
+              toast.error(t('Failed to open app data folder'));
+            }
+          }}
+        >
           <HardDrive class="h-4 w-4" aria-hidden="true" />
           {t('Access Local Logs')}
         </Button>
-        <Button variant="outline" class="justify-start gap-3" onclick={() => {}}>
+        <Button
+          variant="outline"
+          class="justify-start gap-3"
+          onclick={async () => {
+            try {
+              await callBackend('clear_app_logs');
+              toast.success(t('Logs cleared successfully'));
+            } catch (error) {
+              toast.error(t('Failed to clear logs'));
+            }
+          }}
+        >
           <Trash2 class="h-4 w-4" aria-hidden="true" />
           {t('Clear Local Logs')}
         </Button>

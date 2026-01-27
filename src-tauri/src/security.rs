@@ -141,7 +141,9 @@ pub async fn remove_device(state: State<'_, AppState>, device_id: String) -> Res
 pub async fn revoke_all_devices(state: State<'_, AppState>) -> Result<()> {
     let key = get_key(&state).await?;
     let pool = get_db_pool(&state).await?;
-    save_devices(&pool, key.as_slice(), &[]).await
+    let mut devices = load_devices(&pool, key.as_slice()).await?;
+    devices.retain(|device| device.is_current);
+    save_devices(&pool, key.as_slice(), &devices).await
 }
 
 #[tauri::command]

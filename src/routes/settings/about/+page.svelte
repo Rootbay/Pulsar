@@ -21,11 +21,12 @@
   import { i18n, t as translate, type I18nKey } from '$lib/i18n.svelte';
   import { getVersion, getTauriVersion } from '@tauri-apps/api/app';
   import { openUrl, openPath } from '@tauri-apps/plugin-opener';
+  import { check } from '@tauri-apps/plugin-updater';
   import { appLogDir } from '@tauri-apps/api/path';
   import { onMount } from 'svelte';
   import { toast } from 'svelte-sonner';
 
-  type UpdateStatus = 'idle' | 'checking' | 'uptoDate';
+  type UpdateStatus = 'idle' | 'checking' | 'uptoDate' | 'updateAvailable';
   type IconComponent = typeof FileText;
 
   let updateStatus = $state<UpdateStatus>('idle');
@@ -51,7 +52,11 @@
     { label: t('Build'), value: 'a7f3d2e' },
     { label: t('Runtime'), value: `Tauri ${tauriVersion}` },
     { label: t('UI'), value: 'Svelte 5' },
-    { label: t('Status'), value: t('Up to date'), accentClass: 'text-chart-success' }
+    {
+      label: t('Status'),
+      value: updateStatus === 'updateAvailable' ? t('Update Available') : t('Up to date'),
+      accentClass: updateStatus === 'updateAvailable' ? 'text-primary' : 'text-chart-success'
+    }
   ]);
 
   type ResourceLink = { label: string; Icon: IconComponent; action: () => void };
@@ -79,17 +84,42 @@
     }
   ];
 
-  function checkForUpdates() {
+  async function checkForUpdates() {
     if (updateStatus !== 'idle') return;
     updateStatus = 'checking';
 
-    // Mock update check since updater plugin is not configured
-    setTimeout(() => {
-      updateStatus = 'uptoDate';
-      setTimeout(() => {
-        updateStatus = 'idle';
-      }, 2000);
-    }, 1500);
+    try {
+      const update = await check();
+      if (update) {
+        console.log(`Update to ${update.version} available! Date: ${update.date}`);
+        console.log(`Release notes: ${update.body}`);
+        updateStatus = 'updateAvailable';
+        toast.info(t('A new update is available: v{{version}}', { version: update.version }), {
+          action: {
+            label: t('Install'),
+            onClick: async () => {
+              try {
+                await update.downloadAndInstall();
+                toast.success(t('Update installed successfully. Please restart the app.'));
+              } catch (e) {
+                console.error('Failed to install update:', e);
+                toast.error(t('Failed to install update'));
+              }
+            }
+          }
+        });
+      } else {
+        updateStatus = 'uptoDate';
+        toast.success(t('Pulsar is up to date'));
+        setTimeout(() => {
+          updateStatus = 'idle';
+        }, 3000);
+      }
+    } catch (err) {
+      console.error('Failed to check for updates:', err);
+      toast.error(t('Failed to check for updates'));
+      updateStatus = 'idle';
+    }
   }
 
   async function openLink(url: string) {
@@ -160,16 +190,16 @@
             {t('Check if a newer version is available')}
           </p>
         </div>
-        <Button class="shrink-0" onclick={checkForUpdates} disabled={updateStatus !== 'idle'}>
-          {#if updateStatus === 'idle'}
+        <Button class="shrink-0" onclick={checkForUpdates} disabled={updateStatus === 'checking'}>
+          {#if updateStatus === 'idle' || updateStatus === 'uptoDate'}
             <RefreshCw class="mr-2 h-4 w-4" aria-hidden="true" />
             {t('Check Now')}
           {:else if updateStatus === 'checking'}
             <RefreshCw class="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
             {t('Checking...')}
-          {:else}
-            <BadgeCheck class="text-chart-success mr-2 h-4 w-4" aria-hidden="true" />
-            {t('Up to date')}
+          {:else if updateStatus === 'updateAvailable'}
+            <BadgeCheck class="mr-2 h-4 w-4" aria-hidden="true" />
+            {t('Update Available')}
           {/if}
         </Button>
       </div>

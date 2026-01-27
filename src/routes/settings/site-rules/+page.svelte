@@ -13,8 +13,6 @@
   import { Badge } from '$lib/components/ui/badge';
   import { FileText, Pencil, Trash2, Plus } from '@lucide/svelte';
   import { i18n, t as translate } from '$lib/i18n.svelte';
-
-  import { i18n, t as translate } from '$lib/i18n.svelte';
   import InputDialog from '$lib/components/ui/InputDialog.svelte';
 
   const locale = $derived(i18n.locale);

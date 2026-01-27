@@ -1,6 +1,6 @@
 use crate::state::AppState;
 use crate::types::{RecipientKey, SecretString};
-use crate::encryption::{encrypt, decrypt};
+use crate::encryption::{encrypt, decrypt, decrypt_zeroized};
 use crate::error::Result;
 use crate::db::utils::{get_key, get_db_pool};
 use tauri::State;
@@ -43,7 +43,7 @@ pub async fn get_recipient_keys_impl(db_pool: &SqlitePool, key: &[u8]) -> Result
             id: row.get("id"),
             name: decrypt(name_enc.as_str(), key)?,
             public_key: decrypt(public_key_enc.as_str(), key)?,
-            private_key: SecretString::new(decrypt(private_key_enc.as_str(), key)?),
+            private_key: SecretString::from_zeroized(decrypt_zeroized(private_key_enc.as_str(), key)?),
         });
     }
     Ok(keys)

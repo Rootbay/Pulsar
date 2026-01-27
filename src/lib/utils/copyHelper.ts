@@ -5,8 +5,6 @@ import { appState } from '$lib/stores';
 import { settings } from '$lib/stores/appSettings.svelte';
 import { clipboardService } from '$lib/utils/clipboardService.svelte';
 
-let clearTimer: ReturnType<typeof setTimeout> | null = null;
-
 async function copyToClipboard(text: string, label: string = 'Text') {
   const clipSettings = settings.state.clipboard;
   const integrationStatus = clipboardService.state;
@@ -31,27 +29,7 @@ async function copyToClipboard(text: string, label: string = 'Text') {
   }
 
   await writeText(text);
-  await clipboardService.recordCopy(label);
-
-  if (clearTimer) {
-    clearTimeout(clearTimer);
-  }
-
-  if (clipSettings.clearAfterDuration > 0) {
-    const delayMs = clipSettings.clearAfterDuration * 1000;
-    clearTimer = setTimeout(async () => {
-      try {
-        const currentClipboard = await readText();
-        if (currentClipboard === text) {
-          await clear();
-        }
-      } catch (error) {
-        console.error('Failed to clear clipboard after timeout', error);
-      } finally {
-        clearTimer = null;
-      }
-    }, delayMs);
-  }
+  await clipboardService.recordCopy(text, label);
 }
 
 export async function copyPassword(passwordItem: PasswordItem) {

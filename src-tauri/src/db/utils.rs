@@ -1,6 +1,7 @@
 use crate::state::AppState;
 use crate::encryption::CipherSession;
 use crate::error::{Error, Result};
+use crate::types::SecretString;
 use tauri::State;
 use sqlx::SqlitePool;
 use zeroize::Zeroizing;
@@ -42,5 +43,13 @@ impl CryptoHelper {
 
     pub fn decrypt_opt(&self, text: Option<String>) -> Result<Option<String>> {
         text.map(|t| self.decrypt(&t)).transpose()
+    }
+
+    pub fn decrypt_secret(&self, text: &str) -> Result<SecretString> {
+        Ok(SecretString::from_zeroized(self.session.decrypt_zeroized(text)?))
+    }
+
+    pub fn decrypt_secret_opt(&self, text: Option<String>) -> Result<Option<SecretString>> {
+        text.map(|t| self.decrypt_secret(&t)).transpose()
     }
 }

@@ -15,9 +15,8 @@
   import PasswordDetailHeader from '../password/PasswordDetailHeader.svelte';
   import PasswordFieldList from './password-detail/PasswordFieldList.svelte';
   import PasswordMetadata from './password-detail/PasswordMetadata.svelte';
-  import { appState } from '$lib/stores';
-  import { quintOut } from 'svelte/easing';
-  import {
+  import { appState, vaultStore } from '$lib/stores';
+  import { quintOut } from 'svelte/easing';  import {
     Copy,
     Plus,
     RefreshCw,
@@ -538,6 +537,7 @@
         await callBackend('update_password_item', { item: updated });
         selectedPasswordItem = updated;
         originalPasswordItem = JSON.parse(JSON.stringify(updated));
+        vaultStore.updateItem(updated);
         wasSaved = true;
       } catch (error) {
         console.error('Error updating password item:', error);

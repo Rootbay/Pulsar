@@ -139,11 +139,5 @@ export function t(
 export const currentLocale = {
   get value() {
     return i18n.locale;
-  },
-  subscribe(fn: (v: Locale) => void) {
-    fn(i18n.locale);
-    return $effect.root(() => {
-      $effect(() => fn(i18n.locale));
-    });
   }
 };

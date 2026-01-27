@@ -68,15 +68,6 @@ class SecurityDashboardStore {
       };
     }
   }
-
-  subscribe(fn: (value: SecurityDashboardState) => void) {
-    fn({ items: this.items });
-    return $effect.root(() => {
-      $effect(() => {
-        fn({ items: this.items });
-      });
-    });
-  }
 }
 
 export const securityDashboard = new SecurityDashboardStore();

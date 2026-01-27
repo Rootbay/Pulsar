@@ -21,18 +21,9 @@
     confirmLabel = 'Save',
     onConfirm,
     defaultValue = ''
-  }: {
-    open: boolean;
-    title: string;
-    description: string;
-    label: string;
-    placeholder?: string;
-    confirmLabel?: string;
-    onConfirm: (value: string) => void;
-    defaultValue?: string;
   } = $props();
 
-  let value = $state(defaultValue);
+  let value = $state('');
 
   $effect(() => {
     if (open) {

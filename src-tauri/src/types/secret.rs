@@ -14,6 +14,10 @@ impl SecretString {
     pub fn new(s: String) -> Self {
         Self(Zeroizing::new(s))
     }
+
+    pub fn from_zeroized(z: Zeroizing<String>) -> Self {
+        Self(z)
+    }
     
     pub fn as_str(&self) -> &str {
         &self.0

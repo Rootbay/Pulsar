@@ -11,6 +11,16 @@ class AppState {
   totpVerified = $state<boolean>(false);
   totpRequired = $state<boolean>(false);
 
+  constructor() {
+    $effect.root(() => {
+      $effect(() => {
+        if (this.isLocked) {
+          this.resetUI();
+        }
+      });
+    });
+  }
+
   get isReady() {
     return this.isDatabaseLoaded && !this.isLocked && (!this.totpRequired || this.totpVerified);
   }

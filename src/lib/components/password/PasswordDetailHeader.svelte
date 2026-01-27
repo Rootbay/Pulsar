@@ -59,17 +59,13 @@
   let pulse = $state(false);
 
   $effect(() => {
-    if (selectedPasswordItem) {
-      if (prevColor === null) {
-        prevColor = displayColor;
-      } else if (prevColor !== displayColor) {
-        pulse = false;
-        setTimeout(() => {
-          pulse = true;
-          prevColor = displayColor;
-          setTimeout(() => (pulse = false), 360);
-        }, 0);
+    if (selectedPasswordItem && prevColor !== displayColor) {
+      if (prevColor !== null) {
+        pulse = true;
+        const timer = setTimeout(() => (pulse = false), 360);
+        return () => clearTimeout(timer);
       }
+      prevColor = displayColor;
     }
   });
 

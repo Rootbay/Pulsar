@@ -1,4 +1,5 @@
 import { callBackend } from '$lib/utils/backend';
+import { appState } from './appState.svelte';
 
 export interface TagButton {
   id: number;
@@ -12,6 +13,16 @@ export type TagInput = Omit<TagButton, 'id'> & { id?: number };
 class TagStore {
   #tags = $state<TagButton[]>([]);
   #isRefreshing = false;
+
+  constructor() {
+    $effect.root(() => {
+      $effect(() => {
+        if (appState.isLocked) {
+          this.#tags = [];
+        }
+      });
+    });
+  }
 
   get tags() {
     return this.#tags;
@@ -61,15 +72,6 @@ class TagStore {
 
   async removeTagAcrossItems(tag: string) {
     await callBackend('remove_tag_from_password_items', { tag });
-  }
-
-  subscribe(fn: (value: TagButton[]) => void) {
-    fn(this.#tags);
-    return $effect.root(() => {
-      $effect(() => {
-        fn(this.#tags);
-      });
-    });
   }
 }
 

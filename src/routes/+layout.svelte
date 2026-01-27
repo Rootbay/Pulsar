@@ -66,6 +66,12 @@
 
       // Font Size
       htmlElement.style.fontSize = `${appearance.fontSize || 14}px`;
+
+      // Sidebar Width
+      htmlElement.style.setProperty(
+        '--passwordList-width',
+        `${appearance.passwordListWidth || 300}px`
+      );
       
       // Compact Mode
       if (appearance.compactMode) {

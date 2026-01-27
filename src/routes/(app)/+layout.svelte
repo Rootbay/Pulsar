@@ -26,7 +26,7 @@
   let showPopup = $state(false);
   let popupMode = $state<'create' | 'edit'>('create');
   let popupTag = $state<Button | null>(null);
-  const buttons = $derived($tagStore);
+  const buttons = $derived(tagStore.tags);
   let displayColor = $state('#94a3b8');
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let passwordListRef = $state<any>(null);

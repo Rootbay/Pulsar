@@ -13,7 +13,7 @@
   import { cn } from '$lib/utils';
   import { Check } from '@lucide/svelte';
   import { open } from '@tauri-apps/plugin-dialog';
-  import { currentLocale, t as translate, type I18nKey } from '$lib/i18n.svelte';
+  import { i18n, t as translate, type I18nKey } from '$lib/i18n.svelte';
 
   interface PasswordManager {
     id: string;
@@ -32,7 +32,7 @@
 
   let { show = $bindable(false), onimportSelected, onclose }: Props = $props();
 
-  const locale = $derived($currentLocale);
+  const locale = $derived(i18n.locale);
   const t = (key: I18nKey, vars: Record<string, string | number> = {}) =>
     translate(locale, key, vars);
 

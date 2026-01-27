@@ -14,13 +14,9 @@
   import { Input } from '$lib/components/ui/input';
   import { ScrollArea } from '$lib/components/ui/scroll-area';
   import { Skeleton } from '$lib/components/ui/skeleton';
-  import {
-    ContextMenu,
-    ContextMenuContent,
-    ContextMenuItem,
-    ContextMenuSeparator,
-    ContextMenuTrigger
-  } from '$lib/components/ui/context-menu';
+  import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from '$lib/components/ui/context-menu';
+  import { createResizeController } from './password-list/resizeController';
+  import { settings } from '$lib/stores/appSettings.svelte';
 
   type TagButton = {
     id?: number;
@@ -375,6 +371,26 @@
   function handleRemoveEntry(item: PasswordItemOverview) {
     onremoveEntry?.(item);
   }
+
+  const resizeController = createResizeController({
+    onResizeEnd: (width) => {
+      settings.state.appearance.passwordListWidth = width;
+      settings.save();
+    }
+  });
+
+  onDestroy(() => {
+    resizeController.destroy();
+    if (skeletonTimer) {
+      clearTimeout(skeletonTimer);
+      skeletonTimer = null;
+    }
+
+    if (highlightTimer) {
+      clearTimeout(highlightTimer);
+      highlightTimer = null;
+    }
+  });
 </script>
 
 <nav class="passwordList">
@@ -576,6 +592,12 @@
       <ContextMenuItem onSelect={handleCreateEntry}>Create Entry</ContextMenuItem>
     </ContextMenuContent>
   </ContextMenu>
+  <div
+    class="resize-handle"
+    role="separator"
+    aria-label="Resize list"
+    onmousedown={(e) => resizeController.start(e)}
+  ></div>
 </nav>
 
 <style>
@@ -784,5 +806,22 @@
     text-align: center;
     color: var(--passwordlist-subtle-text);
     font-style: italic;
+  }
+
+  .resize-handle {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 4px;
+    height: 100%;
+    cursor: col-resize;
+    z-index: 10;
+    transition: background-color 0.2s;
+  }
+
+  .resize-handle:hover,
+  .resize-handle:active {
+    background-color: var(--primary);
+    opacity: 0.5;
   }
 </style>

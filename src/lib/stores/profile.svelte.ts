@@ -1,4 +1,5 @@
 import { callBackend } from '../utils/backend';
+import { appState } from './appState.svelte';
 
 export interface ProfileSettings {
   name: string;
@@ -20,6 +21,16 @@ export const defaultProfileSettings: ProfileSettings = {
 
 class ProfileStore {
   state = $state<ProfileSettings>(defaultProfileSettings);
+
+  constructor() {
+    $effect.root(() => {
+      $effect(() => {
+        if (appState.isLocked) {
+          this.state = { ...defaultProfileSettings };
+        }
+      });
+    });
+  }
 
   async load() {
     try {

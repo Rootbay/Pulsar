@@ -1,6 +1,8 @@
 import { callBackend } from './backend';
 import type { ClipboardSettings } from '$lib/config/settings';
 import { settings } from '$lib/stores/appSettings.svelte';
+import { appState } from '$lib/stores/appState.svelte';
+import { clear, readText } from '@tauri-apps/plugin-clipboard-manager';
 
 interface ClipboardPolicyStatus {
   integrationAvailable: boolean;
@@ -34,6 +36,18 @@ class ClipboardService {
   auditLog = $state<ClipboardAuditEntry[]>([]);
   #initialized = false;
   #nextAuditId = 1;
+  #clearTimer: ReturnType<typeof setTimeout> | null = null;
+  #lastCopiedText: string | null = null;
+
+  constructor() {
+    $effect.root(() => {
+      $effect(() => {
+        if (appState.isLocked) {
+          this.clearNow().catch(() => {});
+        }
+      });
+    });
+  }
 
   private addAuditEntry(action: string, status: 'success' | 'error') {
     const entry: ClipboardAuditEntry = {
@@ -139,7 +153,12 @@ class ClipboardService {
 
   async clearNow(): Promise<void> {
     try {
-      await callBackend('clear_clipboard');
+      if (this.#clearTimer) {
+        clearTimeout(this.#clearTimer);
+        this.#clearTimer = null;
+      }
+      this.#lastCopiedText = null;
+      await clear();
       this.addAuditEntry('Clipboard Cleared', 'success');
     } catch (error) {
       this.addAuditEntry('Clear Failed', 'error');
@@ -147,8 +166,33 @@ class ClipboardService {
     }
   }
 
-  async recordCopy(itemLabel: string): Promise<void> {
-     this.addAuditEntry(`Copied ${itemLabel}`, 'success');
+  async recordCopy(text: string, itemLabel: string): Promise<void> {
+    this.addAuditEntry(`Copied ${itemLabel}`, 'success');
+    this.#lastCopiedText = text;
+
+    if (this.#clearTimer) {
+      clearTimeout(this.#clearTimer);
+      this.#clearTimer = null;
+    }
+
+    const clipSettings = settings.state.clipboard;
+    if (clipSettings.clearAfterDuration > 0) {
+      const delayMs = clipSettings.clearAfterDuration * 1000;
+      this.#clearTimer = setTimeout(async () => {
+        try {
+          const currentClipboard = await readText();
+          if (currentClipboard === text) {
+            await clear();
+            this.addAuditEntry('Auto-clear', 'success');
+          }
+        } catch (error) {
+          console.error('Failed to clear clipboard after timeout', error);
+        } finally {
+          this.#clearTimer = null;
+          this.#lastCopiedText = null;
+        }
+      }, delayMs);
+    }
   }
 
   private extractErrorMessage(error: unknown): string {

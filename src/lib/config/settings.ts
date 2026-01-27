@@ -1,4 +1,10 @@
 import type { Keybind } from './keybinds';
+import type { GeneratorOptions } from '../utils/generator';
+
+export interface GeneratorSettings {
+  passwordLength: number;
+  options: GeneratorOptions;
+}
 
 export interface AdvancedSettings {
   kdfPreset: 'fast' | 'balanced' | 'secure' | 'paranoid';
@@ -27,6 +33,7 @@ export interface AppearanceSettings {
   highContrast: boolean;
   reducedMotion: boolean;
   pageDensity: 'comfortable' | 'compact' | 'dense';
+  passwordListWidth: number;
 }
 
 export const defaultAppearanceSettings: AppearanceSettings = {
@@ -35,7 +42,8 @@ export const defaultAppearanceSettings: AppearanceSettings = {
   fontSize: 14,
   highContrast: false,
   reducedMotion: false,
-  pageDensity: 'comfortable'
+  pageDensity: 'comfortable',
+  passwordListWidth: 300
 };
 
 export interface AutofillSettings {

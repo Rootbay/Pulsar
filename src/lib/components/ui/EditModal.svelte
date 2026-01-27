@@ -1,7 +1,7 @@
 <script lang="ts">
   import Input from './FieldInput.svelte';
   import Switch from './Switch.svelte';
-  import { currentLocale, t as translate, type I18nKey } from '$lib/i18n.svelte';
+  import { i18n, t as translate, type I18nKey } from '$lib/i18n.svelte';
   import { X } from '@lucide/svelte';
 
   interface Props {
@@ -15,7 +15,7 @@
   let { show, item, type, onsave, onclose }: Props = $props();
 
   let editedItem = $state<any>(null);
-  const locale = $derived($currentLocale);
+  const locale = $derived(i18n.locale);
   const t = (key: I18nKey, vars: Record<string, string | number> = {}) =>
     translate(locale, key, vars);
 

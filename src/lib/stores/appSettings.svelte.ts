@@ -49,7 +49,7 @@ class SettingsStore {
       const storedSettings = await callBackend<string | null>('get_all_settings');
       if (storedSettings) {
         try {
-          let loaded: unknown;
+          let loaded: any;
           try {
             const firstPass = JSON.parse(storedSettings);
             if (typeof firstPass === 'string') {
@@ -62,7 +62,7 @@ class SettingsStore {
           }
 
           if (loaded && typeof loaded === 'object') {
-            this.state = this.#mergeDefaults(loaded as Partial<AllSettings>);
+            this.state = this.#deepMerge(defaultAllSettings, loaded);
             callBackend('apply_system_settings').catch(console.error);
           }
         } catch (e) {
@@ -78,41 +78,28 @@ class SettingsStore {
     }
   }
 
-  #mergeDefaults(loaded: Partial<AllSettings>): AllSettings {
-    const merged = { ...defaultAllSettings };
+  #isObject(item: any): item is Record<string, any> {
+    return item && typeof item === 'object' && !Array.isArray(item);
+  }
 
-    for (const key of Object.keys(defaultAllSettings) as (keyof AllSettings)[]) {
-      if (loaded[key] !== undefined && loaded[key] !== null) {
-        if (
-          typeof defaultAllSettings[key] === 'object' &&
-          !Array.isArray(defaultAllSettings[key])
-        ) {
-          // @ts-ignore
-          merged[key] = { ...defaultAllSettings[key], ...loaded[key] };
-        } else {
-          // If it's an array and empty, but default is not empty, we might want default?
-          // For keybinds specifically, if user wiped them all, they might want defaults back.
-          // But usually we respect user's empty array. 
-          // However, if it's the first time and they have no keybinds saved, we should use defaults.
-          if (Array.isArray(loaded[key]) && (loaded[key] as any[]).length === 0 && Array.isArray(defaultAllSettings[key]) && (defaultAllSettings[key] as any[]).length > 0) {
-             if (key === 'keybinds' || key === 'passwordPresets' || key === 'siteRules') {
-                // Keep default if loaded is empty for these critical arrays
-                // merged[key] = defaultAllSettings[key]; 
-                // Actually, let's just assign loaded[key] and let the user decide.
-                // @ts-ignore
-                merged[key] = loaded[key];
-             } else {
-                // @ts-ignore
-                merged[key] = loaded[key];
-             }
-          } else {
-            // @ts-ignore
-            merged[key] = loaded[key];
-          }
-        }
-      }
+  #deepMerge(target: any, source: any): any {
+    if (!this.#isObject(target) || !this.#isObject(source)) {
+      return source !== undefined ? source : target;
     }
-    return merged;
+
+    const output = { ...target };
+    Object.keys(source).forEach((key) => {
+      if (this.#isObject(source[key])) {
+        if (!(key in target)) {
+          output[key] = source[key];
+        } else {
+          output[key] = this.#deepMerge(target[key], source[key]);
+        }
+      } else {
+        output[key] = source[key];
+      }
+    });
+    return output;
   }
 
   save() {

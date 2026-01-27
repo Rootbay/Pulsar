@@ -5,6 +5,7 @@ use chacha20poly1305::{
 use rand::{rngs::OsRng, RngCore};
 use base64::{engine::general_purpose, Engine as _};
 use crate::error::{Error, Result};
+use zeroize::Zeroizing;
 
 const KEY_LEN_BYTES: usize = 32;
 
@@ -35,6 +36,10 @@ pub fn encrypt(plaintext: &str, key: &[u8]) -> Result<String> {
 }
 
 pub fn decrypt(encrypted_payload: &str, key: &[u8]) -> Result<String> {
+    Ok(decrypt_zeroized(encrypted_payload, key)?.into_inner())
+}
+
+pub fn decrypt_zeroized(encrypted_payload: &str, key: &[u8]) -> Result<Zeroizing<String>> {
     ensure_key_len(key, Error::Decryption)?;
     let mut parts = encrypted_payload.split(':');
     let nonce_b64 = parts.next().ok_or_else(|| Error::Decryption("Invalid encrypted payload format: missing nonce".to_string()))?;
@@ -65,8 +70,10 @@ pub fn decrypt(encrypted_payload: &str, key: &[u8]) -> Result<String> {
         .decrypt(nonce, ciphertext.as_ref())
         .map_err(|e| Error::Decryption(format!("Decryption failed: {e}")))?;
 
-    String::from_utf8(decrypted_bytes)
-        .map_err(|e| Error::Decryption(format!("UTF-8 conversion failed: {e}")))
+    let s = String::from_utf8(decrypted_bytes)
+        .map_err(|e| Error::Decryption(format!("UTF-8 conversion failed: {e}")))?;
+    
+    Ok(Zeroizing::new(s))
 }
 
 pub fn encrypt_bytes(data: &[u8], key: &[u8]) -> Result<Vec<u8>> {
@@ -137,6 +144,10 @@ impl CipherSession {
     }
 
     pub fn decrypt(&self, encrypted_payload: &str) -> Result<String> {
+        Ok(self.decrypt_zeroized(encrypted_payload)?.into_inner())
+    }
+
+    pub fn decrypt_zeroized(&self, encrypted_payload: &str) -> Result<Zeroizing<String>> {
         let mut parts = encrypted_payload.split(':');
         let nonce_b64 = parts.next().ok_or_else(|| Error::Decryption("Invalid encrypted payload format: missing nonce".to_string()))?;
         let ciphertext_b64 = parts.next().ok_or_else(|| Error::Decryption("Invalid encrypted payload format: missing ciphertext".to_string()))?;
@@ -163,8 +174,10 @@ impl CipherSession {
             .decrypt(nonce, ciphertext.as_ref())
             .map_err(|e| Error::Decryption(format!("Decryption failed: {e}")))?;
 
-        String::from_utf8(decrypted_bytes)
-            .map_err(|e| Error::Decryption(format!("UTF-8 conversion failed: {e}")))
+        let s = String::from_utf8(decrypted_bytes)
+            .map_err(|e| Error::Decryption(format!("UTF-8 conversion failed: {e}")))?;
+        
+        Ok(Zeroizing::new(s))
     }
 }
 

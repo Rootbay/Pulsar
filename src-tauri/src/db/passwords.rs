@@ -44,13 +44,13 @@ async fn decrypt_password_item_row(row: &sqlx::sqlite::SqliteRow, helper: &Crypt
     let tags = helper.decrypt_opt(row.get("tags"))?;
     let username = helper.decrypt_opt(row.get("username"))?;
     let url = helper.decrypt_opt(row.get("url"))?;
-    let notes = helper.decrypt_opt(row.get("notes"))?;
+    let notes = helper.decrypt_secret_opt(row.get("notes"))?;
 
     let password_enc: String = row.get("password");
-    let password = SecretString::new(helper.decrypt(&password_enc)?);
+    let password = helper.decrypt_secret(&password_enc)?;
 
     let totp_secret_enc: Option<String> = row.get("totp_secret");
-    let totp_secret = totp_secret_enc.map(|t| helper.decrypt(&t)).transpose()?.map(SecretString::new);
+    let totp_secret = totp_secret_enc.map(|t| helper.decrypt_secret(&t)).transpose()?;
 
     let custom_fields_enc: Option<String> = row.get("custom_fields");
     let custom_fields = custom_fields_enc

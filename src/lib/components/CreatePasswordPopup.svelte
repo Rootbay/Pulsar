@@ -53,7 +53,7 @@
   let showPassword = $state(false);
   let selectedCategory = $state<CategoryId>('login');
   let tags = $state<string[]>([]);
-  const availableTags = $derived($tagStore);
+  const availableTags = $derived(tagStore.tags);
   let dialogOpen = $state(true);
 
   const canSave = $derived(title.trim().length > 0);

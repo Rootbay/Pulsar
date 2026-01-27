@@ -53,7 +53,7 @@ pub struct PasswordItem {
     pub tags: Option<String>,
     pub username: Option<String>,
     pub url: Option<String>,
-    pub notes: Option<String>,
+    pub notes: Option<SecretString>,
     pub password: SecretString,
     pub created_at: String,
     pub updated_at: String,

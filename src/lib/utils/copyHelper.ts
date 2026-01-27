@@ -1,9 +1,5 @@
 import type { PasswordItem } from '$lib/types/password';
-import { clear, readText, writeText } from '@tauri-apps/plugin-clipboard-manager';
-
-import { appState } from '$lib/stores';
-import { settings } from '$lib/stores/appSettings.svelte';
-import { clipboardService } from '$lib/utils/clipboardService.svelte';
+import { callBackend } from './backend';
 
 async function copyToClipboard(text: string, label: string = 'Text') {
   const clipSettings = settings.state.clipboard;
@@ -28,7 +24,7 @@ async function copyToClipboard(text: string, label: string = 'Text') {
     }
   }
 
-  await writeText(text);
+  await callBackend('copy_to_clipboard', { text });
   await clipboardService.recordCopy(text, label);
 }
 

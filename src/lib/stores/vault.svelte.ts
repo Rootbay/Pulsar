@@ -9,6 +9,7 @@ class VaultStore {
   #isLoading = $state(false);
   #activeVaultId = $state<string | null>(null);
   #searchTerm = $state('');
+  #searchTimeout: ReturnType<typeof setTimeout> | null = null;
   #loadPromise: Promise<void> | null = null;
 
   constructor() {
@@ -19,6 +20,17 @@ class VaultStore {
           this.#activeVaultId = null;
           this.#searchTerm = '';
         }
+      });
+
+      $effect(() => {
+        // Trigger re-search when tag or search term changes
+        const _tag = appState.selectedTag;
+        const query = this.#searchTerm;
+        
+        if (this.#searchTimeout) clearTimeout(this.#searchTimeout);
+        this.#searchTimeout = setTimeout(() => {
+          this.loadItems();
+        }, 300);
       });
     });
   }
@@ -51,8 +63,9 @@ class VaultStore {
   }
 
   filteredItems = $derived.by(() => {
-    const normalizedSearch = this.#searchTerm.trim().toLowerCase();
-    const tag = appState.selectedTag;
+    // Backend now handles main search and tag filtering
+    // We only do category filtering (recent/favorites) locally for now
+    // or we could move those to backend too.
     const category = appState.filterCategory;
     const RECENT_DAY_WINDOW = 7;
     const DAY_IN_MS = 24 * 60 * 60 * 1000;
@@ -60,11 +73,6 @@ class VaultStore {
     const FAVORITE_TAG_NAMES = ['favorite', 'fav', 'star'];
 
     return this.#items.filter((item) => {
-      if (tag !== null) {
-        const itemTags = item.tags?.split(',').map((t) => t.trim().toLowerCase()) ?? [];
-        if (!itemTags.includes(tag.toLowerCase())) return false;
-      }
-
       if (category === 'recent') {
         const itemTags = item.tags?.split(',').map((t) => t.trim().toLowerCase()) ?? [];
         const isPinned = itemTags.some((t) => PIN_TAG_NAMES.includes(t));
@@ -82,20 +90,6 @@ class VaultStore {
         if (!isFav) return false;
       }
 
-      if (normalizedSearch) {
-        const title = item.title?.toLowerCase() ?? '';
-        const username = item.username?.toLowerCase() ?? '';
-        const tags = item.tags?.toLowerCase() ?? '';
-        const url = item.url?.toLowerCase() ?? '';
-
-        return (
-          title.includes(normalizedSearch) ||
-          username.includes(normalizedSearch) ||
-          tags.includes(normalizedSearch) ||
-          url.includes(normalizedSearch)
-        );
-      }
-
       return true;
     });
   });
@@ -106,21 +100,23 @@ class VaultStore {
       return;
     }
 
-    if (this.#loadPromise) return this.#loadPromise;
-
     this.#isLoading = true;
-    this.#loadPromise = (async () => {
-      try {
-        this.#items = await callBackend<PasswordItemOverview[]>('get_password_overviews');
-      } catch (error) {
-        console.error('Failed to load vault items:', error);
-      } finally {
-        this.#isLoading = false;
-        this.#loadPromise = null;
-      }
-    })();
+    try {
+      const tag = appState.selectedTag;
+      // We need to find the tag ID for the selected tag text
+      // This is a bit inefficient, better if appState stored tag ID
+      const tagStore = (await import('./tags.svelte')).tagStore;
+      const tagObj = tagStore.tags.find(t => t.text === tag);
 
-    return this.#loadPromise;
+      this.#items = await callBackend<PasswordItemOverview[]>('search_password_items', {
+        query: this.#searchTerm,
+        tagId: tagObj?.id ?? null
+      });
+    } catch (error) {
+      console.error('Failed to load vault items:', error);
+    } finally {
+      this.#isLoading = false;
+    }
   }
 
   async getItemDetails(id: number): Promise<PasswordItem | null> {

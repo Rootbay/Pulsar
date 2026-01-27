@@ -77,7 +77,8 @@ class ClipboardService {
       payload: {
         clipboardIntegration: clipboardSettings.clipboardIntegration,
         blockHistory: clipboardSettings.blockHistory,
-        onlyUnlocked: clipboardSettings.onlyUnlocked
+        onlyUnlocked: clipboardSettings.onlyUnlocked,
+        clearAfterDuration: clipboardSettings.clearAfterDuration
       }
     });
   }

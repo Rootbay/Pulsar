@@ -117,12 +117,181 @@ fn decrypt_password_item_overview_row(row: &sqlx::sqlite::SqliteRow, helper: &Cr
     })
 }
 
+async fn sync_item_tags(
+    tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+    item_id: i64,
+    tags: Option<&String>,
+    key: &[u8],
+) -> Result<()> {
+    sqlx::query("DELETE FROM item_tags WHERE item_id = ?")
+        .bind(item_id)
+        .execute(&mut **tx)
+        .await?;
+
+    let Some(tags_str) = tags else {
+        return Ok(());
+    };
+
+    let tag_names: Vec<String> = tags_str
+        .split(',')
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .collect();
+
+    if tag_names.is_empty() {
+        return Ok(());
+    }
+
+    let buttons = crate::db::buttons::get_buttons_impl(tx.as_mut(), key).await?;
+
+    for name in tag_names {
+        if let Some(button) = buttons.iter().find(|b| b.text == name) {
+            sqlx::query("INSERT OR IGNORE INTO item_tags (item_id, tag_id) VALUES (?, ?)")
+                .bind(item_id)
+                .bind(button.id)
+                .execute(&mut **tx)
+                .await?;
+        }
+    }
+
+    Ok(())
+}
+
+async fn sync_search_indices(
+    tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+    item_id: i64,
+    helper: &CryptoHelper,
+    title: &str,
+    username: Option<&String>,
+) -> Result<()> {
+    sqlx::query("DELETE FROM search_indices WHERE item_id = ?")
+        .bind(item_id)
+        .execute(&mut **tx)
+        .await?;
+    
+    sqlx::query("DELETE FROM search_trigrams WHERE item_id = ?")
+        .bind(item_id)
+        .execute(&mut **tx)
+        .await?;
+
+    let mut all_searchable_text = title.to_string();
+    if let Some(uname) = username {
+        all_searchable_text.push(' ');
+        all_searchable_text.push_str(uname);
+    }
+
+    // Full tokens for exact match
+    let title_token = helper.generate_search_token(title);
+    if !title_token.is_empty() {
+        sqlx::query("INSERT INTO search_indices (item_id, field_name, token) VALUES (?, ?, ?)")
+            .bind(item_id)
+            .bind("title")
+            .bind(title_token)
+            .execute(&mut **tx)
+            .await?;
+    }
+
+    if let Some(uname) = username {
+        let uname_token = helper.generate_search_token(uname);
+        if !uname_token.is_empty() {
+            sqlx::query("INSERT INTO search_indices (item_id, field_name, token) VALUES (?, ?, ?)")
+                .bind(item_id)
+                .bind("username")
+                .bind(uname_token)
+                .execute(&mut **tx)
+                .await?;
+        }
+    }
+
+    // Trigrams for partial match
+    let trigrams = helper.generate_trigram_hashes(&all_searchable_text);
+    for hash in trigrams {
+        sqlx::query("INSERT OR IGNORE INTO search_trigrams (item_id, trigram_hash) VALUES (?, ?)")
+            .bind(item_id)
+            .bind(hash)
+            .execute(&mut **tx)
+            .await?;
+    }
+
+    Ok(())
+}
+
 pub async fn get_password_overviews_impl(db_pool: &SqlitePool, key: &[u8]) -> Result<Vec<PasswordItemOverview>> {
     let rows = sqlx::query("SELECT id, category, title, description, img, tags, username, url, created_at, updated_at, color FROM password_items")
         .fetch_all(db_pool)
         .await?;
 
     let helper = CryptoHelper::new(key)?;
+    let mut items = Vec::with_capacity(rows.len());
+    for row in rows {
+        items.push(decrypt_password_item_overview_row(&row, &helper)?);
+    }
+
+    Ok(items)
+}
+
+#[tauri::command]
+pub async fn search_password_items(
+    state: State<'_, AppState>,
+    query: String,
+    tag_id: Option<i64>,
+) -> Result<Vec<PasswordItemOverview>> {
+    let key = get_key(&state).await?;
+    let db_pool = get_db_pool(&state).await?;
+    let helper = CryptoHelper::new(key.as_slice())?;
+    
+    let query_trimmed = query.trim();
+    
+    let mut sql = "SELECT DISTINCT p.id, p.category, p.title, p.description, p.img, p.tags, p.username, p.url, p.created_at, p.updated_at, p.color 
+                   FROM password_items p".to_string();
+    
+    if tag_id.is_some() {
+        sql.push_str(" JOIN item_tags it ON p.id = it.item_id AND it.tag_id = ?");
+    }
+
+    if !query_trimmed.is_empty() {
+        sql.push_str(if tag_id.is_some() { " AND " } else { " WHERE " });
+        
+        let token = helper.generate_search_token(query_trimmed);
+        let trigrams = helper.generate_trigram_hashes(query_trimmed);
+        
+        if trigrams.len() >= 2 {
+            // Trigram partial match: item must contain at least 60% of query trigrams
+            let threshold = (trigrams.len() as f64 * 0.6).ceil() as usize;
+            sql.push_str(&format!(
+                "p.id IN (
+                    SELECT item_id FROM search_trigrams 
+                    WHERE trigram_hash IN ({}) 
+                    GROUP BY item_id 
+                    HAVING COUNT(trigram_hash) >= {}
+                )",
+                trigrams.iter().map(|_| "?").collect::<Vec<_>>().join(", "),
+                threshold
+            ));
+        } else {
+            // Exact token match for very short queries
+            sql.push_str("p.id IN (SELECT item_id FROM search_indices WHERE token = ?)");
+        }
+    }
+
+    let mut q = sqlx::query(&sql);
+    if let Some(tid) = tag_id {
+        q = q.bind(tid);
+    }
+    
+    if !query_trimmed.is_empty() {
+        let trigrams = helper.generate_trigram_hashes(query_trimmed);
+        if trigrams.len() >= 2 {
+            for hash in trigrams {
+                q = q.bind(hash);
+            }
+        } else {
+            let token = helper.generate_search_token(query_trimmed);
+            q = q.bind(token);
+        }
+    }
+
+    let rows = q.fetch_all(&db_pool).await?;
     let mut items = Vec::with_capacity(rows.len());
     for row in rows {
         items.push(decrypt_password_item_overview_row(&row, &helper)?);
@@ -163,7 +332,7 @@ pub async fn get_password_items(state: State<'_, AppState>) -> Result<Vec<Passwo
 pub async fn save_password_item(
     state: State<'_, AppState>,
     item: PasswordItem,
-) -> Result<()> {
+) -> Result<i64> {
     item.validate().map_err(|e| Error::Validation(e.to_string()))?;
 
     let key = get_key(&state).await?;
@@ -186,11 +355,13 @@ pub async fn save_password_item(
     let custom_fields_json = serde_json::to_string(&item.custom_fields)?;
     let custom_fields_enc = helper.encrypt(&custom_fields_json)?;
     
-    let field_order_json = item.field_order.map(|fo| serde_json::to_string(&fo)).transpose()?;
+    let field_order_json = item.field_order.as_ref().map(|fo| serde_json::to_string(&fo)).transpose()?;
     let field_order_enc = helper.encrypt_opt(field_order_json.as_ref())?;
 
     let db_pool = get_db_pool(&state).await?;
-    sqlx::query("INSERT INTO password_items (category, title, description, img, tags, username, url, notes, password, created_at, updated_at, color, totp_secret, custom_fields, field_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+    let mut tx = db_pool.begin().await?;
+
+    let item_id = sqlx::query("INSERT INTO password_items (category, title, description, img, tags, username, url, notes, password, created_at, updated_at, color, totp_secret, custom_fields, field_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
         .bind(category_enc)
         .bind(title_enc)
         .bind(description_enc)
@@ -206,9 +377,15 @@ pub async fn save_password_item(
         .bind(totp_secret_enc)
         .bind(custom_fields_enc)
         .bind(field_order_enc)
-        .execute(&db_pool)
-        .await?;
-    Ok(())
+        .execute(&mut *tx)
+        .await?
+        .last_insert_rowid();
+
+    sync_item_tags(&mut tx, item_id, item.tags.as_ref(), key.as_slice()).await?;
+    sync_search_indices(&mut tx, item_id, &helper, &item.title, item.username.as_ref()).await?;
+
+    tx.commit().await?;
+    Ok(item_id)
 }
 
 #[tauri::command]
@@ -238,10 +415,12 @@ pub async fn update_password_item(
     let custom_fields_json = serde_json::to_string(&item.custom_fields)?;
     let custom_fields_enc = helper.encrypt(&custom_fields_json)?;
 
-    let field_order_json = item.field_order.map(|fo| serde_json::to_string(&fo)).transpose()?;
+    let field_order_json = item.field_order.as_ref().map(|fo| serde_json::to_string(&fo)).transpose()?;
     let field_order_enc = helper.encrypt_opt(field_order_json.as_ref())?;
 
     let db_pool = get_db_pool(&state).await?;
+    let mut tx = db_pool.begin().await?;
+
     sqlx::query("UPDATE password_items SET category = ?, title = ?, description = ?, img = ?, tags = ?, username = ?, url = ?, notes = ?, password = ?, updated_at = ?, color = ?, totp_secret = ?, custom_fields = ?, field_order = ? WHERE id = ?")
         .bind(category_enc)
         .bind(title_enc)
@@ -258,8 +437,13 @@ pub async fn update_password_item(
         .bind(custom_fields_enc)
         .bind(field_order_enc)
         .bind(item.id)
-        .execute(&db_pool)
+        .execute(&mut *tx)
         .await?;
+
+    sync_item_tags(&mut tx, item.id, item.tags.as_ref(), key.as_slice()).await?;
+    sync_search_indices(&mut tx, item.id, &helper, &item.title, item.username.as_ref()).await?;
+
+    tx.commit().await?;
     Ok(())
 }
 
@@ -404,31 +588,52 @@ pub async fn remove_tag_from_password_items(
     if tag_trimmed.is_empty() { return Ok(0); }
 
     let mut tx = db_pool.begin().await?;
-    let rows = sqlx::query("SELECT id, tags FROM password_items").fetch_all(&mut *tx).await?;
-    let mut updated = 0i64;
+    
+    // 1. Find the tag ID
+    let tag_id: Option<i64> = sqlx::query_scalar("SELECT id FROM buttons WHERE text = ?")
+        .bind(helper.encrypt(&tag_trimmed)?)
+        .fetch_optional(&mut *tx)
+        .await?;
+
+    let Some(tag_id) = tag_id else { return Ok(0); };
+
+    // 2. Get all item IDs that have this tag
+    let item_ids: Vec<i64> = sqlx::query_scalar("SELECT item_id FROM item_tags WHERE tag_id = ?")
+        .bind(tag_id)
+        .fetch_all(&mut *tx)
+        .await?;
+
+    let updated_count = item_ids.len() as i64;
+
+    // 3. Remove from junction table
+    sqlx::query("DELETE FROM item_tags WHERE tag_id = ?")
+        .bind(tag_id)
+        .execute(&mut *tx)
+        .await?;
+
+    // 4. Update legacy tags column for affected items
     let now = Utc::now().to_rfc3339();
+    for id in item_ids {
+        let tags_enc: Option<String> = sqlx::query_scalar("SELECT tags FROM password_items WHERE id = ?")
+            .bind(id)
+            .fetch_one(&mut *tx)
+            .await?;
+        
+        if let Some(t_enc) = tags_enc {
+            let tags_str = helper.decrypt(&t_enc)?;
+            let mut parts: Vec<String> = tags_str.split(',').map(|s| s.trim()).filter(|s| !s.is_empty()).map(|s| s.to_string()).collect();
+            parts.retain(|t| t != &tag_trimmed);
+            
+            let new_tags = parts.join(", ");
+            let tags_enc_opt = if new_tags.trim().is_empty() { None } else { Some(helper.encrypt(&new_tags)?) };
 
-    for row in rows {
-        let id: i64 = row.get("id");
-        let tags_enc: Option<String> = row.get("tags");
-        let tags = tags_enc.map(|t| helper.decrypt(&t)).transpose()?;
-        let Some(tags_str) = tags else { continue };
-
-        let mut parts: Vec<String> = tags_str.split(',').map(|t| t.trim()).filter(|t| !t.is_empty()).map(|t| t.to_string()).collect();
-        let original_len = parts.len();
-        parts.retain(|t| t != &tag_trimmed);
-        if parts.len() == original_len { continue; }
-
-        let new_tags = parts.join(", ");
-        let tags_enc_opt = if new_tags.trim().is_empty() { None } else { Some(helper.encrypt(&new_tags)?) };
-
-        sqlx::query("UPDATE password_items SET tags = ?, updated_at = ? WHERE id = ?")
-            .bind(tags_enc_opt).bind(&now).bind(id).execute(&mut *tx).await?;
-        updated += 1;
+            sqlx::query("UPDATE password_items SET tags = ?, updated_at = ? WHERE id = ?")
+                .bind(tags_enc_opt).bind(&now).bind(id).execute(&mut *tx).await?;
+        }
     }
 
     tx.commit().await?;
-    Ok(updated)
+    Ok(updated_count)
 }
 
 #[tauri::command]
@@ -445,34 +650,53 @@ pub async fn rename_tag_in_password_items(
     if old_trimmed.is_empty() || new_trimmed.is_empty() { return Ok(0); }
 
     let mut tx = db_pool.begin().await?;
-    let rows = sqlx::query("SELECT id, tags FROM password_items").fetch_all(&mut *tx).await?;
-    let mut updated = 0i64;
+
+    // 1. Find the tag ID (the ID itself doesn't change when we rename the text in 'buttons' table,
+    // but here we are renaming the text in the items' legacy tags column)
+    let tag_id: Option<i64> = sqlx::query_scalar("SELECT id FROM buttons WHERE text = ?")
+        .bind(helper.encrypt(&old_trimmed)?)
+        .fetch_optional(&mut *tx)
+        .await?;
+
+    let Some(tag_id) = tag_id else { return Ok(0); };
+
+    // 2. Get affected items
+    let item_ids: Vec<i64> = sqlx::query_scalar("SELECT item_id FROM item_tags WHERE tag_id = ?")
+        .bind(tag_id)
+        .fetch_all(&mut *tx)
+        .await?;
+
+    let updated_count = item_ids.len() as i64;
+
+    // 3. Update legacy tags column for affected items
     let now = Utc::now().to_rfc3339();
+    for id in item_ids {
+        let tags_enc: Option<String> = sqlx::query_scalar("SELECT tags FROM password_items WHERE id = ?")
+            .bind(id)
+            .fetch_one(&mut *tx)
+            .await?;
+        
+        if let Some(t_enc) = tags_enc {
+            let tags_str = helper.decrypt(&t_enc)?;
+            let mut parts: Vec<String> = tags_str.split(',').map(|s| s.trim()).filter(|s| !s.is_empty()).map(|s| s.to_string()).collect();
+            let mut changed = false;
+            for tag in parts.iter_mut() {
+                if tag == &old_trimmed {
+                    *tag = new_trimmed.clone();
+                    changed = true;
+                }
+            }
+            
+            if changed {
+                let new_tags = parts.join(", ");
+                let tags_enc_opt = Some(helper.encrypt(&new_tags)?);
 
-    for row in rows {
-        let id: i64 = row.get("id");
-        let tags_enc: Option<String> = row.get("tags");
-        let tags = tags_enc.map(|t| helper.decrypt(&t)).transpose()?;
-        let Some(tags_str) = tags else { continue };
-
-        let mut parts: Vec<String> = tags_str.split(',').map(|t| t.trim()).filter(|t| !t.is_empty()).map(|t| t.to_string()).collect();
-        let mut changed = false;
-        for tag in parts.iter_mut() {
-            if tag == &old_trimmed {
-                *tag = new_trimmed.clone();
-                changed = true;
+                sqlx::query("UPDATE password_items SET tags = ?, updated_at = ? WHERE id = ?")
+                    .bind(tags_enc_opt).bind(&now).bind(id).execute(&mut *tx).await?;
             }
         }
-        if !changed { continue; }
-
-        let new_tags = parts.join(", ");
-        let tags_enc_opt = if new_tags.trim().is_empty() { None } else { Some(helper.encrypt(&new_tags)?) };
-
-        sqlx::query("UPDATE password_items SET tags = ?, updated_at = ? WHERE id = ?")
-            .bind(tags_enc_opt).bind(&now).bind(id).execute(&mut *tx).await?;
-        updated += 1;
     }
 
     tx.commit().await?;
-    Ok(updated)
+    Ok(updated_count)
 }

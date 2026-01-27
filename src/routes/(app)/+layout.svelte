@@ -171,11 +171,20 @@
     showCreatePasswordPopup = true;
   }
 
-  async function handlePasswordSaved() {
+  async function handlePasswordSaved(newId?: number) {
     showCreatePasswordPopup = false;
     await vaultStore.loadItems();
 
+    if (newId) {
+      const newItem = vaultStore.items.find((item) => item.id === newId);
+      if (newItem) {
+        await handlePasswordSelected(newItem);
+        return;
+      }
+    }
+
     if (vaultStore.items.length) {
+      // Fallback if ID is missing for some reason
       let newest = vaultStore.items[0];
 
       for (const item of vaultStore.items) {

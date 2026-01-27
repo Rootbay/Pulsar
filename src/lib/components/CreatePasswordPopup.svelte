@@ -33,7 +33,7 @@
 
   interface Props {
     onclose?: () => void;
-    onpasswordSaved?: () => void;
+    onpasswordSaved?: (id: number) => void;
   }
 
   let { onclose, onpasswordSaved }: Props = $props();
@@ -101,7 +101,7 @@
     }
 
     try {
-      await callBackend('save_password_item', {
+      const newId = await callBackend<number>('save_password_item', {
         item: {
           id: 0,
           category: selectedCategory,
@@ -122,7 +122,7 @@
         }
       });
 
-      onpasswordSaved?.();
+      onpasswordSaved?.(newId);
       closeDialog();
     } catch (error) {
       console.error('Error saving password:', error);

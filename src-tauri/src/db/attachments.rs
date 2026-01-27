@@ -9,6 +9,24 @@ use chrono::Utc;
 use std::path::{Path, PathBuf};
 use tokio::fs;
 
+async fn get_attachments_dir(state: &AppState) -> Result<PathBuf> {
+    let db_path = state.db_path.lock().await.clone()
+        .ok_or_else(|| Error::Internal("Database path not set".to_string()))?;
+    
+    let mut dir = db_path.clone();
+    let file_name = dir.file_name()
+        .ok_or_else(|| Error::Internal("Invalid DB path".to_string()))?
+        .to_string_lossy();
+    
+    dir.set_file_name(format!("{}.attachments", file_name));
+    
+    if !fs::try_exists(&dir).await.unwrap_or(false) {
+        fs::create_dir_all(&dir).await?;
+    }
+    
+    Ok(dir)
+}
+
 #[tauri::command]
 pub async fn add_attachment(
     state: State<'_, AppState>,
@@ -17,6 +35,7 @@ pub async fn add_attachment(
 ) -> Result<Attachment> {
     let key = get_key(&state).await?;
     let db_pool = get_db_pool(&state).await?;
+    let attachments_dir = get_attachments_dir(&state).await?;
 
     let path = Path::new(&file_path);
     if !fs::try_exists(path).await.unwrap_or(false) {
@@ -40,16 +59,19 @@ pub async fn add_attachment(
     let mime_enc = encrypt(&mime_type, key.as_slice())?;
     let now = Utc::now().to_rfc3339();
 
-    let id = sqlx::query("INSERT INTO attachments (item_id, file_name, file_size, mime_type, data, created_at) VALUES (?, ?, ?, ?, ?, ?)")
+    let id = sqlx::query("INSERT INTO attachments (item_id, file_name, file_size, mime_type, created_at) VALUES (?, ?, ?, ?, ?)")
         .bind(item_id)
         .bind(name_enc)
         .bind(file_size)
         .bind(mime_enc)
-        .bind(encrypted_data)
         .bind(&now)
         .execute(&db_pool)
         .await?
         .last_insert_rowid();
+
+    // Store encrypted data on disk
+    let storage_path = attachments_dir.join(id.to_string());
+    fs::write(storage_path, encrypted_data).await?;
 
     Ok(Attachment {
         id,
@@ -63,12 +85,19 @@ pub async fn add_attachment(
 
 #[tauri::command]
 pub async fn delete_attachment(state: State<'_, AppState>, id: i64) -> Result<()> {
-    get_key(&state).await?;
+    let attachments_dir = get_attachments_dir(&state).await?;
     let db_pool = get_db_pool(&state).await?;
+    
     sqlx::query("DELETE FROM attachments WHERE id = ?")
         .bind(id)
         .execute(&db_pool)
         .await?;
+
+    let storage_path = attachments_dir.join(id.to_string());
+    if fs::try_exists(&storage_path).await.unwrap_or(false) {
+        let _ = fs::remove_file(storage_path).await;
+    }
+    
     Ok(())
 }
 
@@ -79,15 +108,14 @@ pub async fn save_attachment_to_disk(
     save_path: String,
 ) -> Result<()> {
     let key = get_key(&state).await?;
-    let db_pool = get_db_pool(&state).await?;
+    let attachments_dir = get_attachments_dir(&state).await?;
 
-    let row = sqlx::query("SELECT data FROM attachments WHERE id = ?")
-        .bind(attachment_id)
-        .fetch_optional(&db_pool)
-        .await?
-        .ok_or_else(|| Error::Internal("Attachment not found".to_string()))?;
+    let storage_path = attachments_dir.join(attachment_id.to_string());
+    if !fs::try_exists(&storage_path).await.unwrap_or(false) {
+        return Err(Error::Internal("Attachment file not found on disk".to_string()));
+    }
 
-    let data_blob: Vec<u8> = row.get("data");
+    let data_blob = fs::read(storage_path).await?;
     let file_data = decrypt_bytes(&data_blob, key.as_slice())?;
 
     write_sensitive_bytes(Path::new(&save_path), &file_data).await?;

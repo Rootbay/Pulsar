@@ -151,6 +151,7 @@ fn main() {
             db::rename_tag_in_password_items,
             db::save_password_item,
             db::get_password_items,
+            db::search_password_items,
             db::get_password_overviews,
             db::get_password_item_by_id,
             db::update_password_item,
@@ -201,6 +202,7 @@ fn main() {
             settings::simulate_autotype,
             clipboard::get_clipboard_capabilities,
             clipboard::apply_clipboard_policy,
+            clipboard::copy_to_clipboard,
             clipboard::clear_clipboard,
         ]);
 

@@ -34,6 +34,46 @@ pub struct ClipboardPolicyPayload {
     pub clipboard_integration: bool,
     pub block_history: bool,
     pub only_unlocked: bool,
+    pub clear_after_duration: u64,
+}
+
+#[tauri::command]
+pub async fn copy_to_clipboard(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, AppState>,
+    text: String,
+) -> Result<()> {
+    let mut policy = state.clipboard_policy.lock().await;
+    
+    if !policy.integration_enabled {
+        return Err(Error::Internal("Clipboard integration is disabled in settings.".to_string()));
+    }
+
+    if policy.only_unlocked {
+        let db_guard = state.db.lock().await;
+        if db_guard.is_none() {
+            return Err(Error::VaultLocked);
+        }
+    }
+
+    // Write to clipboard
+    app.clipboard().write_text(text).map_err(|e| Error::Internal(e.to_string()))?;
+
+    // Cancel existing clear task
+    if let Some(handle) = policy.clear_task_handle.take() {
+        handle.abort();
+    }
+
+    let duration = policy.clear_after_duration;
+    if duration > 0 {
+        let app_clone = app.clone();
+        policy.clear_task_handle = Some(tokio::spawn(async move {
+            tokio::time::sleep(std::time::Duration::from_secs(duration)).await;
+            let _ = app_clone.clipboard().clear();
+        }));
+    }
+
+    Ok(())
 }
 
 fn history_blocking_supported() -> bool {
@@ -194,7 +234,12 @@ pub async fn apply_clipboard_policy(
     let was_blocking = policy.block_history;
     policy.integration_enabled = payload.clipboard_integration;
     policy.only_unlocked = payload.only_unlocked;
+    policy.clear_after_duration = payload.clear_after_duration;
     policy.block_history = payload.block_history && history_blocking_supported();
+
+    if let Some(handle) = policy.clear_task_handle.take() {
+        handle.abort();
+    }
 
     if policy.block_history {
         if !was_blocking {

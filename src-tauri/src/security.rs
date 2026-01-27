@@ -177,6 +177,10 @@ pub async fn wipe_memory(state: State<'_, AppState>) -> Result<()> {
 pub struct SecurityReport {
     pub reused_passwords: Vec<ReusedPasswordGroup>,
     pub weak_passwords_count: usize,
+    pub breached_passwords_count: usize,
+    pub unique_passwords_count: usize,
+    pub total_passwords_count: usize,
+    pub overall_health_score: f64,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -194,32 +198,59 @@ pub async fn get_security_report(state: State<'_, AppState>) -> Result<SecurityR
 
     use std::collections::HashMap;
     let mut password_map: HashMap<SecretString, Vec<i64>> = HashMap::new();
+    let mut breached_passwords_count = 0;
+    let total_passwords_count = items.len();
 
     for item in items {
         if !item.password.as_str().is_empty() && item.password.as_str() != "N/A" {
             password_map.entry(item.password.clone()).or_default().push(item.id);
         }
+        
+        // Mock breach detection via tags
+        if let Some(tags) = &item.tags {
+            let t = tags.to_lowercase();
+            if t.contains("breached") || t.contains("compromised") || t.contains("leaked") {
+                breached_passwords_count += 1;
+            }
+        }
     }
 
     let mut reused_passwords = Vec::new();
     let mut weak_passwords_count = 0;
+    let unique_passwords_count = password_map.len();
+    let mut total_reused_items = 0;
 
-    for (password, ids) in password_map {
+    for (password, ids) in &password_map {
         if ids.len() > 1 {
             reused_passwords.push(ReusedPasswordGroup {
                 item_ids: ids.clone(),
                 count: ids.len(),
             });
+            total_reused_items += ids.len();
         }
 
-        if password.len() < 8 {
+        if password.len() < 12 {
             weak_passwords_count += ids.len();
         }
+    }
+
+    // Basic health score calculation (0.0 to 100.0)
+    let mut score = 100.0;
+    if total_passwords_count > 0 {
+        let reused_penalty = (total_reused_items as f64 / total_passwords_count as f64) * 40.0;
+        let weak_penalty = (weak_passwords_count as f64 / total_passwords_count as f64) * 30.0;
+        let breached_penalty = (breached_passwords_count as f64 / total_passwords_count as f64) * 50.0;
+        
+        score = (score - reused_penalty - weak_penalty - breached_penalty).max(0.0);
     }
 
     Ok(SecurityReport {
         reused_passwords,
         weak_passwords_count,
+        breached_passwords_count,
+        unique_passwords_count,
+        total_passwords_count,
+        overall_health_score: score,
     })
 }
 

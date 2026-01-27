@@ -660,25 +660,23 @@
     }
   }
 
-  async function handleCopyTotpSecret() {
-    if (!totpSecret) {
-      return;
-    }
+  async function copyTotpSecret() {
+    if (!totpSecret) return;
     try {
-      await copyText(totpSecret);
-    } catch (error) {
-      totpActionError = toErrorMessage(error);
+      await copyText(totpSecret, 'TOTP Secret');
+      toast.success(t('totpSecretCopied'));
+    } catch (err) {
+      toast.error(t('totpSecretCopyError'));
     }
   }
 
-  async function handleCopyTotpCode() {
-    if (!totpCode) {
-      return;
-    }
+  async function copyTotpCode() {
+    if (!totpCode) return;
     try {
-      await copyText(totpCode);
-    } catch (error) {
-      totpActionError = toErrorMessage(error);
+      await copyText(totpCode, 'TOTP Code');
+      toast.success(t('totpCodeCopied'));
+    } catch (err) {
+      toast.error(t('totpCodeCopyError'));
     }
   }
 

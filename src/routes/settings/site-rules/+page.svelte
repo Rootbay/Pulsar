@@ -14,6 +14,9 @@
   import { FileText, Pencil, Trash2, Plus } from '@lucide/svelte';
   import { i18n, t as translate } from '$lib/i18n.svelte';
 
+  import { i18n, t as translate } from '$lib/i18n.svelte';
+  import InputDialog from '$lib/components/ui/InputDialog.svelte';
+
   const locale = $derived(i18n.locale);
   const t = (key: string, vars = {}) => translate(locale, key as any, vars);
 
@@ -21,6 +24,7 @@
 
   let showEditModal = $state(false);
   let itemToEdit = $state<SiteRule | null>(null);
+  let showAddDialog = $state(false);
 
   function handleEditRule(rule: SiteRule) {
     itemToEdit = JSON.parse(JSON.stringify(rule));
@@ -51,10 +55,7 @@
     closeModal();
   }
 
-  function addNewRule() {
-    const url = prompt(t('Enter the domain or URL for this rule:'));
-    if (!url) return;
-
+  function handleAddNewRule(url: string) {
     const newRule: SiteRule = {
       url,
       length: 16,
@@ -94,7 +95,7 @@
           </CardDescription>
         </div>
       </div>
-      <Button type="button" class="gap-2" onclick={addNewRule}>
+      <Button type="button" class="gap-2" onclick={() => (showAddDialog = true)}>
         <Plus class="size-4" aria-hidden="true" />
         {t('Add Rule')}
       </Button>
@@ -162,3 +163,13 @@
     onsave={handleSaveEdit}
   />
 {/if}
+
+<InputDialog
+  bind:open={showAddDialog}
+  title={t('Add Rule')}
+  description={t('Enter the domain or URL for this rule:')}
+  label="URL"
+  placeholder="example.com"
+  confirmLabel={t('Add')}
+  onConfirm={handleAddNewRule}
+/>

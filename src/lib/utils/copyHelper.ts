@@ -7,7 +7,7 @@ import { clipboardService } from '$lib/utils/clipboardService.svelte';
 
 let clearTimer: ReturnType<typeof setTimeout> | null = null;
 
-async function copyToClipboard(text: string) {
+async function copyToClipboard(text: string, label: string = 'Text') {
   const clipSettings = settings.state.clipboard;
   const integrationStatus = clipboardService.state;
   const serviceReady = clipboardService.ready;
@@ -31,6 +31,7 @@ async function copyToClipboard(text: string) {
   }
 
   await writeText(text);
+  await clipboardService.recordCopy(label);
 
   if (clearTimer) {
     clearTimeout(clearTimer);
@@ -55,31 +56,31 @@ async function copyToClipboard(text: string) {
 
 export async function copyPassword(passwordItem: PasswordItem) {
   if (passwordItem && passwordItem.password) {
-    await copyToClipboard(passwordItem.password);
+    await copyToClipboard(passwordItem.password, 'Password');
   }
 }
 
 export async function copyUsername(passwordItem: PasswordItem) {
   if (passwordItem && passwordItem.username) {
-    await copyToClipboard(passwordItem.username);
+    await copyToClipboard(passwordItem.username, 'Username');
   }
 }
 
 export async function copyUrl(passwordItem: PasswordItem) {
   if (passwordItem && passwordItem.url) {
-    await copyToClipboard(passwordItem.url);
+    await copyToClipboard(passwordItem.url, 'URL');
   }
 }
 
 export async function copyTitle(passwordItem: PasswordItem) {
   if (passwordItem && passwordItem.title) {
-    await copyToClipboard(passwordItem.title);
+    await copyToClipboard(passwordItem.title, 'Title');
   }
 }
 
-export async function copyText(value: string | null | undefined) {
+export async function copyText(value: string | null | undefined, label: string = 'Text') {
   if (!value) {
     return;
   }
-  await copyToClipboard(value);
+  await copyToClipboard(value, label);
 }

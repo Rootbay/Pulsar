@@ -45,7 +45,7 @@
       : `${currentSettings.clearAfterDuration} seconds`
   );
 
-  const auditLogEntries: Array<{ id: number; action: string; time: string; status: string }> = [];
+  const auditLogEntries = $derived(clipboardService.auditLog);
 
   const handleSetTimeout = async (seconds: number) => {
     try {

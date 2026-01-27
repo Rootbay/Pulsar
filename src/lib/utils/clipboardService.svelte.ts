@@ -21,10 +21,29 @@ const defaultStatus: ClipboardIntegrationState = {
   lastError: null
 };
 
+export interface ClipboardAuditEntry {
+  id: number;
+  action: string;
+  time: string;
+  status: 'success' | 'error';
+}
+
 class ClipboardService {
   state = $state<ClipboardIntegrationState>(defaultStatus);
   ready = $state(false);
+  auditLog = $state<ClipboardAuditEntry[]>([]);
   #initialized = false;
+  #nextAuditId = 1;
+
+  private addAuditEntry(action: string, status: 'success' | 'error') {
+    const entry: ClipboardAuditEntry = {
+      id: this.#nextAuditId++,
+      action,
+      time: new Date().toLocaleTimeString(),
+      status
+    };
+    this.auditLog = [entry, ...this.auditLog].slice(0, 50); // Keep last 50 entries
+  }
 
   private updateState(partial: Partial<ClipboardIntegrationState>) {
     this.state = { ...this.state, ...partial };
@@ -107,9 +126,11 @@ class ClipboardService {
       settings.save();
 
       this.updateFromStatus(status);
+      this.addAuditEntry('Policy Updated', 'success');
     } catch (error) {
       const message = this.extractErrorMessage(error);
       this.updateState({ lastError: message });
+      this.addAuditEntry('Policy Update Failed', 'error');
       throw new Error(message);
     } finally {
       this.updateState({ applying: false });
@@ -117,7 +138,17 @@ class ClipboardService {
   }
 
   async clearNow(): Promise<void> {
-    await callBackend('clear_clipboard');
+    try {
+      await callBackend('clear_clipboard');
+      this.addAuditEntry('Clipboard Cleared', 'success');
+    } catch (error) {
+      this.addAuditEntry('Clear Failed', 'error');
+      throw error;
+    }
+  }
+
+  async recordCopy(itemLabel: string): Promise<void> {
+     this.addAuditEntry(`Copied ${itemLabel}`, 'success');
   }
 
   private extractErrorMessage(error: unknown): string {

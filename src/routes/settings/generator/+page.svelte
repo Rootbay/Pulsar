@@ -29,6 +29,7 @@
   } from '@lucide/svelte';
   import { i18n, t as translate } from '$lib/i18n.svelte';
   import { copyText } from '$lib/utils/copyHelper';
+  import InputDialog from '$lib/components/ui/InputDialog.svelte';
 
   import { GeneratorService } from '$lib/utils/generator';
 
@@ -136,6 +137,7 @@
   let copyResetTimer: ReturnType<typeof setTimeout> | undefined;
 
   let selectedPresetName = $state<string | null>(null);
+  let showSavePresetDialog = $state(false);
 
   let strengthEntropy = $state(0);
   let strengthLevel = $state<StrengthLevel>('weak');
@@ -173,7 +175,7 @@
   async function copyPassword() {
     if (!generatedPassword) return;
     try {
-      await copyText(generatedPassword);
+      await copyText(generatedPassword, 'Generated Password');
       copyButtonText = 'Copied!';
       if (copyResetTimer) clearTimeout(copyResetTimer);
       copyResetTimer = setTimeout(() => {
@@ -184,10 +186,7 @@
     }
   }
 
-  function saveCurrentSettingsAsPreset() {
-    const name = prompt(t('Enter a name for this preset:'));
-    if (!name) return;
-
+  function handleSavePreset(name: string) {
     const charSets: string[] = [];
     if (options.uppercase) charSets.push('A-Z');
     if (options.lowercase) charSets.push('a-z');
@@ -327,7 +326,7 @@
             type="button"
             variant="outline"
             class="gap-2"
-            onclick={saveCurrentSettingsAsPreset}
+            onclick={() => (showSavePresetDialog = true)}
           >
             <Save class="size-4" aria-hidden="true" />
             {t('Save as preset')}
@@ -490,3 +489,12 @@
     </CardContent>
   </Card>
 </div>
+
+<InputDialog
+  bind:open={showSavePresetDialog}
+  title={t('Save as preset')}
+  description={t('Enter a name for this password generator preset:')}
+  label={t('Preset Name')}
+  placeholder="Work / Personal / Bank"
+  onConfirm={handleSavePreset}
+/>

@@ -370,7 +370,7 @@
     if (!secret) return;
 
     try {
-      await copyText(secret);
+      await copyText(secret, 'TOTP Secret');
       setSecretCopyFeedback(context, 'Secret copied to clipboard.', 'success');
     } catch (error) {
       setSecretCopyFeedback(context, toErrorMessage(error), 'error');
@@ -381,7 +381,7 @@
     if (!uri) return;
 
     try {
-      await copyText(uri);
+      await copyText(uri, 'TOTP Setup Link');
       setUriCopyFeedback(context, 'Setup link copied to clipboard.', 'success');
     } catch (error) {
       setUriCopyFeedback(context, toErrorMessage(error), 'error');

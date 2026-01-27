@@ -178,7 +178,7 @@
     if (!currentToken) return;
 
     try {
-      await copyText(currentToken);
+      await copyText(currentToken, 'TOTP Token');
       setCopyFeedback(t('totpCopySuccess'), 'success');
     } catch (error) {
       setCopyFeedback(toErrorMessage(error), 'error');

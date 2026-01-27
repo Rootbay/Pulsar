@@ -207,11 +207,11 @@
             await copyUrl(passwordItem);
             break;
           default:
-            await copyText(field.value);
+            await copyText(field.value, field.name);
             break;
         }
       } else {
-        await copyText(field.value);
+        await copyText(field.value, field.name);
       }
 
       toast.success(getCopySuccessMessage(field));

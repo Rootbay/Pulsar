@@ -1,6 +1,5 @@
 use crate::state::AppState;
 use crate::types::{PasswordItem, SecretString, CustomField, Attachment};
-use crate::encryption::decrypt;
 use crate::error::{Error, Result};
 use crate::db::utils::{get_key, get_db_pool, CryptoHelper};
 use tauri::State;

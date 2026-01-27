@@ -1,4 +1,3 @@
-use std::path::PathBuf;
 use tauri_plugin_store::StoreBuilder;
 use keyring::Entry;
 use base64::{engine::general_purpose, Engine as _};

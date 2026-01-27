@@ -77,39 +77,6 @@ fn build_pool_options() -> SqlitePoolOptions {
         })
 }
 
-pub async fn init_db(db_path: &Path, password: Option<&[u8]>) -> Result<SqlitePool, String> {
-    let db_path_abs = resolve_db_path(db_path)?;
-
-    if let Some(parent) = db_path_abs.parent() {
-        fs::create_dir_all(parent)
-            .await
-            .map_err(|e| {
-                eprintln!("Failed to create database directory {}: {e}", parent.display());
-                "Failed to access database directory".to_string()
-            })?;
-    }
-
-    let opts = build_connect_options(db_path_abs.as_path(), password, true);
-
-    let pool = build_pool_options()
-        .connect_with(opts)
-        .await
-        .map_err(|e| {
-            eprintln!("Database connection error: {e}");
-            "Failed to connect to the database. Ensure the file is not locked by another process.".to_string()
-        })?;
-
-    sqlx::migrate!()
-        .run(&pool)
-        .await
-        .map_err(|e| {
-            eprintln!("Database migration error: {e}");
-            "Internal error: Database migration failed".to_string()
-        })?;
-
-    Ok(pool)
-}
-
 pub async fn init_db_lazy(
     db_path: &Path,
     password: Option<&[u8]>,

@@ -1,5 +1,5 @@
 use crate::state::AppState;
-use crate::encryption::{encrypt, decrypt, CipherSession};
+use crate::encryption::CipherSession;
 use crate::error::{Error, Result};
 use tauri::State;
 use sqlx::SqlitePool;

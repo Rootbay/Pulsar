@@ -7,7 +7,6 @@ use tauri::State;
 use sqlx::Row;
 use chrono::Utc;
 use std::path::Path;
-use tokio::io::AsyncWriteExt;
 
 #[tauri::command]
 pub async fn add_attachment(

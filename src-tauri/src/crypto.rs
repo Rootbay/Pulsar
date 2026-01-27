@@ -11,8 +11,6 @@ use sha2::Sha256;
 use x25519_dalek::{PublicKey as X25519Public, EphemeralSecret as X25519Secret, StaticSecret};
 use zeroize::{Zeroize, Zeroizing};
 use tauri::Window;
-use std::fs;
-use std::io::Write;
 use std::path::Path;
 
 #[tauri::command]

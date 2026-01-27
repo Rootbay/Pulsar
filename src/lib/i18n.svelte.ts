@@ -1,5 +1,4 @@
-import { derived } from 'svelte/store';
-import { generalSettings } from '$lib/stores/general';
+import { settings } from '$lib/stores/appSettings.svelte';
 import en from './i18n/en.json';
 import sv from './i18n/sv.json';
 import es from './i18n/es.json';
@@ -42,6 +41,7 @@ export type Locale =
   | 'th'
   | 'vi'
   | 'el';
+
 type Messages = typeof en;
 export type I18nKey = keyof Messages;
 
@@ -67,6 +67,7 @@ const dictionaries: Record<Locale, Partial<Messages>> = {
   vi,
   el
 };
+
 const supportedLocales = new Set<Locale>(Object.keys(dictionaries) as Locale[]);
 const supportedLocaleList = Object.keys(dictionaries) as Locale[];
 const supportedLocaleByLower = new Map(
@@ -109,14 +110,16 @@ function detectSystemLocale(): Locale {
   return 'en';
 }
 
-export const currentLocale = derived(generalSettings, ($general): Locale => {
-  const preferred = $general.appLanguage;
-  if (preferred === 'system') {
-    return detectSystemLocale();
+export const i18n = {
+  get locale(): Locale {
+    const preferred = settings.state.general.appLanguage;
+    if (preferred === 'system') {
+      return detectSystemLocale();
+    }
+    const normalized = normalizeLocale(preferred);
+    return normalized && supportedLocales.has(normalized) ? normalized : 'en';
   }
-  const normalized = normalizeLocale(preferred);
-  return normalized && supportedLocales.has(normalized) ? normalized : 'en';
-});
+};
 
 export function t(
   locale: Locale,
@@ -124,26 +127,8 @@ export function t(
   vars: Record<string, string | number> = {}
 ): string {
   const dictionary = dictionaries[locale] ?? dictionaries.en;
-  const inLocale = Object.prototype.hasOwnProperty.call(dictionary, key);
-  const inEnglish = Object.prototype.hasOwnProperty.call(dictionaries.en, key);
-
-  if (!inLocale) {
-    const warningKey = `${locale}:${key}`;
-    if (!missingKeyWarnings.has(warningKey)) {
-      missingKeyWarnings.add(warningKey);
-      console.warn(`[i18n] Missing key "${key}" for locale "${locale}".`);
-    }
-  }
-
-  if (!inEnglish) {
-    const warningKey = `en:${key}`;
-    if (!missingKeyWarnings.has(warningKey)) {
-      missingKeyWarnings.add(warningKey);
-      console.warn(`[i18n] Missing key "${key}" in English dictionary.`);
-    }
-  }
-
   const template = dictionary[key] ?? dictionaries.en[key] ?? key;
+  
   return template.replace(/\{(\w+)\}/g, (match, token) => {
     if (Object.prototype.hasOwnProperty.call(vars, token)) {
       return String(vars[token]);
@@ -151,3 +136,13 @@ export function t(
     return match;
   });
 }
+
+export const currentLocale = {
+    get value() { return i18n.locale; },
+    subscribe(fn: (v: Locale) => void) {
+        fn(i18n.locale);
+        return $effect.root(() => {
+            $effect(() => fn(i18n.locale));
+        });
+    }
+};

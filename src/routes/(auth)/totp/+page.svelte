@@ -15,13 +15,14 @@
     CardHeader,
     CardTitle
   } from '$lib/components/ui/card';
-  import { Copy, RefreshCw } from '@lucide/svelte';
+  import { Copy, RefreshCw, ArrowLeft } from '@lucide/svelte';
   import { appState } from '$lib/stores';
   import { loginTotpSecret } from '$lib/stores/totp';
-  import { currentLocale, t } from '$lib/i18n';
-  import { ArrowLeft } from '@lucide/svelte';
+  import { i18n, t as translate, type I18nKey } from '$lib/i18n.svelte';
 
-  let locale = $derived($currentLocale);
+  const locale = $derived(i18n.locale);
+  const t = (key: I18nKey, vars: Record<string, string | number> = {}) =>
+    translate(locale, key, vars);
 
   const CODE_LENGTH = 6;
   const TOKEN_PERIOD = 30;
@@ -94,7 +95,7 @@
     if (error instanceof Error) return error.message;
     if (error && typeof error === 'object' && 'message' in error)
       return (error as { message: string }).message;
-    return t(locale, 'totpUnexpectedError');
+    return t('totpUnexpectedError');
   };
 
   function updateTimeRemaining() {
@@ -169,7 +170,7 @@
 
     try {
       await copyText(currentToken);
-      setCopyFeedback(t(locale, 'totpCopySuccess'), 'success');
+      setCopyFeedback(t('totpCopySuccess'), 'success');
     } catch (error) {
       setCopyFeedback(toErrorMessage(error), 'error');
     }
@@ -183,7 +184,7 @@
     if (isVerifying) return;
 
     if (code.length !== CODE_LENGTH) {
-      verificationError = t(locale, 'totpEnterCodeError');
+      verificationError = t('totpEnterCodeError');
       return;
     }
 
@@ -199,7 +200,7 @@
     } catch (cause) {
       const message = toErrorMessage(cause);
       if (message.toLowerCase().includes('invalid')) {
-        verificationError = t(locale, 'totpInvalidCodeError');
+        verificationError = t('totpInvalidCodeError');
       } else {
         verificationError = message;
       }
@@ -213,7 +214,7 @@
       activeSecret = value;
       if (!value) {
         currentToken = null;
-        tokenError = t(locale, 'totpSecretMissing');
+        tokenError = t('totpSecretMissing');
       } else {
         tokenError = null;
         void fetchToken(true);
@@ -263,7 +264,7 @@
     onclick={goBack}
   >
     <ArrowLeft class="h-4 w-4" />
-    {t(locale, 'back')}
+    {t('back')}
   </button>
   <div
     class="bg-primary-glow pointer-events-none absolute top-1/2 left-1/2 h-[min(90vw,32rem)] w-[min(90vw,32rem)] -translate-x-1/2 -translate-y-1/2 rounded-full blur-3xl"
@@ -274,8 +275,8 @@
     class="border-border/60 bg-card/80 supports-backdrop-filter:bg-card/70 relative z-10 w-full max-w-md backdrop-blur"
   >
     <CardHeader class="space-y-2 text-center">
-      <CardTitle class="text-2xl font-semibold">{t(locale, 'totpTitle')}</CardTitle>
-      <CardDescription>{t(locale, 'totpSubtitle')}</CardDescription>
+      <CardTitle class="text-2xl font-semibold">{t('totpTitle')}</CardTitle>
+      <CardDescription>{t('totpSubtitle')}</CardDescription>
     </CardHeader>
 
     <CardContent class="space-y-6">
@@ -283,14 +284,14 @@
         class="border-border/60 bg-muted/20 hover:border-border relative flex gap-3 rounded-2xl border p-4 shadow-sm transition"
         role="button"
         tabindex="0"
-        aria-label={t(locale, 'totpAriaEnterCode')}
+        aria-label={t('totpAriaEnterCode')}
         onclick={focusHiddenInput}
         onkeydown={handleKeyDown}
       >
         {#each Array.from({ length: 6 }) as _, i (i)}
           <div
             class="border-border/50 bg-background text-foreground flex h-16 w-14 items-center justify-center rounded-xl border text-2xl font-semibold tracking-widest shadow-sm sm:h-20 sm:w-16 sm:text-3xl"
-            aria-label={t(locale, 'totpDigitLabel', { index: String(i + 1) })}
+            aria-label={t('totpDigitLabel', { index: String(i + 1) })}
           >
             {code[i] ?? ''}
           </div>
@@ -312,11 +313,11 @@
       <section class="border-border/60 bg-muted/10 rounded-2xl border p-5">
         <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p class="text-foreground text-sm font-semibold">{t(locale, 'totpCodeLabel')}</p>
-            <p class="text-muted-foreground text-sm">{t(locale, 'totpCodeHint')}</p>
+            <p class="text-foreground text-sm font-semibold">{t('totpCodeLabel')}</p>
+            <p class="text-muted-foreground text-sm">{t('totpCodeHint')}</p>
           </div>
           <Badge variant={activeSecret ? 'default' : 'secondary'}>
-            {activeSecret ? t(locale, 'totpSecretStored') : t(locale, 'totpSecretUnavailable')}
+            {activeSecret ? t('totpSecretStored') : t('totpSecretUnavailable')}
           </Badge>
         </div>
 
@@ -329,7 +330,7 @@
               <Spinner class="h-4 w-4" aria-hidden="true" />
             {/if}
             <span>
-              {t(locale, 'totpRefreshIn', {
+              {t('totpRefreshIn', {
                 seconds: timeRemaining > 0 ? `${timeRemaining}s` : '—'
               })}
             </span>
@@ -349,7 +350,7 @@
             disabled={!currentToken}
           >
             <Copy class="h-4 w-4" aria-hidden="true" />
-            {t(locale, 'totpCopyCode')}
+            {t('totpCopyCode')}
           </Button>
           <Button
             type="button"
@@ -362,7 +363,7 @@
               class={`h-4 w-4 ${isFetchingToken ? 'animate-spin' : ''}`}
               aria-hidden="true"
             />
-            {t(locale, 'totpRefresh')}
+            {t('totpRefresh')}
           </Button>
         </div>
 
@@ -376,7 +377,7 @@
         {/if}
 
         <p class="text-muted-foreground mt-3 text-xs">
-          {t(locale, 'totpBackupNote')}
+          {t('totpBackupNote')}
         </p>
       </section>
     </CardContent>
@@ -393,7 +394,7 @@
         onclick={handleContinue}
         disabled={isVerifying || code.length !== CODE_LENGTH}
       >
-        {isVerifying ? t(locale, 'totpVerifying') : t(locale, 'totpVerifyButton')}
+        {isVerifying ? t('totpVerifying') : t('totpVerifyButton')}
       </Button>
     </CardFooter>
   </Card>

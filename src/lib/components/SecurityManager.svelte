@@ -1,9 +1,8 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { securitySettings } from '$lib/stores/security';
+  import { settings } from '$lib/stores/appSettings.svelte';
   import { appState } from '$lib/stores';
   import { callBackend } from '$lib/utils/backend';
-  import { get } from 'svelte/store';
   import { getCurrentWindow } from '@tauri-apps/api/window';
   import type { SecuritySettings } from '$lib/config/settings';
 
@@ -45,12 +44,12 @@
   function resetInactivityTimer() {
     if (inactivityTimer) clearTimeout(inactivityTimer);
 
-    const settings = get(securitySettings);
-    if (settings.autoLockInactivity === 'Never' || appState.isLocked) {
+    const currentSettings = settings.state.security;
+    if (currentSettings.autoLockInactivity === 'Never' || appState.isLocked) {
       return;
     }
 
-    const duration = parseDuration(settings.autoLockInactivity);
+    const duration = parseDuration(currentSettings.autoLockInactivity);
     if (duration > 0) {
       inactivityTimer = setTimeout(lockVault, duration);
     }
@@ -70,9 +69,9 @@
     }
   }
 
-  function getLockGraceMs(settings: SecuritySettings) {
-    const seconds = Number.isFinite(settings.lockGraceSeconds)
-      ? Math.max(0, Math.min(60, settings.lockGraceSeconds))
+  function getLockGraceMs(currentSettings: SecuritySettings) {
+    const seconds = Number.isFinite(currentSettings.lockGraceSeconds)
+      ? Math.max(0, Math.min(60, currentSettings.lockGraceSeconds))
       : 0;
     return seconds * 1000;
   }
@@ -99,13 +98,13 @@
           return;
         }
         if (payload === false) {
-          const settings = get(securitySettings);
-          if (settings.lockOnMinimize) {
+          const currentSettings = settings.state.security;
+          if (currentSettings.lockOnMinimize) {
             try {
               const minimized = await appWindow.isMinimized();
               if (minimized) {
                 clearMinimizeTimer();
-                const graceMs = getLockGraceMs(settings);
+                const graceMs = getLockGraceMs(currentSettings);
                 if (graceMs === 0) {
                   await lockVault();
                 } else {
@@ -134,10 +133,10 @@
         resetInactivityTimer();
         return;
       }
-      const settings = get(securitySettings);
-      if (settings.lockOnSuspend) {
+      const currentSettings = settings.state.security;
+      if (currentSettings.lockOnSuspend) {
         clearSuspendTimer();
-        const graceMs = getLockGraceMs(settings);
+        const graceMs = getLockGraceMs(currentSettings);
         if (graceMs === 0) {
           await lockVault();
         } else {
@@ -168,8 +167,10 @@
 
   $effect(() => {
     const locked = appState.isLocked;
-    const settings = $securitySettings;
-    void settings;
+    const currentSettings = settings.state.security;
+    void currentSettings.autoLockInactivity;
+    void currentSettings.lockGraceSeconds;
+    
     if (!locked) {
       resetInactivityTimer();
     } else {

@@ -13,7 +13,7 @@
   import { cn } from '$lib/utils';
   import { Check } from '@lucide/svelte';
   import { open } from '@tauri-apps/plugin-dialog';
-  import { currentLocale, t as translate, type I18nKey } from '$lib/i18n';
+  import { currentLocale, t as translate, type I18nKey } from '$lib/i18n.svelte';
 
   interface PasswordManager {
     id: string;

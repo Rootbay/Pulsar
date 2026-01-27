@@ -1,8 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
-  import { get } from 'svelte/store';
   import { appState } from '$lib/stores';
-  import { securitySettings } from '$lib/stores/security';
+  import { settings } from '$lib/stores/appSettings.svelte';
   import { loginTotpSecret, loginTotpConfigured } from '$lib/stores/totp';
   import { callBackend } from '$lib/utils/backend';
   import { invoke } from '@tauri-apps/api/core';
@@ -49,11 +48,12 @@
     MonitorSmartphone,
     HardDrive
   } from '@lucide/svelte';
-  import { currentLocale, t } from '$lib/i18n';
+  import { i18n, t as translate } from '$lib/i18n.svelte';
   import type { SecuritySettings } from '$lib/config/settings';
   import { cn } from '$lib/utils';
   import { toast } from '$lib/components/ui/sonner';
   import { copyText } from '$lib/utils/copyHelper';
+  import { updateClipboardSettings } from '$lib/utils/clipboardService';
 
   interface Argon2Params {
     memoryKib: number;
@@ -82,19 +82,17 @@
   const TOTP_CODE_LENGTH = 6;
   const MIN_PASSWORD_LENGTH = 8;
 
-  const locale = $derived($currentLocale);
+  const locale = $derived(i18n.locale);
+  const t = (key: string, vars = {}) => translate(locale, key as any, vars);
 
-  let currentSettings = $state<SecuritySettings>({ ...get(securitySettings) });
-
-  const unsubscribe = securitySettings.subscribe((settings) => {
-    currentSettings = { ...settings };
-  });
+  let currentSettings = $derived(settings.state.security);
+  let currentClipboardSettings = $derived(settings.state.clipboard);
 
   const currentProvisioningUri = $derived(
     $loginTotpSecret ? buildProvisioningUri($loginTotpSecret) : null
   );
   const generateButtonLabel = $derived(
-    $loginTotpSecret ? t(locale, 'Regenerate Secret') : t(locale, 'Generate Secret')
+    $loginTotpSecret ? t('Regenerate Secret') : t('Generate Secret')
   );
 
   let passwordModalOpen = $state(false);
@@ -472,19 +470,14 @@
     refreshTotpStatus();
   });
 
-  import { clipboardSettings } from '$lib/stores/clipboard';
-  let currentClipboardSettings = $state(get(clipboardSettings));
-  const unsubClipboard = clipboardSettings.subscribe((s) => (currentClipboardSettings = s));
-
   onDestroy(() => {
-    unsubscribe();
-    unsubClipboard();
     clearCopyTimeouts();
   });
 
   function applyChanges(partial: Partial<SecuritySettings>) {
-    currentSettings = { ...currentSettings, ...partial };
-    securitySettings.set(currentSettings);
+    const updated = { ...settings.state.security, ...partial };
+    settings.state.security = updated;
+    settings.save();
   }
 
   function toggleSetting(setting: keyof SecuritySettings) {
@@ -508,9 +501,7 @@
   function updateClipboardClear(value: string) {
     const seconds = parseInt(value);
     if (!isNaN(seconds)) {
-      import('$lib/stores/clipboard').then(({ clipboardSettings }) => {
-        clipboardSettings.update((s) => ({ ...s, clearAfterDuration: seconds }));
-      });
+      updateClipboardSettings({ clearAfterDuration: seconds });
     }
   }
 
@@ -861,9 +852,9 @@
       </div>
       <div class="flex w-full items-center justify-between">
         <div>
-          <CardTitle>{t(locale, 'Vault Health')}</CardTitle>
+          <CardTitle>{t('Vault Health')}</CardTitle>
           <CardDescription>
-            {t(locale, 'Security analysis of your stored items.')}
+            {t('Security analysis of your stored items.')}
           </CardDescription>
         </div>
         <Button variant="ghost" size="sm" onclick={loadSecurityReport} disabled={healthLoading}>
@@ -896,7 +887,7 @@
             )}
           >
             <p class="text-sm font-semibold">
-              {t(locale, 'Reused Passwords')}
+              {t('Reused Passwords')}
             </p>
             <p
               class={cn(
@@ -908,8 +899,8 @@
             </p>
             <p class="text-muted-foreground mt-1 text-xs">
               {reusedCount > 0
-                ? t(locale, 'Multiple items share the same password.')
-                : t(locale, 'No password reuse detected.')}
+                ? t('Multiple items share the same password.')
+                : t('No password reuse detected.')}
             </p>
           </div>
 
@@ -919,7 +910,7 @@
               weakCount > 0 ? 'border-warning/40 bg-warning/5' : 'border-border/60 bg-muted/20'
             )}
           >
-            <p class="text-sm font-semibold">{t(locale, 'Weak Passwords')}</p>
+            <p class="text-sm font-semibold">{t('Weak Passwords')}</p>
             <p
               class={cn(
                 'mt-1 text-2xl font-bold',
@@ -930,8 +921,8 @@
             </p>
             <p class="text-muted-foreground mt-1 text-xs">
               {weakCount > 0
-                ? t(locale, 'Passwords shorter than 8 characters.')
-                : t(locale, 'No weak passwords detected.')}
+                ? t('Passwords shorter than 8 characters.')
+                : t('No weak passwords detected.')}
             </p>
           </div>
         </div>
@@ -943,7 +934,6 @@
             <TriangleAlert class="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
             <p>
               {t(
-                locale,
                 'Security issues detected. Consider updating shared or short passwords to improve vault integrity.'
               )}
             </p>
@@ -953,7 +943,7 @@
             class="mt-4 flex items-start gap-3 rounded-lg border border-emerald-500/40 bg-emerald-500/10 p-3 text-sm text-emerald-600"
           >
             <Check class="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-            <p>{t(locale, 'Your vault health looks great!')}</p>
+            <p>{t('Your vault health looks great!')}</p>
           </div>
         {/if}
       {/if}
@@ -969,10 +959,10 @@
       </div>
       <div>
         <CardTitle>
-          {t(locale, 'Two-factor authentication')}
+          {t('Two-factor authentication')}
         </CardTitle>
         <CardDescription>
-          {t(locale, 'Protect vault unlocks with a time-based one-time password.')}
+          {t('Protect vault unlocks with a time-based one-time password.')}
         </CardDescription>
       </div>
     </CardHeader>
@@ -982,7 +972,7 @@
           <Check class="text-primary h-4 w-4" aria-hidden="true" />
           <div class="space-y-1">
             <AlertTitle>
-              {t(locale, 'Authenticator enabled')}
+              {t('Authenticator enabled')}
             </AlertTitle>
             <AlertDescription>{totpSetupSuccess}</AlertDescription>
           </div>
@@ -994,7 +984,7 @@
           <ShieldCheck class="text-primary h-4 w-4" aria-hidden="true" />
           <div class="space-y-1">
             <AlertTitle>
-              {t(locale, 'Authenticator disabled')}
+              {t('Authenticator disabled')}
             </AlertTitle>
             <AlertDescription>{totpDisableSuccess}</AlertDescription>
           </div>
@@ -1006,7 +996,7 @@
           <CircleAlert class="h-4 w-4" aria-hidden="true" />
           <div class="space-y-1">
             <AlertTitle>
-              {t(locale, 'Unable to load status')}
+              {t('Unable to load status')}
             </AlertTitle>
             <AlertDescription>{totpStatusError}</AlertDescription>
           </div>
@@ -1018,7 +1008,7 @@
           <CircleAlert class="h-4 w-4" aria-hidden="true" />
           <div class="space-y-1">
             <AlertTitle>
-              {t(locale, 'Unable to generate secret')}
+              {t('Unable to generate secret')}
             </AlertTitle>
             <AlertDescription>{totpGenerationError}</AlertDescription>
           </div>
@@ -1029,16 +1019,14 @@
         <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p class="text-foreground text-sm font-semibold">
-              {t(locale, 'Current status')}
+              {t('Current status')}
             </p>
             <p class="text-muted-foreground text-sm">
               {$loginTotpConfigured
                 ? t(
-                    locale,
                     'Unlocking requires both your master password and an authenticator token.'
                   )
                 : t(
-                    locale,
                     'Generate a secret to require an authenticator token when unlocking the vault.'
                   )}
             </p>
@@ -1172,14 +1160,14 @@
 
           <div class="space-y-2">
             <Label for="totp-verification">
-              {t(locale, 'Step 2 — Confirm a code')}
+              {t('Step 2 — Confirm a code')}
             </Label>
             <Input
               id="totp-verification"
               type="number"
               maxlength={TOTP_CODE_LENGTH}
               autocomplete="one-time-code"
-              placeholder={t(locale, 'Enter 6-digit code')}
+              placeholder={t('Enter 6-digit code')}
               bind:inputValue={totpVerificationCode}
               oninput={sanitizeTotpCode}
               title="Verification Code"
@@ -1194,7 +1182,7 @@
               <CircleAlert class="h-4 w-4" aria-hidden="true" />
               <div class="space-y-1">
                 <AlertTitle>
-                  {t(locale, 'Unable to generate secret')}
+                  {t('Unable to generate secret')}
                 </AlertTitle>
                 <AlertDescription>{totpGenerationError}</AlertDescription>
               </div>
@@ -1213,7 +1201,7 @@
               {:else}
                 <Check class="h-4 w-4" aria-hidden="true" />
               {/if}
-              {isConfirmingTotp ? t(locale, 'Verifying…') : t(locale, 'Verify & enable')}
+              {isConfirmingTotp ? t('Verifying…') : t('Verify & enable')}
             </Button>
             <Button
               type="button"
@@ -1226,16 +1214,15 @@
                 class={`h-4 w-4 ${isGeneratingTotpSecret ? 'animate-spin' : ''}`}
                 aria-hidden="true"
               />
-              {t(locale, 'Generate another secret')}
+              {t('Generate another secret')}
             </Button>
             <Button type="button" variant="ghost" onclick={cancelTotpSetup}>
-              {t(locale, 'Cancel')}
+              {t('Cancel')}
             </Button>
           </div>
 
           <p class="text-muted-foreground text-xs">
             {t(
-              locale,
               'Codes rotate every 30 seconds. If verification fails, wait for the next code before trying again.'
             )}
           </p>
@@ -1252,11 +1239,9 @@
               <p class="text-muted-foreground text-sm">
                 {storedSecret
                   ? t(
-                      locale,
                       'Copy the secret if you need to enrol another authenticator or keep an offline backup.'
                     )
                   : t(
-                      locale,
                       'This device does not have a local copy of the secret. Rotate the secret to capture it again.'
                     )}
               </p>
@@ -1279,7 +1264,7 @@
                   onclick={() => copySecret(storedSecret, 'stored')}
                 >
                   <Copy class="h-4 w-4" aria-hidden="true" />
-                  {t(locale, 'Copy secret')}
+                  {t('Copy secret')}
                 </Button>
                 <Button
                   type="button"
@@ -1289,7 +1274,7 @@
                   disabled={!currentProvisioningUri}
                 >
                   <Link2 class="h-4 w-4" aria-hidden="true" />
-                  {t(locale, 'Copy setup link')}
+                  {t('Copy setup link')}
                 </Button>
               </div>
               {#if secretCopyFeedback?.context === 'stored'}
@@ -1314,10 +1299,10 @@
               <CircleAlert class="h-4 w-4" aria-hidden="true" />
               <div class="space-y-1">
                 <AlertTitle>
-                  {t(locale, 'No local secret available')}
+                  {t('No local secret available')}
                 </AlertTitle>
                 <AlertDescription>
-                  {t(locale, 'Rotate the secret to store a copy on this device for backup access.')}
+                  {t('Rotate the secret to store a copy on this device for backup access.')}
                 </AlertDescription>
               </div>
             </Alert>
@@ -1336,10 +1321,10 @@
       </div>
       <div>
         <CardTitle>
-          {t(locale, 'Master Password & Encryption')}
+          {t('Master Password & Encryption')}
         </CardTitle>
         <CardDescription>
-          {t(locale, 'Manage the master password and key derivation policy.')}
+          {t('Manage the master password and key derivation policy.')}
         </CardDescription>
       </div>
     </CardHeader>
@@ -1349,14 +1334,14 @@
       >
         <div>
           <p class="text-foreground text-sm font-semibold">
-            {t(locale, 'Master Password')}
+            {t('Master Password')}
           </p>
           <p class="text-muted-foreground text-sm">
-            {t(locale, 'Update the password used to unlock your vault.')}
+            {t('Update the password used to unlock your vault.')}
           </p>
         </div>
         <Button variant="outline" onclick={openPasswordModal}>
-          {t(locale, 'Change Password')}
+          {t('Change Password')}
         </Button>
       </div>
 
@@ -1365,14 +1350,14 @@
       >
         <div>
           <p class="text-foreground text-sm font-semibold">
-            {t(locale, 'Key Derivation')}
+            {t('Key Derivation')}
           </p>
           <p class="text-muted-foreground text-sm">
-            {argon2Loading ? t(locale, 'Loading key derivation parameters…') : argon2Summary}
+            {argon2Loading ? t('Loading key derivation parameters…') : argon2Summary}
           </p>
         </div>
         <Button variant="outline" size="sm" onclick={openKdfModal}>
-          {t(locale, 'Reconfigure KDF')}
+          {t('Reconfigure KDF')}
         </Button>
       </div>
     </CardContent>
@@ -1387,10 +1372,10 @@
       </div>
       <div>
         <CardTitle>
-          {t(locale, 'Auto-lock Controls')}
+          {t('Auto-lock Controls')}
         </CardTitle>
         <CardDescription>
-          {t(locale, 'Define when the vault should automatically lock itself.')}
+          {t('Define when the vault should automatically lock itself.')}
         </CardDescription>
       </div>
     </CardHeader>
@@ -1400,10 +1385,10 @@
       >
         <div>
           <p class="text-foreground text-sm font-semibold">
-            {t(locale, 'Lock on Suspend')}
+            {t('Lock on Suspend')}
           </p>
           <p class="text-muted-foreground text-sm">
-            {t(locale, 'Lock whenever the system sleeps or hibernates.')}
+            {t('Lock whenever the system sleeps or hibernates.')}
           </p>
         </div>
         <Switch
@@ -1418,10 +1403,10 @@
       >
         <div>
           <p class="text-foreground text-sm font-semibold">
-            {t(locale, 'Lock on Minimise')}
+            {t('Lock on Minimise')}
           </p>
           <p class="text-muted-foreground text-sm">
-            {t(locale, 'Lock the vault when the window is minimised.')}
+            {t('Lock the vault when the window is minimised.')}
           </p>
         </div>
         <Switch
@@ -1433,10 +1418,10 @@
 
       <div class="border-border/60 bg-muted/20 flex flex-col gap-2 rounded-lg border px-4 py-4">
         <Label class="text-foreground text-sm font-semibold">
-          {t(locale, 'Lock Grace Period')}
+          {t('Lock Grace Period')}
         </Label>
         <p class="text-muted-foreground text-sm">
-          {t(locale, 'Delay before locking after minimize or suspend.')}
+          {t('Delay before locking after minimize or suspend.')}
         </p>
         <Select
           type="single"
@@ -1446,7 +1431,7 @@
           <SelectTrigger aria-label="Select lock grace period" class="w-full sm:w-56">
             <span data-slot="select-value" class="truncate text-sm">
               {lockGraceOptions.find((o) => o.value === currentSettings.lockGraceSeconds.toString())
-                ?.label || t(locale, 'Select duration')}
+                ?.label || t('Select duration')}
             </span>
           </SelectTrigger>
           <SelectContent>
@@ -1461,10 +1446,10 @@
 
       <div class="border-border/60 bg-muted/20 flex flex-col gap-2 rounded-lg border px-4 py-4">
         <Label class="text-foreground text-sm font-semibold">
-          {t(locale, 'Auto-lock After Inactivity')}
+          {t('Auto-lock After Inactivity')}
         </Label>
         <p class="text-muted-foreground text-sm">
-          {t(locale, 'Lock the vault automatically after the selected idle period.')}
+          {t('Lock the vault automatically after the selected idle period.')}
         </p>
         <Select
           type="single"
@@ -1473,7 +1458,7 @@
         >
           <SelectTrigger aria-label="Select auto-lock inactivity" class="w-full sm:w-56">
             <span data-slot="select-value" class="truncate text-sm">
-              {getAutoLockLabel(currentSettings.autoLockInactivity) || t(locale, 'Select duration')}
+              {getAutoLockLabel(currentSettings.autoLockInactivity) || t('Select duration')}
             </span>
           </SelectTrigger>
           <SelectContent>
@@ -1488,11 +1473,10 @@
 
       <div class="border-border/60 bg-muted/20 flex flex-col gap-2 rounded-lg border px-4 py-4">
         <Label class="text-foreground text-sm font-semibold">
-          {t(locale, 'Clipboard Clear Timeout')}
+          {t('Clipboard Clear Timeout')}
         </Label>
         <p class="text-muted-foreground text-sm">
           {t(
-            locale,
             'Automatically clear sensitive data from your clipboard after the selected duration.'
           )}
         </p>
@@ -1505,7 +1489,7 @@
             <span data-slot="select-value" class="truncate text-sm">
               {clipboardClearOptions.find(
                 (o) => o.value === currentClipboardSettings.clearAfterDuration.toString()
-              )?.label || t(locale, 'Select duration')}
+              )?.label || t('Select duration')}
             </span>
           </SelectTrigger>
           <SelectContent>
@@ -1529,10 +1513,10 @@
       </div>
       <div>
         <CardTitle>
-          {t(locale, 'Biometric & Session')}
+          {t('Biometric & Session')}
         </CardTitle>
         <CardDescription>
-          {t(locale, 'Control biometric unlock availability and session persistence.')}
+          {t('Control biometric unlock availability and session persistence.')}
         </CardDescription>
       </div>
     </CardHeader>
@@ -1542,10 +1526,10 @@
       >
         <div>
           <p class="text-foreground text-sm font-semibold">
-            {t(locale, 'Biometric Unlock')}
+            {t('Biometric Unlock')}
           </p>
           <p class="text-muted-foreground text-sm">
-            {t(locale, 'Allow fingerprint or face recognition to unlock the vault.')}
+            {t('Allow fingerprint or face recognition to unlock the vault.')}
           </p>
         </div>
         <Switch
@@ -1561,10 +1545,10 @@
       >
         <div>
           <p class="text-foreground text-sm font-semibold">
-            {t(locale, 'Session Persistence')}
+            {t('Session Persistence')}
           </p>
           <p class="text-muted-foreground text-sm">
-            {t(locale, 'Remember the unlocked session between restarts.')}
+            {t('Remember the unlocked session between restarts.')}
           </p>
         </div>
         <Switch
@@ -1586,14 +1570,14 @@
       <div class="flex w-full flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <CardTitle>
-            {t(locale, 'Paired Devices')}
+            {t('Paired Devices')}
           </CardTitle>
           <CardDescription>
-            {t(locale, 'Review devices authorised for biometric or key-based unlock.')}
+            {t('Review devices authorised for biometric or key-based unlock.')}
           </CardDescription>
         </div>
         <Button variant="outline" size="sm" onclick={handlePairDevice} disabled={devicesLoading}>
-          {t(locale, 'Pair New Device')}
+          {t('Pair New Device')}
         </Button>
       </div>
     </CardHeader>
@@ -1601,11 +1585,11 @@
       {#if devicesLoading}
         <div class="text-muted-foreground flex items-center gap-2 text-sm">
           <Spinner class="h-4 w-4" aria-hidden="true" />
-          <span>{t(locale, 'Loading devices…')}</span>
+          <span>{t('Loading devices…')}</span>
         </div>
       {:else if devices.length === 0}
         <p class="text-muted-foreground text-sm">
-          {t(locale, 'No devices have been paired yet.')}
+          {t('No devices have been paired yet.')}
         </p>
       {:else}
         {#each devices as device (device.id)}
@@ -1664,7 +1648,7 @@
             {#if isRevokingDevices}
               <Spinner class="mr-2 h-4 w-4" aria-hidden="true" />
             {/if}
-            {t(locale, 'Revoke All Devices')}
+            {t('Revoke All Devices')}
           </Button>
         </div>
       {/if}
@@ -1680,10 +1664,10 @@
       </div>
       <div>
         <CardTitle>
-          {t(locale, 'Privacy Controls')}
+          {t('Privacy Controls')}
         </CardTitle>
         <CardDescription>
-          {t(locale, 'Fine-tune privacy and diagnostic data handling.')}
+          {t('Fine-tune privacy and diagnostic data handling.')}
         </CardDescription>
       </div>
     </CardHeader>
@@ -1696,17 +1680,17 @@
             <div>
               <p class="text-foreground text-sm font-semibold">
                 {toggle.key === 'externalBreachCheck'
-                  ? t(locale, 'External Breach Check')
+                  ? t('External Breach Check')
                   : toggle.key === 'localReuseDetection'
-                    ? t(locale, 'Local Reuse Detection')
-                    : t(locale, 'Secure RAM Handling')}
+                    ? t('Local Reuse Detection')
+                    : t('Secure RAM Handling')}
               </p>
               <p class="text-muted-foreground text-sm">
                 {toggle.key === 'externalBreachCheck'
-                  ? t(locale, 'Cross-reference vault items against known breach databases.')
+                  ? t('Cross-reference vault items against known breach databases.')
                   : toggle.key === 'localReuseDetection'
-                    ? t(locale, 'Alert when passwords repeat across vault entries.')
-                    : t(locale, 'Allocate hardened memory regions for sensitive operations.')}
+                    ? t('Alert when passwords repeat across vault entries.')
+                    : t('Allocate hardened memory regions for sensitive operations.')}
               </p>
             </div>
             <Switch
@@ -1721,11 +1705,11 @@
       <div class="grid gap-3 sm:grid-cols-2">
         <Button variant="outline" class="justify-start gap-3" onclick={() => {}}>
           <HardDrive class="h-4 w-4" aria-hidden="true" />
-          {t(locale, 'Access Local Logs')}
+          {t('Access Local Logs')}
         </Button>
         <Button variant="outline" class="justify-start gap-3" onclick={() => {}}>
           <Trash2 class="h-4 w-4" aria-hidden="true" />
-          {t(locale, 'Clear Local Logs')}
+          {t('Clear Local Logs')}
         </Button>
       </div>
 
@@ -1749,10 +1733,10 @@
       </div>
       <div>
         <CardTitle>
-          {t(locale, 'Security Actions')}
+          {t('Security Actions')}
         </CardTitle>
         <CardDescription>
-          {t(locale, 'Execute advanced maintenance and security tasks.')}
+          {t('Execute advanced maintenance and security tasks.')}
         </CardDescription>
       </div>
     </CardHeader>
@@ -1775,17 +1759,17 @@
             <div class="space-y-1">
               <p class="text-foreground text-sm font-semibold">
                 {action.id === 'rekey'
-                  ? t(locale, 'Re-key Vault')
+                  ? t('Re-key Vault')
                   : action.id === 'wipe-memory'
-                    ? t(locale, 'Clear Memory')
-                    : t(locale, 'Integrity Check')}
+                    ? t('Clear Memory')
+                    : t('Integrity Check')}
               </p>
               <p class="text-muted-foreground text-xs wrap-break-word whitespace-normal">
                 {action.id === 'rekey'
-                  ? t(locale, 'Rotate encryption keys and re-encrypt stored data.')
+                  ? t('Rotate encryption keys and re-encrypt stored data.')
                   : action.id === 'wipe-memory'
-                    ? t(locale, 'Scrub sensitive material from memory immediately.')
-                    : t(locale, 'Verify vault contents for tampering or corruption.')}
+                    ? t('Scrub sensitive material from memory immediately.')
+                    : t('Verify vault contents for tampering or corruption.')}
               </p>
             </div>
           </Button>
@@ -1799,11 +1783,10 @@
   <DialogContent class="sm:max-w-lg">
     <DialogHeader>
       <DialogTitle>
-        {t(locale, 'Change Master Password')}
+        {t('Change Master Password')}
       </DialogTitle>
       <DialogDescription>
         {t(
-          locale,
           'Provide your current master password and enter a new secure password to re-encrypt the vault.'
         )}
       </DialogDescription>
@@ -1812,13 +1795,13 @@
     <div class="space-y-4">
       <div class="space-y-2">
         <Label for="current-password">
-          {t(locale, 'Current Password')}
+          {t('Current Password')}
         </Label>
         <div class="relative">
           <Input
             id="current-password"
             type={showCurrentPassword ? 'text' : 'password'}
-            placeholder={t(locale, 'Enter current password')}
+            placeholder={t('Enter current password')}
             bind:inputValue={currentPassword}
             title="Current Password"
           />
@@ -1828,8 +1811,8 @@
             size="icon"
             class="absolute top-1/2 right-1 -translate-y-1/2"
             aria-label={showCurrentPassword
-              ? t(locale, 'Hide current password')
-              : t(locale, 'Show current password')}
+              ? t('Hide current password')
+              : t('Show current password')}
             onclick={togglePasswordVisibility}
           >
             {#if showCurrentPassword}
@@ -1842,11 +1825,11 @@
       </div>
 
       <div class="space-y-2">
-        <Label for="new-password">{t(locale, 'New Password')}</Label>
+        <Label for="new-password">{t('New Password')}</Label>
         <Input
           id="new-password"
           type="password"
-          placeholder={t(locale, 'Enter new password')}
+          placeholder={t('Enter new password')}
           bind:inputValue={newPassword}
           title="New Password"
         />
@@ -1854,12 +1837,12 @@
 
       <div class="space-y-2">
         <Label for="confirm-password">
-          {t(locale, 'Confirm New Password')}
+          {t('Confirm New Password')}
         </Label>
         <Input
           id="confirm-password"
           type="password"
-          placeholder={t(locale, 'Confirm new password')}
+          placeholder={t('Confirm new password')}
           bind:inputValue={confirmPassword}
           title="Confirm Password"
         />
@@ -1871,7 +1854,6 @@
         <TriangleAlert class="mt-0.5 h-4 w-4" aria-hidden="true" />
         <p>
           {t(
-            locale,
             'Changing the master password re-encrypts the vault. The operation may take several minutes for large vaults.'
           )}
         </p>
@@ -1883,7 +1865,7 @@
 
     <DialogFooter class="gap-2">
       <Button type="button" variant="outline" onclick={closePasswordModal}>
-        {t(locale, 'Cancel')}
+        {t('Cancel')}
       </Button>
       <Button
         type="button"
@@ -1895,7 +1877,7 @@
         {#if isChangingPassword}
           <Spinner class="mr-2 h-4 w-4" aria-hidden="true" />
         {/if}
-        {t(locale, 'Change Password')}
+        {t('Change Password')}
       </Button>
     </DialogFooter>
   </DialogContent>
@@ -1905,17 +1887,17 @@
   <DialogContent class="sm:max-w-lg">
     <DialogHeader>
       <DialogTitle>
-        {t(locale, 'Reconfigure Key Derivation')}
+        {t('Reconfigure Key Derivation')}
       </DialogTitle>
       <DialogDescription>
-        {t(locale, 'Adjust the Argon2id parameters used when deriving the vault encryption key.')}
+        {t('Adjust the Argon2id parameters used when deriving the vault encryption key.')}
       </DialogDescription>
     </DialogHeader>
 
     <div class="space-y-4">
       <div class="grid gap-3 sm:grid-cols-3">
         <div class="space-y-2">
-          <Label for="kdf-memory">{t(locale, 'Memory (MiB)')}</Label>
+          <Label for="kdf-memory">{t('Memory (MiB)')}</Label>
           <Input
             id="kdf-memory"
             type="number"
@@ -1925,7 +1907,7 @@
           />
         </div>
         <div class="space-y-2">
-          <Label for="kdf-time">{t(locale, 'Time Cost')}</Label>
+          <Label for="kdf-time">{t('Time Cost')}</Label>
           <Input
             id="kdf-time"
             type="number"
@@ -1935,7 +1917,7 @@
           />
         </div>
         <div class="space-y-2">
-          <Label for="kdf-parallelism">{t(locale, 'Parallelism')}</Label>
+          <Label for="kdf-parallelism">{t('Parallelism')}</Label>
           <Input
             id="kdf-parallelism"
             type="number"
@@ -1947,12 +1929,12 @@
       </div>
 
       <div class="space-y-2">
-        <Label for="kdf-password">{t(locale, 'Current Password')}</Label>
+        <Label for="kdf-password">{t('Current Password')}</Label>
         <div class="relative">
           <Input
             id="kdf-password"
             type={showKdfPassword ? 'text' : 'password'}
-            placeholder={t(locale, 'Enter current password')}
+            placeholder={t('Enter current password')}
             bind:inputValue={kdfCurrentPassword}
             title="Password"
           />
@@ -1962,8 +1944,8 @@
             size="icon"
             class="absolute top-1/2 right-1 -translate-y-1/2"
             aria-label={showKdfPassword
-              ? t(locale, 'Hide current password')
-              : t(locale, 'Show current password')}
+              ? t('Hide current password')
+              : t('Show current password')}
             onclick={toggleKdfPasswordVisibility}
           >
             {#if showKdfPassword}
@@ -1981,7 +1963,6 @@
         <TriangleAlert class="text-primary mt-0.5 h-4 w-4" aria-hidden="true" />
         <p>
           {t(
-            locale,
             'Updating Argon2 parameters will re-encrypt the vault and may take a few moments.'
           )}
         </p>
@@ -1994,10 +1975,11 @@
 
     <DialogFooter class="gap-2">
       <Button type="button" variant="outline" onclick={() => handleKdfDialogChange(false)}>
-        {t(locale, 'Cancel')}
+        {t('Cancel')}
       </Button>
       <Button
         type="button"
+        variant="destructive"
         onclick={submitKdfUpdate}
         disabled={!isKdfFormValid || isUpdatingKdf}
         aria-busy={isUpdatingKdf}
@@ -2005,7 +1987,7 @@
         {#if isUpdatingKdf}
           <Spinner class="mr-2 h-4 w-4" aria-hidden="true" />
         {/if}
-        {t(locale, 'Apply Changes')}
+        {t('Update Parameters')}
       </Button>
     </DialogFooter>
   </DialogContent>

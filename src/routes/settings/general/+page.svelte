@@ -1,7 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { settingsStore } from '$lib/stores';
-  import { generalSettings } from '$lib/stores/general';
+  import { generalSettings } from '$lib/stores/general.svelte';
   import type { AppLanguage, GeneralSettings } from '$lib/config/settings';
   import KeyboardShortcutsPopup from '$lib/components/KeyboardShortcutsPopup.svelte';
   import { Button } from '$lib/components/ui/button';
@@ -16,7 +15,7 @@
   import { Select, SelectContent, SelectItem, SelectTrigger } from '$lib/components/ui/select';
   import { Switch } from '$lib/components/ui/switch';
   import { Smartphone, Key, Lock, Settings, X } from '@lucide/svelte';
-  import { currentLocale, t as translate, type I18nKey } from '$lib/i18n';
+  import { i18n, t as translate, type I18nKey } from '$lib/i18n.svelte';
 
   interface Props {
     onclose?: () => void;
@@ -31,20 +30,10 @@
   type SelectSettingKey = Exclude<keyof GeneralSettings, BooleanSettingKey>;
   type NonLanguageSelectKey = Exclude<SelectSettingKey, 'appLanguage'>;
 
-  let currentGeneralSettings = $state<GeneralSettings>({} as GeneralSettings);
-  const locale = $derived($currentLocale);
+  let currentGeneralSettings = $derived(generalSettings.state);
+  const locale = $derived(i18n.locale);
   const t = (key: I18nKey, vars: Record<string, string | number> = {}) =>
     translate(locale, key, vars);
-
-  $effect(() => {
-    return generalSettings.subscribe((value) => {
-      currentGeneralSettings = value;
-    });
-  });
-
-  onMount(() => {
-    settingsStore.registerModule('general', generalSettings);
-  });
 
   let showKeyboardShortcutsPopup = $state(false);
   let languageSearch = $state('');
@@ -101,11 +90,11 @@
   ];
 
   function updateSetting<K extends keyof GeneralSettings>(setting: K, value: GeneralSettings[K]) {
-    generalSettings.set({ ...currentGeneralSettings, [setting]: value });
+    generalSettings.update(setting, value);
   }
 
   function toggleSwitch(setting: BooleanSettingKey) {
-    updateSetting(setting, !currentGeneralSettings[setting]);
+    generalSettings.toggle(setting);
   }
 
   function getLanguageOptions(): LanguageOption[] {
@@ -190,46 +179,44 @@
           <Label class="text-foreground text-sm font-medium">
             {t('settingsGeneralLanguageLabel')}
           </Label>
-          {#each [locale] as l (l)}
-            <Select
-              type="single"
-              value={currentGeneralSettings.appLanguage}
-              onValueChange={(value) => {
-                const next = getLanguageOptions().find((option) => option.value === value)?.value;
-                if (!next) return;
-                updateSetting('appLanguage', next);
-                languageSearch = '';
-              }}
-            >
-              <SelectTrigger aria-label={t('settingsGeneralLanguageAria')} class="w-full">
-                <span data-slot="select-value" class="truncate">
-                  {getOptionLabel('appLanguage')}
-                </span>
-              </SelectTrigger>
-              <SelectContent>
-                <div class="px-2 pt-2">
-                  <input
-                    class="border-border/60 bg-muted/30 focus:border-primary focus:ring-primary/30 text-foreground placeholder:text-muted-foreground w-full rounded-md border px-3 py-2 text-sm outline-none focus:ring-2"
-                    type="text"
-                    placeholder={t('settingsGeneralLanguageSearchPlaceholder')}
-                    aria-label={t('settingsGeneralLanguageSearchPlaceholder')}
-                    bind:value={languageSearch}
-                  />
-                </div>
-                <div class="max-h-64 overflow-y-auto pb-1">
-                  {#if getFilteredLanguageOptions().length === 0}
-                    <div class="text-muted-foreground px-3 py-2 text-sm">
-                      {t('settingsGeneralLanguageNoResults')}
-                    </div>
-                  {:else}
-                    {#each getFilteredLanguageOptions() as option (option.value)}
-                      <SelectItem value={option.value}>{option.label}</SelectItem>
-                    {/each}
-                  {/if}
-                </div>
-              </SelectContent>
-            </Select>
-          {/each}
+          <Select
+            type="single"
+            value={currentGeneralSettings.appLanguage}
+            onValueChange={(value) => {
+              const next = getLanguageOptions().find((option) => option.value === value)?.value;
+              if (!next) return;
+              updateSetting('appLanguage', next);
+              languageSearch = '';
+            }}
+          >
+            <SelectTrigger aria-label={t('settingsGeneralLanguageAria')} class="w-full">
+              <span data-slot="select-value" class="truncate">
+                {getOptionLabel('appLanguage')}
+              </span>
+            </SelectTrigger>
+            <SelectContent>
+              <div class="px-2 pt-2">
+                <input
+                  class="border-border/60 bg-muted/30 focus:border-primary focus:ring-primary/30 text-foreground placeholder:text-muted-foreground w-full rounded-md border px-3 py-2 text-sm outline-none focus:ring-2"
+                  type="text"
+                  placeholder={t('settingsGeneralLanguageSearchPlaceholder')}
+                  aria-label={t('settingsGeneralLanguageSearchPlaceholder')}
+                  bind:value={languageSearch}
+                />
+              </div>
+              <div class="max-h-64 overflow-y-auto pb-1">
+                {#if getFilteredLanguageOptions().length === 0}
+                  <div class="text-muted-foreground px-3 py-2 text-sm">
+                    {t('settingsGeneralLanguageNoResults')}
+                  </div>
+                {:else}
+                  {#each getFilteredLanguageOptions() as option (option.value)}
+                    <SelectItem value={option.value}>{option.label}</SelectItem>
+                  {/each}
+                {/if}
+              </div>
+            </SelectContent>
+          </Select>
         </div>
 
         <div class="space-y-2">

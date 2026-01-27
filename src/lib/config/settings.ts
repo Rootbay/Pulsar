@@ -1,3 +1,5 @@
+import type { Keybind } from './keybinds';
+
 export interface AdvancedSettings {
   kdfPreset: 'fast' | 'balanced' | 'secure' | 'paranoid';
   timeCost: number;
@@ -328,3 +330,19 @@ export const defaultSiteRules: SiteRule[] = [
     }
   }
 ];
+
+export interface AllSettings {
+  advanced: AdvancedSettings;
+  appearance: AppearanceSettings;
+  autofill: AutofillSettings;
+  backup: BackupSettings;
+  clipboard: ClipboardSettings;
+  general: GeneralSettings;
+  generator: GeneratorSettings;
+  keybinds: Keybind[];
+  passwordPresets: PasswordPreset[];
+  recentDatabases: string[];
+  siteRules: SiteRule[];
+  security: SecuritySettings;
+  vaultSettingsById: VaultSettingsMap;
+}

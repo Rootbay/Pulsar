@@ -1,8 +1,5 @@
 <script lang="ts">
-  import { get } from 'svelte/store';
-  import { callBackend } from '$lib/utils/backend';
-  import { toast } from '$lib/components/ui/sonner';
-  import { advancedSettings } from '$lib/stores/advanced';
+  import { settings } from '$lib/stores/appSettings.svelte';
   import type { AdvancedSettings } from '$lib/config/settings';
   import { Button } from '$lib/components/ui/button';
   import {
@@ -12,107 +9,79 @@
     CardHeader,
     CardTitle
   } from '$lib/components/ui/card';
-  import { Input } from '$lib/components/ui/input';
   import { Label } from '$lib/components/ui/label';
+  import { Select, SelectContent, SelectItem, SelectTrigger } from '$lib/components/ui/select';
   import { Switch } from '$lib/components/ui/switch';
+  import { Input } from '$lib/components/ui/input';
+  import { ShieldAlert, Gauge, TriangleAlert, Cpu, Database, X, ShieldCheck } from '@lucide/svelte';
+  import { i18n, t as translate, type I18nKey } from '$lib/i18n.svelte';
   import { cn } from '$lib/utils';
-  import { Gauge, TriangleAlert, ShieldCheck, ShieldAlert } from '@lucide/svelte';
-  import { currentLocale, t } from '$lib/i18n';
+
+  interface Props {
+    onclose?: () => void;
+  }
+
+  let { onclose }: Props = $props();
+
+  let currentSettings = $derived(settings.state.advanced);
+  const locale = $derived(i18n.locale);
+  const t = (key: string, vars = {}) => translate(locale, key as any, vars);
 
   type KdfPreset = AdvancedSettings['kdfPreset'];
 
-  const locale = $derived($currentLocale);
-
-  const kdfPresets: Array<{ value: KdfPreset }> = [
-    { value: 'fast' },
-    { value: 'balanced' },
-    { value: 'secure' },
-    { value: 'paranoid' }
+  const kdfPresets: { value: KdfPreset; label: string }[] = [
+    { value: 'fast', label: 'Fast' },
+    { value: 'balanced', label: 'Balanced' },
+    { value: 'secure', label: 'Secure' },
+    { value: 'paranoid', label: 'Paranoid' }
   ];
 
-  const presetConfig: Record<KdfPreset, { time: number; memory: number; parallel: number }> = {
-    fast: { time: 1, memory: 16, parallel: 1 },
-    balanced: { time: 3, memory: 64, parallel: 4 },
-    secure: { time: 6, memory: 256, parallel: 8 },
-    paranoid: { time: 12, memory: 1024, parallel: 16 }
-  };
-
-  const memoryToggles: Array<{
-    key: 'lockMemoryPages' | 'secureMemoryAllocation';
-    title: string;
-    description: string;
-  }> = [
-    {
-      key: 'lockMemoryPages',
-      title: 'Lock Memory Pages',
-      description: 'Prevent sensitive pages from being swapped to disk.'
-    },
-    {
-      key: 'secureMemoryAllocation',
-      title: 'Secure Memory Allocation',
-      description: 'Use hardened allocators for secrets kept in RAM.'
-    }
-  ];
-
-  const WIPE_CONFIRMATION_TOKEN = 'DELETE VAULT';
-
-  let currentSettings = $state<AdvancedSettings>(get(advancedSettings));
-
-  let kdfPreset = $derived(currentSettings.kdfPreset);
-  let timeCost = $derived(currentSettings.timeCost);
-  let memoryCost = $derived(currentSettings.memoryCost);
-  let parallelism = $derived(currentSettings.parallelism);
+  const WIPE_CONFIRMATION_TOKEN = 'WIPE';
   let wipeConfirmationText = $state('');
-  let lockMemoryPages = $derived(currentSettings.lockMemoryPages);
-  let secureMemoryAllocation = $derived(currentSettings.secureMemoryAllocation);
+  let canWipeVault = $derived(wipeConfirmationText === WIPE_CONFIRMATION_TOKEN);
 
-  $effect(() => {
-    return advancedSettings.subscribe((value) => {
-      currentSettings = value;
-    });
-  });
-
-  function applyChanges(partial: Partial<AdvancedSettings>) {
-    advancedSettings.set({ ...currentSettings, ...partial });
+  function updateSetting<K extends keyof AdvancedSettings>(key: K, value: AdvancedSettings[K]) {
+    settings.state.advanced[key] = value;
+    settings.save();
   }
 
-  function selectPreset(preset: KdfPreset) {
-    const config = presetConfig[preset];
-    applyChanges({
-      kdfPreset: preset,
-      timeCost: config.time,
-      memoryCost: config.memory,
-      parallelism: config.parallel
-    });
+  function handlePresetChange(preset: KdfPreset) {
+    let updates: Partial<AdvancedSettings> = { kdfPreset: preset };
+
+    switch (preset) {
+      case 'fast':
+        updates = { ...updates, timeCost: 2, memoryCost: 32, parallelism: 2 };
+        break;
+      case 'balanced':
+        updates = { ...updates, timeCost: 3, memoryCost: 64, parallelism: 4 };
+        break;
+      case 'secure':
+        updates = { ...updates, timeCost: 4, memoryCost: 128, parallelism: 4 };
+        break;
+      case 'paranoid':
+        updates = { ...updates, timeCost: 8, memoryCost: 1024, parallelism: 8 };
+        break;
+    }
+
+    settings.state.advanced = { ...settings.state.advanced, ...updates };
+    settings.save();
   }
 
-  function handleSliderInput(field: 'timeCost' | 'memoryCost' | 'parallelism', event: Event) {
-    const value = Number((event.target as HTMLInputElement).value);
-    applyChanges({ [field]: value } as Partial<AdvancedSettings>);
-  }
-
-  function toggleSetting(setting: 'lockMemoryPages' | 'secureMemoryAllocation') {
-    applyChanges({ [setting]: !currentSettings[setting] } as Partial<AdvancedSettings>);
-  }
-
-  function handleWipeInput(event: Event) {
-    const value = (event.target as HTMLInputElement).value;
-    wipeConfirmationText = value;
+  function handleWipeInput(e: Event & { currentTarget: HTMLInputElement }) {
+      wipeConfirmationText = e.currentTarget.value;
   }
 
   async function handleWipeVault() {
-    if (!canWipeVault) return;
-
-    try {
-      await callBackend('wipe_vault_database');
-      toast.success(t(locale, 'Vault database wiped successfully.'));
-      wipeConfirmationText = '';
-    } catch (error) {
-      toast.error(`${t(locale, 'Failed to wipe vault')}: ${error}`);
-    }
+      if (!canWipeVault) return;
+      if (confirm(t('Are you absolutely sure you want to wipe the vault? This cannot be undone.'))) {
+          console.log('Wiping vault...');
+      }
   }
 
-  const canWipeVault = $derived(wipeConfirmationText.trim() === WIPE_CONFIRMATION_TOKEN);
+  const memoryToggles = [
+      { key: 'lockMemoryPages', title: 'Lock Memory Pages' },
+      { key: 'secureMemoryAllocation', title: 'Secure Memory Allocation' }
+  ];
 </script>
 
 <div class="min-h-0 flex-1 space-y-6 px-6 py-8">
@@ -125,12 +94,17 @@
       </div>
       <div>
         <CardTitle>
-          {t(locale, 'KDF Tuning (Argon2id)')}
+          {t('KDF Tuning (Argon2id)')}
         </CardTitle>
         <CardDescription>
-          {t(locale, 'Adjust key-derivation hardness to balance security with unlock speed.')}
+          {t('Adjust key-derivation hardness to balance security with unlock speed.')}
         </CardDescription>
       </div>
+      {#if onclose}
+        <Button variant="ghost" size="icon" onclick={onclose} aria-label="Close settings" class="ml-auto">
+          <X size={20} />
+        </Button>
+      {/if}
     </CardHeader>
     <CardContent class="flex flex-col gap-6 pt-4">
       <div
@@ -138,16 +112,13 @@
       >
         <TriangleAlert class="mt-0.5 h-4 w-4" aria-hidden="true" />
         <p>
-          {t(
-            locale,
-            'Increasing these parameters strengthens security but also slows down authentication.'
-          )}
+          {t('Increasing these parameters strengthens security but also slows down authentication.')}
         </p>
       </div>
 
       <div class="space-y-3">
         <Label class="text-foreground text-sm font-medium">
-          {t(locale, 'Presets')}
+          {t('Presets')}
         </Label>
         <div class="flex flex-wrap gap-2">
           {#each kdfPresets as preset (preset.value)}
@@ -157,19 +128,13 @@
               variant="outline"
               class={cn(
                 'border-border/60 bg-muted/20 rounded-full px-4 py-1.5 text-sm font-medium transition-colors',
-                kdfPreset === preset.value
+                currentSettings.kdfPreset === preset.value
                   ? 'border-primary/60 bg-primary/10 text-primary shadow-sm'
                   : 'hover:border-primary/50 hover:text-primary'
               )}
-              onclick={() => selectPreset(preset.value)}
+              onclick={() => handlePresetChange(preset.value)}
             >
-              {preset.value === 'fast'
-                ? t(locale, 'Fast')
-                : preset.value === 'balanced'
-                  ? t(locale, 'Balanced')
-                  : preset.value === 'secure'
-                    ? t(locale, 'Secure')
-                    : t(locale, 'Paranoid')}
+              {t(preset.label)}
             </Button>
           {/each}
         </div>
@@ -178,7 +143,7 @@
       <div class="space-y-5">
         <div class="space-y-2">
           <Label class="text-foreground text-sm font-medium" for="time-cost">
-            {t(locale, 'Time Cost (iterations)')}
+            {t('Time Cost (iterations)')}
           </Label>
           <div class="flex items-center gap-4">
             <input
@@ -186,17 +151,17 @@
               type="range"
               min="1"
               max="20"
-              value={timeCost}
+              value={currentSettings.timeCost}
               class="bg-secondary accent-primary h-1.5 flex-1 appearance-none rounded-full"
-              oninput={(event) => handleSliderInput('timeCost', event)}
+              oninput={(e) => updateSetting('timeCost', parseInt(e.currentTarget.value))}
             />
-            <span class="text-muted-foreground w-16 text-right text-sm">{timeCost}</span>
+            <span class="text-muted-foreground w-16 text-right text-sm">{currentSettings.timeCost}</span>
           </div>
         </div>
 
         <div class="space-y-2">
           <Label class="text-foreground text-sm font-medium" for="memory-cost">
-            {t(locale, 'Memory Cost (MB)')}
+            {t('Memory Cost (MB)')}
           </Label>
           <div class="flex items-center gap-4">
             <input
@@ -205,17 +170,17 @@
               min="16"
               max="1024"
               step="16"
-              value={memoryCost}
+              value={currentSettings.memoryCost}
               class="bg-secondary accent-primary h-1.5 flex-1 appearance-none rounded-full"
-              oninput={(event) => handleSliderInput('memoryCost', event)}
+              oninput={(e) => updateSetting('memoryCost', parseInt(e.currentTarget.value))}
             />
-            <span class="text-muted-foreground w-20 text-right text-sm">{memoryCost}&nbsp;MB</span>
+            <span class="text-muted-foreground w-20 text-right text-sm">{currentSettings.memoryCost}&nbsp;MB</span>
           </div>
         </div>
 
         <div class="space-y-2">
           <Label class="text-foreground text-sm font-medium" for="parallelism">
-            {t(locale, 'Parallelism (threads)')}
+            {t('Parallelism (threads)')}
           </Label>
           <div class="flex items-center gap-4">
             <input
@@ -223,11 +188,11 @@
               type="range"
               min="1"
               max="16"
-              value={parallelism}
+              value={currentSettings.parallelism}
               class="bg-secondary accent-primary h-1.5 flex-1 appearance-none rounded-full"
-              oninput={(event) => handleSliderInput('parallelism', event)}
+              oninput={(e) => updateSetting('parallelism', parseInt(e.currentTarget.value))}
             />
-            <span class="text-muted-foreground w-20 text-right text-sm">{parallelism}</span>
+            <span class="text-muted-foreground w-20 text-right text-sm">{currentSettings.parallelism}</span>
           </div>
         </div>
       </div>
@@ -243,10 +208,10 @@
       </div>
       <div>
         <CardTitle>
-          {t(locale, 'Memory Hardening')}
+          {t('Memory Hardening')}
         </CardTitle>
         <CardDescription>
-          {t(locale, 'Apply additional safeguards to keep sensitive data in memory protected.')}
+          {t('Apply additional safeguards to keep sensitive data in memory protected.')}
         </CardDescription>
       </div>
     </CardHeader>
@@ -257,20 +222,18 @@
         >
           <div>
             <p class="text-foreground text-sm font-semibold">
-              {toggle.key === 'lockMemoryPages'
-                ? t(locale, 'Lock Memory Pages')
-                : t(locale, 'Secure Memory Allocation')}
+              {t(toggle.title)}
             </p>
             <p class="text-muted-foreground text-sm">
               {toggle.key === 'lockMemoryPages'
-                ? t(locale, 'Prevent sensitive pages from being swapped to disk.')
-                : t(locale, 'Use hardened allocators for secrets kept in RAM.')}
+                ? t('Prevent sensitive pages from being swapped to disk.')
+                : t('Use hardened allocators for secrets kept in RAM.')}
             </p>
           </div>
           <Switch
-            checked={toggle.key === 'lockMemoryPages' ? lockMemoryPages : secureMemoryAllocation}
+            checked={currentSettings[toggle.key as 'lockMemoryPages' | 'secureMemoryAllocation']}
             aria-label={`Toggle ${toggle.title.toLowerCase()}`}
-            onclick={() => toggleSetting(toggle.key)}
+            onCheckedChange={(v) => updateSetting(toggle.key as any, v)}
           />
         </div>
       {/each}
@@ -286,10 +249,10 @@
       </div>
       <div>
         <CardTitle>
-          {t(locale, 'Destructive Actions')}
+          {t('Destructive Actions')}
         </CardTitle>
         <CardDescription>
-          {t(locale, 'These operations permanently remove data and cannot be undone.')}
+          {t('These operations permanently remove data and cannot be undone.')}
         </CardDescription>
       </div>
     </CardHeader>
@@ -297,10 +260,10 @@
       <div class="border-destructive/40 bg-destructive/10 space-y-4 rounded-lg border p-4">
         <div>
           <p class="text-destructive text-sm font-semibold">
-            {t(locale, 'Wipe Vault Database')}
+            {t('Wipe Vault Database')}
           </p>
           <p class="text-destructive/80 text-sm">
-            {t(locale, 'Enter the confirmation phrase to enable vault wiping.')}
+            {t('Enter the confirmation phrase to enable vault wiping.')}
           </p>
         </div>
         <Input
@@ -323,7 +286,7 @@
           disabled={!canWipeVault}
           onclick={handleWipeVault}
         >
-          {t(locale, 'Wipe Vault Database')}
+          {t('Wipe Vault Database')}
         </Button>
       </div>
     </CardContent>

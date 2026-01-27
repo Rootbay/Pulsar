@@ -3,26 +3,26 @@ import { clear, readText, writeText } from '@tauri-apps/plugin-clipboard-manager
 import { get } from 'svelte/store';
 
 import { appState } from '$lib/stores';
-import { clipboardSettings } from '$lib/stores/clipboard';
+import { settings } from '$lib/stores/appSettings.svelte';
 import { clipboardIntegrationState, clipboardServiceReady } from '$lib/utils/clipboardService';
 
 let clearTimer: ReturnType<typeof setTimeout> | null = null;
 
 async function copyToClipboard(text: string) {
-  const settings = get(clipboardSettings);
+  const clipSettings = settings.state.clipboard;
   const integrationStatus = get(clipboardIntegrationState);
   const serviceReady = get(clipboardServiceReady);
   const locked = appState.isLocked;
 
-  if (!settings.clipboardIntegration || !integrationStatus.integrationAvailable) {
+  if (!clipSettings.clipboardIntegration || !integrationStatus.integrationAvailable) {
     throw new Error('Clipboard integration is disabled.');
   }
 
-  if (settings.onlyUnlocked && locked) {
+  if (clipSettings.onlyUnlocked && locked) {
     throw new Error('Clipboard access is disabled while the vault is locked.');
   }
 
-  if (settings.blockHistory && serviceReady) {
+  if (clipSettings.blockHistory && serviceReady) {
     if (!integrationStatus.historyBlockingSupported) {
       throw new Error('Clipboard history blocking is not supported on this platform.');
     }
@@ -38,8 +38,8 @@ async function copyToClipboard(text: string) {
     clearTimeout(clearTimer);
   }
 
-  if (settings.clearAfterDuration > 0) {
-    const delayMs = settings.clearAfterDuration * 1000;
+  if (clipSettings.clearAfterDuration > 0) {
+    const delayMs = clipSettings.clearAfterDuration * 1000;
     clearTimer = setTimeout(async () => {
       try {
         const currentClipboard = await readText();

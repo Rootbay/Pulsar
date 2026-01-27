@@ -1,6 +1,5 @@
 <script lang="ts">
-  import { onDestroy } from 'svelte';
-  import { autofillSettings } from '$lib/stores/autofill';
+  import { settings } from '$lib/stores/appSettings.svelte';
   import type { AutofillSettings } from '$lib/config/settings';
   import { Button } from '$lib/components/ui/button';
   import {
@@ -12,29 +11,20 @@
   } from '$lib/components/ui/card';
   import { Switch } from '$lib/components/ui/switch';
   import { TriangleAlert, CircleCheck, Play, CircleX } from '@lucide/svelte';
-  import { currentLocale, t, type Locale } from '$lib/i18n';
+  import { i18n, t as translate, type Locale } from '$lib/i18n.svelte';
 
-  const locale = $derived($currentLocale);
+  const locale = $derived(i18n.locale);
+  const t = (key: string, vars = {}) => translate(locale, key as any, vars);
 
-  let browserAutofill = $state(false);
-  let globalAutotype = $state(false);
-  let osUnlock = $state(false);
-  let perSiteConfirmation = $state(false);
-
-  const unsubscribe = autofillSettings.subscribe((value) => {
-    browserAutofill = value.browserAutofill;
-    globalAutotype = value.globalAutotype;
-    osUnlock = value.osUnlock;
-    perSiteConfirmation = value.perSiteConfirmation;
-  });
-
-  onDestroy(unsubscribe);
+  let currentSettings = $derived(settings.state.autofill);
+  let browserAutofill = $derived(currentSettings.browserAutofill);
+  let globalAutotype = $derived(currentSettings.globalAutotype);
+  let osUnlock = $derived(currentSettings.osUnlock);
+  let perSiteConfirmation = $derived(currentSettings.perSiteConfirmation);
 
   const toggleSetting = (key: keyof AutofillSettings) => {
-    autofillSettings.update((current) => ({
-      ...current,
-      [key]: !current[key]
-    }));
+    settings.state.autofill[key] = !settings.state.autofill[key];
+    settings.save();
   };
 
   const testResults = [
@@ -59,19 +49,19 @@
 <div class="min-h-0 flex-1 space-y-6 px-6 py-8">
   <Card class="border-border/60 bg-card/80 supports-backdrop-filter:bg-card/70 backdrop-blur">
     <CardHeader>
-      <CardTitle>{t(locale, 'Browser Auto-fill')}</CardTitle>
+      <CardTitle>{t('Browser Auto-fill')}</CardTitle>
       <CardDescription>
-        {t(locale, 'Configure browser auto-fill settings.')}
+        {t('Configure browser auto-fill settings.')}
       </CardDescription>
     </CardHeader>
     <CardContent>
       <div class="flex items-center justify-between gap-4">
         <div class="space-y-1">
           <p class="text-foreground text-sm font-medium">
-            {t(locale, 'Enable Auto-fill for Browsers')}
+            {t('Enable Auto-fill for Browsers')}
           </p>
           <p class="text-muted-foreground text-sm">
-            {t(locale, 'Automatically fill login forms in web browsers.')}
+            {t('Automatically fill login forms in web browsers.')}
           </p>
         </div>
         <Switch
@@ -85,19 +75,19 @@
 
   <Card class="border-border/60 bg-card/80 supports-backdrop-filter:bg-card/70 backdrop-blur">
     <CardHeader>
-      <CardTitle>{t(locale, 'Global Auto-type')}</CardTitle>
+      <CardTitle>{t('Global Auto-type')}</CardTitle>
       <CardDescription>
-        {t(locale, 'Configure global auto-type settings.')}
+        {t('Configure global auto-type settings.')}
       </CardDescription>
     </CardHeader>
     <CardContent>
       <div class="flex items-center justify-between gap-4">
         <div class="space-y-1">
           <p class="text-foreground text-sm font-medium">
-            {t(locale, 'Enable Global Auto-type')}
+            {t('Enable Global Auto-type')}
           </p>
           <p class="text-muted-foreground text-sm">
-            {t(locale, 'Type passwords automatically using keyboard shortcuts.')}
+            {t('Type passwords automatically using keyboard shortcuts.')}
           </p>
         </div>
         <Switch
@@ -111,19 +101,19 @@
 
   <Card class="border-border/60 bg-card/80 supports-backdrop-filter:bg-card/70 backdrop-blur">
     <CardHeader>
-      <CardTitle>{t(locale, 'Safety Checks')}</CardTitle>
+      <CardTitle>{t('Safety Checks')}</CardTitle>
       <CardDescription>
-        {t(locale, 'Configure safety checks for autofill.')}
+        {t('Configure safety checks for autofill.')}
       </CardDescription>
     </CardHeader>
     <CardContent class="space-y-6">
       <div class="flex items-center justify-between gap-4">
         <div class="space-y-1">
           <p class="text-foreground text-sm font-medium">
-            {t(locale, 'Require OS-level Unlock for Auto-fill')}
+            {t('Require OS-level Unlock for Auto-fill')}
           </p>
           <p class="text-muted-foreground text-sm">
-            {t(locale, 'Require system authentication before auto-filling.')}
+            {t('Require system authentication before auto-filling.')}
           </p>
         </div>
         <Switch
@@ -135,10 +125,10 @@
       <div class="flex items-center justify-between gap-4">
         <div class="space-y-1">
           <p class="text-foreground text-sm font-medium">
-            {t(locale, 'Require Per-site Confirmation')}
+            {t('Require Per-site Confirmation')}
           </p>
           <p class="text-muted-foreground text-sm">
-            {t(locale, 'Ask for confirmation before auto-filling on each site.')}
+            {t('Ask for confirmation before auto-filling on each site.')}
           </p>
         </div>
         <Switch
@@ -152,9 +142,9 @@
 
   <Card class="border-border/60 bg-card/80 supports-backdrop-filter:bg-card/70 backdrop-blur">
     <CardHeader>
-      <CardTitle>{t(locale, 'Test Auto-type')}</CardTitle>
+      <CardTitle>{t('Test Auto-type')}</CardTitle>
       <CardDescription>
-        {t(locale, 'Test your auto-type configuration.')}
+        {t('Test your auto-type configuration.')}
       </CardDescription>
     </CardHeader>
     <CardContent class="space-y-6">
@@ -163,21 +153,21 @@
       >
         <Button type="button" class="w-full sm:w-auto">
           <Play class="mr-2 size-4" />
-          {t(locale, 'Simulate Auto-type')}
+          {t('Simulate Auto-type')}
         </Button>
         <div
           class="border-chart-warning-soft bg-chart-warning-soft text-chart-warning flex items-start gap-3 rounded-md border px-3 py-2 text-sm"
         >
           <TriangleAlert class="mt-0.5 size-4 shrink-0" />
           <span>
-            {t(locale, 'Make sure you have a text field selected before testing.')}
+            {t('Make sure you have a text field selected before testing.')}
           </span>
         </div>
       </div>
 
       <div class="border-border/60 bg-muted/10 space-y-4 rounded-lg border p-4">
         <h3 class="text-foreground text-sm font-semibold">
-          {t(locale, 'Test results')}
+          {t('Test results')}
         </h3>
         <div class="space-y-3">
           {#each testResults as result (result.message)}

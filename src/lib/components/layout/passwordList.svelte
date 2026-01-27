@@ -1,4 +1,4 @@
-﻿<svelte:options runes />
+<svelte:options runes />
 
 <script lang="ts">
   import { onDestroy, tick } from 'svelte';
@@ -8,7 +8,7 @@
   import { iconPaths } from '$lib/icons';
   import { callBackend } from '$lib/utils/backend';
   import { appState, vaultStore } from '$lib/stores';
-  import type { PasswordItem } from '$lib/types/password';
+  import type { PasswordItemOverview } from '$lib/types/password';
   import { Search, X } from '@lucide/svelte';
   import { Button } from '$lib/components/ui/button';
   import { Input } from '$lib/components/ui/input';
@@ -38,22 +38,23 @@
 
   interface ItemSection {
     title: SectionTitle;
-    items: PasswordItem[];
+    items: PasswordItemOverview[];
   }
 
   interface Props {
-    items: PasswordItem[];
+    items: PasswordItemOverview[];
     buttons: TagButton[];
     selectedId: number | null;
     disableEdit?: boolean;
-    onselect?: (item: PasswordItem | null) => void;
+    onselect?: (item: PasswordItemOverview | null) => void;
     oncreateEntry?: () => void;
-    oneditEntry?: (item: PasswordItem) => void;
-    onremoveEntry?: (item: PasswordItem) => void;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    oneditEntry?: (item: any) => void; 
+    onremoveEntry?: (item: PasswordItemOverview) => void;
   }
 
   let {
-    items = $bindable<PasswordItem[]>([]),
+    items = $bindable<PasswordItemOverview[]>([]),
     buttons,
     selectedId = null,
     disableEdit = false,
@@ -218,8 +219,8 @@
     }, 800);
   }
 
-  function partitionItems(list: PasswordItem[]): ItemSection[] {
-    const buckets: Record<SectionTitle, PasswordItem[]> = {
+  function partitionItems(list: PasswordItemOverview[]): ItemSection[] {
+    const buckets: Record<SectionTitle, PasswordItemOverview[]> = {
       Pinned: [],
       Today: [],
       Yesterday: [],
@@ -244,7 +245,7 @@
     }));
   }
 
-  function getTagNames(item: PasswordItem): string[] {
+  function getTagNames(item: PasswordItemOverview): string[] {
     return item.tags
       ? item.tags
           .split(',')
@@ -257,7 +258,7 @@
     return tagNames.some((tag) => PIN_TAG_NAMES.has(tag.toLowerCase()));
   }
 
-  function isPinned(item: PasswordItem): boolean {
+  function isPinned(item: PasswordItemOverview): boolean {
     return hasPinnedTag(getTagNames(item));
   }
 
@@ -306,7 +307,7 @@
     return diff <= windowInDays * DAY_IN_MS;
   }
 
-  function isRecent(item: PasswordItem, tagNames: string[]): boolean {
+  function isRecent(item: PasswordItemOverview, tagNames: string[]): boolean {
     if (hasPinnedTag(tagNames)) {
       return true;
     }
@@ -314,7 +315,7 @@
     return item.updated_at ? isWithinDays(item.updated_at, RECENT_DAY_WINDOW) : false;
   }
 
-  function getFallback(item: PasswordItem): TagMeta {
+  function getFallback(item: PasswordItemOverview): TagMeta {
     const tagNames = getTagNames(item);
     if (tagNames.length > 0) {
       const firstTagMeta = tagMap.get(tagNames[0]);
@@ -325,7 +326,7 @@
     return defaultFallback;
   }
 
-  async function handlePinToggle(item: PasswordItem) {
+  async function handlePinToggle(item: PasswordItemOverview) {
     const id = item.id;
     const tagNames = getTagNames(item);
     const pinnedIndex = tagNames.findIndex((tag) => PIN_TAG_NAMES.has(tag.toLowerCase()));
@@ -354,7 +355,7 @@
     return Array.from({ length: count }, (_, index) => index);
   }
 
-  function selectItem(item: PasswordItem) {
+  function selectItem(item: PasswordItemOverview) {
     selectedItemId = item.id;
     onselect?.(item);
   }
@@ -363,7 +364,7 @@
     oncreateEntry?.();
   }
 
-  function handleEditEntry(item: PasswordItem) {
+  function handleEditEntry(item: PasswordItemOverview) {
     if (disableEdit) {
       return;
     }
@@ -371,7 +372,7 @@
     oneditEntry?.(item);
   }
 
-  function handleRemoveEntry(item: PasswordItem) {
+  function handleRemoveEntry(item: PasswordItemOverview) {
     onremoveEntry?.(item);
   }
 </script>

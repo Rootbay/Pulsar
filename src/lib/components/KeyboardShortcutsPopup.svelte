@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { keybinds } from '../stores/keybinds';
-  import type { Keybind } from '../config/keybinds';
+  import { settings } from '$lib/stores/appSettings.svelte';
+  import { defaultKeybinds, type Keybind } from '$lib/config/keybinds';
   import {
     Dialog,
     DialogContent,
@@ -24,6 +24,7 @@
   let dialogOpen = $state(true);
   let duplicateKeybinds = $state<Record<string, boolean>>({});
   let shakeInput = $state<Record<string, boolean>>({});
+  let currentKeybinds = $derived(settings.state.keybinds);
 
   function close() {
     dialogOpen = false;
@@ -31,8 +32,6 @@
   }
 
   function validateKeybinds() {
-    const currentKeybinds = $keybinds;
-
     // eslint-disable-next-line svelte/prefer-svelte-reactivity
     const keyMap = new Map<string, string[]>();
     let hasDuplicates = false;
@@ -62,6 +61,14 @@
     return !hasDuplicates;
   }
 
+  function updateKeybind(name: string, newKey: string) {
+      const index = settings.state.keybinds.findIndex(k => k.name === name);
+      if (index !== -1) {
+          settings.state.keybinds[index].key = newKey;
+          settings.save();
+      }
+  }
+
   function handleKeydown(event: KeyboardEvent, keybindName: string) {
     event.preventDefault();
 
@@ -76,12 +83,13 @@
     }
 
     const newKey = keys.join('+');
-    keybinds.updateKeybind(keybindName, newKey);
+    updateKeybind(keybindName, newKey);
     validateKeybinds();
   }
 
   function handleReset() {
-    keybinds.resetKeybinds();
+    settings.state.keybinds = JSON.parse(JSON.stringify(defaultKeybinds));
+    settings.save();
     validateKeybinds();
   }
 
@@ -135,7 +143,7 @@
 
     <ScrollArea class="max-h-[60vh] pr-2">
       <div class="flex flex-col gap-4 pr-2">
-        {#each $keybinds as keybind (keybind.name)}
+        {#each currentKeybinds as keybind (keybind.name)}
           <div
             class="border-border/40 bg-muted/30 flex flex-col gap-4 rounded-lg border p-4 sm:flex-row sm:items-center sm:justify-between"
           >
@@ -144,7 +152,7 @@
               <span class="text-muted-foreground text-xs">{keybind.description}</span>
             </div>
             <Input
-              bind:value={keybind.key}
+              value={keybind.key}
               class={cn(
                 'focus-visible:ring-ring/50 h-10 w-44 shrink-0 font-mono text-sm shadow-none focus-visible:ring-2',
                 duplicateKeybinds[keybind.name] &&

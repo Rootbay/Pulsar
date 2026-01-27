@@ -15,11 +15,13 @@
     CardTitle
   } from '$lib/components/ui/card';
   import { appState } from '$lib/stores';
-  import { currentLocale, t } from '$lib/i18n';
+  import { i18n, t as translate, type I18nKey } from '$lib/i18n.svelte';
   import { Lock, Eye, EyeOff, ArrowLeft, FingerprintPattern, TriangleAlert } from '@lucide/svelte';
   import { onMount } from 'svelte';
 
-  let locale = $derived($currentLocale);
+  const locale = $derived(i18n.locale);
+  const t = (key: I18nKey, vars: Record<string, string | number> = {}) =>
+    translate(locale, key, vars);
 
   let password = $state('');
   let loginError = $state<string | null>(null);
@@ -56,7 +58,7 @@
 
     try {
       const { authenticate } = await import('@tauri-apps/plugin-biometric');
-      await authenticate(t(locale, 'loginBiometricPrompt'));
+      await authenticate(t('loginBiometricPrompt'));
 
       const result = await callBackend<{ totp_required: boolean }>('unlock_with_biometrics');
 
@@ -79,7 +81,7 @@
         !msg.toLowerCase().includes('cancel') &&
         !msg.toLowerCase().includes('user canceled')
       ) {
-        loginError = t(locale, 'loginBiometricFailed');
+        loginError = t('loginBiometricFailed');
       }
     } finally {
       isBiometricUnlocking = false;
@@ -125,7 +127,7 @@
       appState.totpRequired = false;
       appState.totpVerified = false;
       loginError =
-        ((error as Record<string, unknown>).message as string) || t(locale, 'loginUnknownError');
+        ((error as Record<string, unknown>).message as string) || t('loginUnknownError');
     } finally {
       isUnlocking = false;
     }
@@ -168,7 +170,7 @@
     onclick={goBack}
   >
     <ArrowLeft class="h-4 w-4" />
-    {t(locale, 'back')}
+    {t('back')}
   </button>
   <div class="pointer-events-none absolute inset-0 -z-10">
     <div
@@ -191,23 +193,23 @@
             <Lock class="size-6" />
           </div>
           <CardTitle class="text-2xl font-semibold tracking-tight">
-            {t(locale, 'loginTitle')}
+            {t('loginTitle')}
           </CardTitle>
           <CardDescription class="mt-0">
-            {t(locale, 'loginSubtitle')}
+            {t('loginSubtitle')}
           </CardDescription>
         </CardHeader>
 
         <CardContent class="mt-6 space-y-4">
           <div class="space-y-2">
             <Label for="master-password">
-              {t(locale, 'loginMasterPasswordLabel')}
+              {t('loginMasterPasswordLabel')}
             </Label>
             <div class="relative">
               <Input
                 id="master-password"
                 type={showPassword ? 'text' : 'password'}
-                placeholder={t(locale, 'loginMasterPasswordPlaceholder')}
+                placeholder={t('loginMasterPasswordPlaceholder')}
                 bind:value={password}
                 autocomplete="current-password"
                 disabled={isUnlocking}
@@ -219,8 +221,8 @@
                 class="text-muted-foreground hover:text-foreground absolute inset-y-0 right-0 flex items-center px-3"
                 onclick={() => (showPassword = !showPassword)}
                 aria-label={showPassword
-                  ? t(locale, 'loginHidePassword')
-                  : t(locale, 'loginShowPassword')}
+                  ? t('loginHidePassword')
+                  : t('loginShowPassword')}
                 tabindex="-1"
               >
                 {#if showPassword}
@@ -235,7 +237,7 @@
                 class="text-warning-foreground flex animate-pulse items-center gap-1.5 pt-1 text-[11px] font-medium"
               >
                 <TriangleAlert class="size-3" />
-                {t(locale, 'loginCapsLockOn')}
+                {t('loginCapsLockOn')}
               </p>
             {/if}
           </div>
@@ -248,9 +250,9 @@
         <CardFooter class="mt-6 flex flex-col gap-2">
           <Button type="submit" class="w-full" disabled={!canSubmit}>
             {#if isUnlocking}
-              <Spinner class="mr-2 size-4" /> {t(locale, 'loginUnlocking')}
+              <Spinner class="mr-2 size-4" /> {t('loginUnlocking')}
             {:else}
-              {t(locale, 'loginUnlock')}
+              {t('loginUnlock')}
             {/if}
           </Button>
 
@@ -267,12 +269,12 @@
               {:else}
                 <FingerprintPattern class="size-4" />
               {/if}
-              {t(locale, 'loginUnlockBiometric')}
+              {t('loginUnlockBiometric')}
             </Button>
           {/if}
 
           <Button type="button" variant="ghost" class="w-full" onclick={handleChangeDatabase}>
-            {t(locale, 'loginOpenAnotherVault')}
+            {t('loginOpenAnotherVault')}
           </Button>
         </CardFooter>
       </form>
@@ -280,7 +282,7 @@
 
     <div class="mt-6 text-center text-xs">
       <span class="crypto-tagline text-muted-foreground">
-        {t(locale, 'loginCryptoTagline')}
+        {t('loginCryptoTagline')}
       </span>
     </div>
   </div>

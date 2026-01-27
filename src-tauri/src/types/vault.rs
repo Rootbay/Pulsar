@@ -27,6 +27,21 @@ pub struct Attachment {
     pub created_at: String,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct PasswordItemOverview {
+    pub id: i64,
+    pub category: String,
+    pub title: String,
+    pub description: Option<String>,
+    pub img: Option<String>,
+    pub tags: Option<String>,
+    pub username: Option<String>,
+    pub url: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+    pub color: Option<String>,
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone, Validate)]
 #[validate(schema(function = "crate::db::validation::validate_password_item_fields"))]
 pub struct PasswordItem {
@@ -54,5 +69,5 @@ pub struct RecipientKey {
     pub id: i64,
     pub name: String,
     pub public_key: String,
-    pub private_key: String,
+    pub private_key: SecretString,
 }

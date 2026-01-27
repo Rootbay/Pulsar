@@ -1,7 +1,6 @@
 import { callBackend } from '$lib/utils/backend';
-import { get } from 'svelte/store';
-import { recentDatabases, pruneRecentDatabases } from '$lib/stores/recentDatabases';
-import { initAppSettings } from '$lib/stores/appSettings.svelte';
+import { pruneRecentDatabases, addRecentDatabase } from '$lib/stores/recentDatabases.svelte';
+import { initAppSettings, settings } from '$lib/stores/appSettings.svelte';
 import { appState } from '$lib/stores';
 
 export const ssr = false;
@@ -16,13 +15,13 @@ export async function load() {
   try {
     activePath = await callBackend<string | null>('get_active_db_path');
     if (activePath) {
-      await recentDatabases.addRecentDatabase(activePath);
+      await addRecentDatabase(activePath);
     }
   } catch (e) {
     console.warn('Could not read active DB path from backend:', e);
   }
 
-  const recentDbPaths = get(recentDatabases);
+  const recentDbPaths = settings.state.recentDatabases;
   if (recentDbPaths.length > 0 && !activePath) {
     const latestDbPath = recentDbPaths[0];
     try {

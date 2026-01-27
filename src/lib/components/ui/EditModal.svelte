@@ -1,7 +1,7 @@
 <script lang="ts">
   import Input from './FieldInput.svelte';
   import Switch from './Switch.svelte';
-  import { currentLocale, t as translate, type I18nKey } from '$lib/i18n';
+  import { currentLocale, t as translate, type I18nKey } from '$lib/i18n.svelte';
   import { X } from '@lucide/svelte';
 
   interface Props {

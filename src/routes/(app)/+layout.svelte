@@ -9,10 +9,10 @@
   import { SidebarProvider } from '$lib/components/ui/sidebar';
   import Settings from '../settings/general/+page.svelte';
   import { callBackend } from '$lib/utils/backend';
-  import type { PasswordItem } from '../+layout.ts';
+  import type { PasswordItem, PasswordItemOverview } from '$lib/types/password';
   import { onMount, tick } from 'svelte';
   import { toast } from '$lib/components/ui/sonner';
-  import { profileSettings } from '$lib/stores/profile';
+  import { profileSettings } from '$lib/stores/profile.svelte';
 
   type Button = TagInput;
 
@@ -126,7 +126,11 @@
 
     if (selectedPasswordItem) {
       const refreshedItem = vaultStore.items.find((item) => item.id === selectedPasswordItem?.id);
-      selectedPasswordItem = refreshedItem ?? null;
+      if (refreshedItem) {
+         await handlePasswordSelected(refreshedItem);
+      } else {
+         selectedPasswordItem = null;
+      }
     }
   }
 
@@ -152,8 +156,12 @@
     await vaultStore.loadItems();
 
     if (selectedPasswordItem) {
-      const refreshedItem = vaultStore.items.find((item) => item.id === selectedPasswordItem?.id);
-      selectedPasswordItem = refreshedItem ?? null;
+       const refreshedItem = vaultStore.items.find((item) => item.id === selectedPasswordItem?.id);
+       if (refreshedItem) {
+         await handlePasswordSelected(refreshedItem);
+       } else {
+         selectedPasswordItem = null;
+       }
     }
   }
 
@@ -180,7 +188,7 @@
         }
       }
 
-      selectedPasswordItem = newest;
+      await handlePasswordSelected(newest);
     }
   }
 
@@ -188,8 +196,18 @@
     showCreatePasswordPopup = false;
   }
 
-  function handlePasswordSelected(item: PasswordItem | null) {
-    selectedPasswordItem = item;
+  async function handlePasswordSelected(item: PasswordItemOverview | null) {
+    if (!item) {
+        selectedPasswordItem = null;
+        return;
+    }
+    try {
+        const fullItem = await vaultStore.getItemDetails(item.id);
+        selectedPasswordItem = fullItem;
+    } catch (err) {
+        console.error("Failed to fetch password details", err);
+        toast.error("Failed to load item details");
+    }
   }
 
   async function handlePasswordEditRequested(item: PasswordItem) {
@@ -197,7 +215,12 @@
       return;
     }
 
-    selectedPasswordItem = item;
+    if (!('password' in item)) {
+         await handlePasswordSelected(item);
+    } else {
+        selectedPasswordItem = item;
+    }
+
     await tick();
 
     await passwordListRef?.focusItem?.(item.id ?? null);
@@ -206,7 +229,7 @@
 
   let disableContextEdit = $derived(appState.isLocked || vaultStore.items.length === 0);
 
-  async function handleRemoveEntry(itemToRemove: PasswordItem) {
+  async function handleRemoveEntry(itemToRemove: PasswordItemOverview) {
     if (!itemToRemove) return;
 
     try {

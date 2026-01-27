@@ -18,13 +18,15 @@
     ShieldQuestionMark,
     CloudUpload
   } from '@lucide/svelte';
-  import { currentLocale, t } from '$lib/i18n';
+  import { i18n, t as translate, type I18nKey } from '$lib/i18n.svelte';
 
   type UpdateStatus = 'idle' | 'checking' | 'uptoDate';
   type IconComponent = typeof FileText;
 
   let updateStatus = $state<UpdateStatus>('idle');
-  const locale = $derived($currentLocale);
+  const locale = $derived(i18n.locale);
+  const t = (key: string, vars: Record<string, string | number> = {}) =>
+    translate(locale, key as I18nKey, vars);
   let uploadDiagnostics = $state(false);
 
   const versionDetails = [
@@ -75,10 +77,10 @@
       </div>
       <div>
         <CardTitle>
-          {t(locale, 'Application Information')}
+          {t('Application Information')}
         </CardTitle>
         <CardDescription>
-          {t(locale, 'Version details and update status.')}
+          {t('Version details and update status.')}
         </CardDescription>
       </div>
     </CardHeader>
@@ -99,22 +101,22 @@
       >
         <div class="space-y-1">
           <h3 class="text-foreground text-sm font-semibold">
-            {t(locale, 'Check for Updates')}
+            {t('Check for Updates')}
           </h3>
           <p class="text-muted-foreground text-sm">
-            {t(locale, 'Check if a newer version is available')}
+            {t('Check if a newer version is available')}
           </p>
         </div>
         <Button class="shrink-0" onclick={checkForUpdates} disabled={updateStatus !== 'idle'}>
           {#if updateStatus === 'idle'}
             <RefreshCw class="mr-2 h-4 w-4" aria-hidden="true" />
-            {t(locale, 'Check Now')}
+            {t('Check Now')}
           {:else if updateStatus === 'checking'}
             <RefreshCw class="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
-            {t(locale, 'Checking...')}
+            {t('Checking...')}
           {:else}
             <BadgeCheck class="text-chart-success mr-2 h-4 w-4" aria-hidden="true" />
-            {t(locale, 'Up to date')}
+            {t('Up to date')}
           {/if}
         </Button>
       </div>
@@ -130,10 +132,10 @@
       </div>
       <div>
         <CardTitle>
-          {t(locale, 'Documentation & Support')}
+          {t('Documentation & Support')}
         </CardTitle>
         <CardDescription>
-          {t(locale, 'Find helpful resources and get in touch.')}
+          {t('Find helpful resources and get in touch.')}
         </CardDescription>
       </div>
     </CardHeader>
@@ -148,12 +150,12 @@
           >
             <Icon class="h-4 w-4" aria-hidden="true" />
             {label === 'License'
-              ? t(locale, 'License')
+              ? t('License')
               : label === 'Security Whitepaper'
-                ? t(locale, 'Security Whitepaper')
+                ? t('Security Whitepaper')
                 : label === 'Contact Support'
-                  ? t(locale, 'Contact Support')
-                  : t(locale, 'Source Code')}
+                  ? t('Contact Support')
+                  : t('Source Code')}
           </Button>
         {/each}
       </div>
@@ -169,10 +171,10 @@
       </div>
       <div>
         <CardTitle>
-          {t(locale, 'Diagnostic Tools')}
+          {t('Diagnostic Tools')}
         </CardTitle>
         <CardDescription>
-          {t(locale, 'Tools for troubleshooting and support.')}
+          {t('Tools for troubleshooting and support.')}
         </CardDescription>
       </div>
     </CardHeader>
@@ -182,10 +184,10 @@
       >
         <div>
           <h3 class="text-foreground text-sm font-semibold">
-            {t(locale, 'Open Logs Folder')}
+            {t('Open Logs Folder')}
           </h3>
           <p class="text-muted-foreground text-sm">
-            {t(locale, 'Access application log files')}
+            {t('Access application log files')}
           </p>
         </div>
         <Button
@@ -195,7 +197,7 @@
           onclick={() => openLink('Logs Folder')}
         >
           <FolderOpen class="h-4 w-4" aria-hidden="true" />
-          {t(locale, 'Open')}
+          {t('Open')}
         </Button>
       </div>
 
@@ -204,10 +206,10 @@
       >
         <div>
           <h3 class="text-foreground text-sm font-semibold">
-            {t(locale, 'Upload Diagnostics to Support')}
+            {t('Upload Diagnostics to Support')}
           </h3>
           <p class="text-muted-foreground text-sm">
-            {t(locale, 'Help us identify and fix issues faster')}
+            {t('Help us identify and fix issues faster')}
           </p>
         </div>
         <div class="flex items-center gap-3">

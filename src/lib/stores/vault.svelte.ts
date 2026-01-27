@@ -1,15 +1,27 @@
-import { settingsManager } from './appSettings.svelte';
+import { settings } from './appSettings.svelte';
 import { defaultVaultSettings, type VaultSettings } from '../config/settings';
-import type { PasswordItem } from '../types/password';
+import type { PasswordItem, PasswordItemOverview } from '../types/password';
 import { callBackend } from '../utils/backend';
 import { appState } from './appState.svelte';
 
 class VaultStore {
-  #items = $state<PasswordItem[]>([]);
+  #items = $state<PasswordItemOverview[]>([]);
   #isLoading = $state(false);
   #activeVaultId = $state<string | null>(null);
   #searchTerm = $state('');
   #loadPromise: Promise<void> | null = null;
+
+  constructor() {
+    $effect.root(() => {
+      $effect(() => {
+        if (appState.isLocked) {
+          this.#items = [];
+          this.#activeVaultId = null;
+          this.#searchTerm = '';
+        }
+      });
+    });
+  }
 
   get items() {
     return this.#items;
@@ -34,7 +46,7 @@ class VaultStore {
   get settings(): VaultSettings {
     const id = this.#activeVaultId;
     if (!id) return { ...defaultVaultSettings };
-    const existing = settingsManager.current.vaultSettingsById[id];
+    const existing = settings.state.vaultSettingsById[id];
     return { ...defaultVaultSettings, ...existing };
   }
 
@@ -92,7 +104,7 @@ class VaultStore {
     this.#isLoading = true;
     this.#loadPromise = (async () => {
       try {
-        this.#items = await callBackend<PasswordItem[]>('get_password_items');
+        this.#items = await callBackend<PasswordItemOverview[]>('get_password_overviews');
       } catch (error) {
         console.error('Failed to load vault items:', error);
       } finally {
@@ -104,54 +116,60 @@ class VaultStore {
     return this.#loadPromise;
   }
 
+  async getItemDetails(id: number): Promise<PasswordItem | null> {
+    const existing = this.#items.find(i => i.id === id);
+    if (existing && 'password' in existing) {
+        return existing as PasswordItem;
+    }
+
+    const fullItem = await callBackend<PasswordItem | null>('get_password_item_by_id', { id });
+    if (fullItem) {
+        this.updateItem(fullItem);
+    }
+    return fullItem;
+  }
+
   selectVault(vaultId: string, defaults: Partial<VaultSettings> = {}) {
     this.#activeVaultId = vaultId;
-    settingsManager.update((settings) => {
-      const existing = settings.vaultSettingsById[vaultId];
-      settings.vaultSettingsById = {
-        ...settings.vaultSettingsById,
-        [vaultId]: {
-          ...defaultVaultSettings,
-          ...existing,
-          ...defaults
-        }
-      };
-    });
+    const existing = settings.state.vaultSettingsById[vaultId];
+    settings.state.vaultSettingsById[vaultId] = {
+        ...defaultVaultSettings,
+        ...existing,
+        ...defaults
+    };
+    settings.save();
   }
 
   updateSettings(updater: (settings: VaultSettings) => VaultSettings) {
     const id = this.#activeVaultId;
     if (!id) return;
-    settingsManager.update((settings) => {
-      const existing = settings.vaultSettingsById[id];
-      settings.vaultSettingsById = {
-        ...settings.vaultSettingsById,
-        [id]: updater({
-          ...defaultVaultSettings,
-          ...existing
-        })
-      };
+    
+    const existing = settings.state.vaultSettingsById[id];
+    settings.state.vaultSettingsById[id] = updater({
+        ...defaultVaultSettings,
+        ...existing
     });
+    settings.save();
   }
 
   clearVault(vaultId: string) {
-    settingsManager.update((settings) => {
-      if (!(vaultId in settings.vaultSettingsById)) return;
-      const newMap = { ...settings.vaultSettingsById };
-      delete newMap[vaultId];
-      settings.vaultSettingsById = newMap;
-    });
+    if (vaultId in settings.state.vaultSettingsById) {
+        const newMap = { ...settings.state.vaultSettingsById };
+        delete newMap[vaultId];
+        settings.state.vaultSettingsById = newMap;
+        settings.save();
+    }
     if (this.#activeVaultId === vaultId) {
       this.#activeVaultId = null;
       this.#items = [];
     }
   }
 
-  setItems(items: PasswordItem[]) {
+  setItems(items: PasswordItemOverview[]) {
     this.#items = items;
   }
 
-  updateItem(updatedItem: PasswordItem) {
+  updateItem(updatedItem: PasswordItemOverview) {
     const index = this.#items.findIndex((item) => item.id === updatedItem.id);
     if (index !== -1) {
       this.#items[index] = updatedItem;
@@ -166,13 +184,6 @@ class VaultStore {
 export const vaultStore = new VaultStore();
 
 export const vaultSettings = {
-  subscribe(fn: (value: VaultSettings) => void) {
-    return $effect.root(() => {
-      $effect(() => {
-        fn(vaultStore.settings);
-      });
-    });
-  },
   get value() {
     return vaultStore.settings;
   },

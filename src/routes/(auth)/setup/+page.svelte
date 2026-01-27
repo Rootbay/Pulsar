@@ -15,10 +15,14 @@
   import { Label } from '$lib/components/ui/label';
   import { Progress } from '$lib/components/ui/progress';
   import { appState } from '$lib/stores';
-  import { currentLocale, t } from '$lib/i18n';
+  import { i18n, t as translate, type I18nKey } from '$lib/i18n.svelte';
   import { ArrowLeft } from '@lucide/svelte';
 
   import { SecurityService } from '$lib/utils/security';
+
+  const locale = $derived(i18n.locale);
+  const t = (key: I18nKey, vars: Record<string, string | number> = {}) =>
+    translate(locale, key, vars);
 
   let newMasterPassword = $state('');
   let confirmMasterPassword = $state('');
@@ -50,12 +54,10 @@
     '[&_[data-slot=progress-indicator]]:bg-[color:var(--color-chart-4)]'
   ];
 
-  const locale = $derived($currentLocale);
-
   const strengthLabelText = $derived(
     newMasterPassword
-      ? t(locale, STRENGTH_LABEL_KEYS[strengthResult.score])
-      : t(locale, 'setupStrengthNone')
+      ? t(STRENGTH_LABEL_KEYS[strengthResult.score])
+      : t('setupStrengthNone')
   );
   const strengthColorClass = $derived(
     newMasterPassword ? STRENGTH_COLORS[strengthResult.score] : 'text-muted-foreground'
@@ -78,11 +80,11 @@
 
   async function handleSetMasterPassword() {
     if (!newMasterPassword.trim() || !confirmMasterPassword.trim()) {
-      loginError = t(locale, 'setupPasswordFieldsRequired');
+      loginError = t('setupPasswordFieldsRequired');
       return;
     }
     if (newMasterPassword !== confirmMasterPassword) {
-      loginError = t(locale, 'setupPasswordMismatch');
+      loginError = t('setupPasswordMismatch');
       return;
     }
 
@@ -96,7 +98,7 @@
       appState.totpRequired = false;
     } catch (cause) {
       console.error('Set master password failed:', cause);
-      loginError = typeof cause === 'string' ? cause : t(locale, 'setupUnknownError');
+      loginError = typeof cause === 'string' ? cause : t('setupUnknownError');
     } finally {
       isSetting = false;
     }
@@ -138,7 +140,7 @@
     onclick={goBack}
   >
     <ArrowLeft class="h-4 w-4" />
-    {t(locale, 'back')}
+    {t('back')}
   </button>
   <div
     class="bg-primary-glow pointer-events-none absolute top-1/2 left-1/2 h-[min(90vw,32rem)] w-[min(90vw,32rem)] -translate-x-1/2 -translate-y-1/2 rounded-full blur-3xl"
@@ -151,22 +153,22 @@
     <form class="flex flex-col gap-6" onsubmit={handleSubmit}>
       <CardHeader class="space-y-2 text-center">
         <CardTitle class="text-2xl font-semibold">
-          {t(locale, 'setupTitle')}
+          {t('setupTitle')}
         </CardTitle>
         <CardDescription>
-          {t(locale, 'setupSubtitle')}
+          {t('setupSubtitle')}
         </CardDescription>
       </CardHeader>
 
       <CardContent class="space-y-5">
         <div class="space-y-2">
           <Label for="new-password">
-            {t(locale, 'setupNewMasterPassword')}
+            {t('setupNewMasterPassword')}
           </Label>
           <Input
             id="new-password"
             type="password"
-            placeholder={t(locale, 'setupNewMasterPassword')}
+            placeholder={t('setupNewMasterPassword')}
             bind:value={newMasterPassword}
             autocomplete="new-password"
             disabled={isSetting}
@@ -175,12 +177,12 @@
 
         <div class="space-y-2">
           <Label for="confirm-password">
-            {t(locale, 'setupConfirmMasterPassword')}
+            {t('setupConfirmMasterPassword')}
           </Label>
           <Input
             id="confirm-password"
             type="password"
-            placeholder={t(locale, 'setupConfirmMasterPassword')}
+            placeholder={t('setupConfirmMasterPassword')}
             bind:value={confirmMasterPassword}
             autocomplete="new-password"
             disabled={isSetting}
@@ -191,7 +193,7 @@
           <div class="border-border/60 bg-muted/20 space-y-3 rounded-xl border p-4">
             <div class="text-muted-foreground flex items-center justify-between text-sm">
               <span class="font-medium">
-                {t(locale, 'setupStrength')}
+                {t('setupStrength')}
               </span>
               <span class={`font-semibold ${strengthColorClass}`}>{strengthLabelText}</span>
             </div>
@@ -203,7 +205,7 @@
               </p>
             {:else}
               <p class="text-muted-foreground text-xs">
-                {t(locale, 'setupPasswordTip')}
+                {t('setupPasswordTip')}
               </p>
             {/if}
           </div>
@@ -211,7 +213,7 @@
 
         {#if confirmMasterPassword && newMasterPassword !== confirmMasterPassword}
           <p class="text-destructive text-xs font-medium">
-            {t(locale, 'setupPasswordMismatch')}
+            {t('setupPasswordMismatch')}
           </p>
         {/if}
 
@@ -232,10 +234,10 @@
             !newMasterPassword.trim() ||
             newMasterPassword !== confirmMasterPassword}
         >
-          {isSetting ? t(locale, 'setupSetting') : t(locale, 'setupSetPassword')}
+          {isSetting ? t('setupSetting') : t('setupSetPassword')}
         </Button>
         <p class="text-muted-foreground text-center text-xs">
-          {t(locale, 'setupPasswordLocalNote')}
+          {t('setupPasswordLocalNote')}
         </p>
       </CardFooter>
     </form>

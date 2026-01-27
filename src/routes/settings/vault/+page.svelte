@@ -1,10 +1,10 @@
 <script lang="ts">
-  import { onDestroy, onMount } from 'svelte';
+  import { onMount } from 'svelte';
   import { derived, get, writable, type Readable } from 'svelte/store';
   import { invoke } from '@tauri-apps/api/core';
   import { toast } from '$lib/components/ui/sonner';
-  import { vaultSettings } from '$lib/stores/vault.svelte';
-  import { recentDatabases } from '$lib/stores/recentDatabases';
+  import { vaultStore } from '$lib/stores/vault.svelte';
+  import { addRecentDatabase, removeRecentDatabase } from '$lib/stores/recentDatabases.svelte';
   import type { VaultSettings } from '$lib/config/settings';
   import { Button } from '$lib/components/ui/button';
   import {
@@ -30,7 +30,10 @@
     Trash2
   } from '@lucide/svelte';
   import { exportVaultBackup, importVaultBackup, notifyVaultRefresh } from '$lib/utils/backup';
-  import { currentLocale, t, type Locale } from '$lib/i18n';
+  import { i18n, t as translate, type Locale } from '$lib/i18n.svelte';
+
+  const locale = $derived(i18n.locale);
+  const t = (key: string, vars = {}) => translate(locale, key as any, vars);
 
   interface BackendVault {
     id: string;
@@ -59,6 +62,8 @@
   const vaultsStore = writable<Vault[]>([]);
   const selectedVaultId = writable<string | null>(null);
 
+  let activeVaultSettings = $derived(vaultStore.settings);
+
   const selectedVault: Readable<Vault | undefined> = derived(
     [vaultsStore, selectedVaultId],
     ([$vaults, id]) => $vaults.find((vault) => vault.id === id)
@@ -75,8 +80,6 @@
 
   const WEAK_PASSWORDS = 23;
   const DUPLICATES = 5;
-
-  const locale = $derived($currentLocale);
 
   let loadingVaults = $state(false);
   let busyAction = $state<'import' | 'create' | 'backup' | 'restore' | 'export' | null>(null);
@@ -100,7 +103,7 @@
 
   function formatBytes(bytes?: number): string {
     if (bytes === undefined) {
-      return t(locale, 'settingsVaultUnknownSize');
+      return t('settingsVaultUnknownSize');
     }
 
     if (bytes === 0) {
@@ -121,7 +124,7 @@
 
   function formatRelativeTime(timestamp?: number): string {
     if (!timestamp) {
-      return t(locale, 'settingsVaultUnknown');
+      return t('settingsVaultUnknown');
     }
 
     const difference = timestamp - Date.now();
@@ -142,23 +145,23 @@
       }
     }
 
-    return t(locale, 'settingsVaultJustNow');
+    return t('settingsVaultJustNow');
   }
 
-  function formatItemBadge(count: number | undefined, locale: Locale): string {
+  function formatItemBadge(count: number | undefined): string {
     if (typeof count === 'number') {
-      const label = count === 1 ? t(locale, 'itemSingular') : t(locale, 'itemPlural');
+      const label = count === 1 ? t('itemSingular') : t('itemPlural');
       return `${count} ${label}`;
     }
 
-    return t(locale, 'settingsVaultItemsUnavailable');
+    return t('settingsVaultItemsUnavailable');
   }
 
-  function formatStatusLabel(status: Vault['status'], locale: Locale): string {
-    if (status === 'unlocked') return t(locale, 'settingsVaultStatusUnlocked');
-    if (status === 'locked') return t(locale, 'settingsVaultStatusLocked');
-    if (status === 'available') return t(locale, 'settingsVaultStatusAvailable');
-    return t(locale, 'settingsVaultUnknown');
+  function formatStatusLabel(status: Vault['status']): string {
+    if (status === 'unlocked') return t('settingsVaultStatusUnlocked');
+    if (status === 'locked') return t('settingsVaultStatusLocked');
+    if (status === 'available') return t('settingsVaultStatusAvailable');
+    return t('settingsVaultUnknown');
   }
 
   async function refreshVaults({ preserveSelection = true } = {}): Promise<void> {
@@ -196,11 +199,11 @@
 
       const active = mapped.find((vault) => vault.id === nextSelection);
       if (active) {
-        vaultSettings.selectVault(active.id, { ...active.settings, name: active.name });
+        vaultStore.selectVault(active.id, { ...active.settings, name: active.name });
       }
     } catch (cause) {
       console.error('Failed to load vaults:', cause);
-      toast.error(t(locale, 'settingsVaultLoadError'));
+      toast.error(t('settingsVaultLoadError'));
     } finally {
       loadingVaults = false;
     }
@@ -213,11 +216,11 @@
     }
 
     selectedVaultId.set(id);
-    vaultSettings.selectVault(id, { ...vault.settings, name: vault.name });
+    vaultStore.selectVault(id, { ...vault.settings, name: vault.name });
   }
 
   function updateVaultSetting(setting: keyof VaultSettings): void {
-    vaultSettings.update((current) => ({
+    vaultStore.updateSettings((current) => ({
       ...current,
       [setting]: !current[setting]
     }));
@@ -225,7 +228,7 @@
 
   function updateVaultName(event: Event): void {
     const value = (event.target as HTMLInputElement).value;
-    vaultSettings.update((current) => ({
+    vaultStore.updateSettings((current) => ({
       ...current,
       name: value
     }));
@@ -237,8 +240,8 @@
       return;
     }
 
-    vaultSettings.clear(id);
-    recentDatabases.removeRecentDatabase(vault.path);
+    vaultStore.clearVault(id);
+    removeRecentDatabase(vault.path);
 
     vaultsStore.update((entries) => entries.filter((entry) => entry.id !== id));
 
@@ -264,14 +267,14 @@
 
     try {
       const sourcePath = await invoke<string>('pick_open_file');
-      const passphrase = window.prompt(t(locale, 'settingsVaultImportPassphrasePrompt'));
+      const passphrase = window.prompt(t('settingsVaultImportPassphrasePrompt'));
 
       if (!passphrase?.trim()) {
         return;
       }
 
       await importVaultBackup(passphrase.trim(), { sourcePath });
-      toast.success(t(locale, 'settingsVaultImportSuccess'));
+      toast.success(t('settingsVaultImportSuccess'));
       notifyVaultRefresh('import');
       await refreshVaults();
     } catch (cause) {
@@ -280,7 +283,7 @@
       }
 
       console.error('Failed to import vault:', cause);
-      toast.error(resolveErrorMessage(cause, t(locale, 'settingsVaultImportFailed')));
+      toast.error(resolveErrorMessage(cause, t('settingsVaultImportFailed')));
     } finally {
       busyAction = null;
     }
@@ -305,9 +308,9 @@
       const finalPath = `${folder}${sep}${stem}.psec`;
 
       await invoke('switch_database', { dbPath: finalPath });
-      await recentDatabases.addRecentDatabase(finalPath);
+      await addRecentDatabase(finalPath);
 
-      toast.success(t(locale, 'settingsVaultCreateSuccess'));
+      toast.success(t('settingsVaultCreateSuccess'));
       notifyVaultRefresh('create');
       await refreshVaults({ preserveSelection: false });
     } catch (cause) {
@@ -316,7 +319,7 @@
       }
 
       console.error('Failed to create vault:', cause);
-      toast.error(resolveErrorMessage(cause, t(locale, 'settingsVaultCreateFailed')));
+      toast.error(resolveErrorMessage(cause, t('settingsVaultCreateFailed')));
     } finally {
       busyAction = null;
     }
@@ -330,7 +333,7 @@
     busyAction = 'backup';
 
     try {
-      const passphrase = window.prompt(t(locale, 'settingsVaultBackupPassphrasePrompt'));
+      const passphrase = window.prompt(t('settingsVaultBackupPassphrasePrompt'));
       if (!passphrase?.trim()) {
         return;
       }
@@ -341,7 +344,7 @@
       await refreshVaults();
     } catch (cause) {
       console.error('Failed to run backup:', cause);
-      toast.error(resolveErrorMessage(cause, t(locale, 'settingsVaultBackupFailed')));
+      toast.error(resolveErrorMessage(cause, t('settingsVaultBackupFailed')));
     } finally {
       busyAction = null;
     }
@@ -356,14 +359,14 @@
 
     try {
       const sourcePath = await invoke<string>('pick_open_file');
-      const passphrase = window.prompt(t(locale, 'settingsVaultRestorePassphrasePrompt'));
+      const passphrase = window.prompt(t('settingsVaultRestorePassphrasePrompt'));
 
       if (!passphrase?.trim()) {
         return;
       }
 
       await importVaultBackup(passphrase.trim(), { sourcePath });
-      toast.success(t(locale, 'settingsVaultRestoreSuccess'));
+      toast.success(t('settingsVaultRestoreSuccess'));
       notifyVaultRefresh('restore');
       await refreshVaults();
     } catch (cause) {
@@ -372,7 +375,7 @@
       }
 
       console.error('Failed to restore vault:', cause);
-      toast.error(resolveErrorMessage(cause, t(locale, 'settingsVaultRestoreFailed')));
+      toast.error(resolveErrorMessage(cause, t('settingsVaultRestoreFailed')));
     } finally {
       busyAction = null;
     }
@@ -386,12 +389,12 @@
     busyAction = 'export';
 
     try {
-      const passphrase = window.prompt(t(locale, 'settingsVaultExportPassphrasePrompt'));
+      const passphrase = window.prompt(t('settingsVaultExportPassphrasePrompt'));
       if (!passphrase?.trim()) {
         return;
       }
 
-      const exportPlaintext = window.confirm(t(locale, 'settingsVaultExportConfirmPlaintext'));
+      const exportPlaintext = window.confirm(t('settingsVaultExportConfirmPlaintext'));
 
       const message = await exportVaultBackup(passphrase.trim(), { plaintext: exportPlaintext });
       toast.success(message);
@@ -399,35 +402,23 @@
       await refreshVaults();
     } catch (cause) {
       console.error('Failed to export vault:', cause);
-      toast.error(resolveErrorMessage(cause, t(locale, 'settingsVaultExportFailed')));
+      toast.error(resolveErrorMessage(cause, t('settingsVaultExportFailed')));
     } finally {
       busyAction = null;
     }
   }
 
-  let unsubscribeVaultSettings: (() => void) | null = null;
-
   onMount(() => {
     void refreshVaults({ preserveSelection: false });
-
-    unsubscribeVaultSettings = vaultSettings.subscribe((settings) => {
-      const id = get(selectedVaultId);
-      if (!id) {
-        return;
-      }
-
-      vaultsStore.update((vaults) =>
-        vaults.map((vault) =>
-          vault.id === id
-            ? { ...vault, name: settings.name, settings: { ...vault.settings, ...settings } }
-            : vault
-        )
-      );
-    });
   });
 
-  onDestroy(() => {
-    unsubscribeVaultSettings?.();
+  $effect(() => {
+      const id = get(selectedVaultId);
+      if (id && activeVaultSettings) {
+          vaultsStore.update(vaults => vaults.map(v => 
+              v.id === id ? { ...v, name: activeVaultSettings.name, settings: { ...v.settings, ...activeVaultSettings } } : v
+          ));
+      }
   });
 </script>
 
@@ -442,10 +433,10 @@
         </div>
         <div>
           <CardTitle>
-            {t(locale, 'settingsVaultTitle')}
+            {t('settingsVaultTitle')}
           </CardTitle>
           <CardDescription>
-            {t(locale, 'settingsVaultSubtitle')}
+            {t('settingsVaultSubtitle')}
           </CardDescription>
         </div>
       </div>
@@ -458,7 +449,7 @@
           disabled={busyAction !== null}
         >
           <HardDriveDownload class="size-4" aria-hidden="true" />
-          {t(locale, 'settingsVaultImportAction')}
+          {t('settingsVaultImportAction')}
         </Button>
         <Button
           type="button"
@@ -467,7 +458,7 @@
           disabled={busyAction !== null}
         >
           <Archive class="size-4" aria-hidden="true" />
-          {t(locale, 'settingsVaultCreateAction')}
+          {t('settingsVaultCreateAction')}
         </Button>
       </div>
     </CardHeader>
@@ -479,13 +470,13 @@
             <div
               class="border-border/60 bg-muted/20 text-muted-foreground rounded-xl border p-4 text-sm"
             >
-              {t(locale, 'settingsVaultLoading')}
+              {t('settingsVaultLoading')}
             </div>
           {:else if !$vaultsStore.length}
             <div
               class="border-border/60 bg-muted/20 text-muted-foreground rounded-xl border p-4 text-sm"
             >
-              {t(locale, 'settingsVaultEmptyState')}
+              {t('settingsVaultEmptyState')}
             </div>
           {:else}
             {#each $vaultsStore as vault (vault.id)}
@@ -505,9 +496,9 @@
                       <p class="text-foreground text-sm font-semibold">{vault.name}</p>
                       <div class="flex flex-wrap items-center gap-1 text-[10px]">
                         <Badge variant="secondary" class="capitalize">
-                          {formatStatusLabel(vault.status, locale)}
+                          {formatStatusLabel(vault.status)}
                         </Badge>
-                        <Badge variant="outline">{formatItemBadge(vault.itemCount, locale)}</Badge>
+                        <Badge variant="outline">{formatItemBadge(vault.itemCount)}</Badge>
                       </div>
                     </div>
                     <p class="text-muted-foreground text-xs">{vault.path}</p>
@@ -516,18 +507,18 @@
                 <div class="text-muted-foreground flex flex-wrap items-center gap-4 text-xs">
                   <span>{formatBytes(vault.sizeBytes)}</span>
                   <span>
-                    {t(locale, 'settingsVaultLastModified')}
+                    {t('settingsVaultLastModified')}
                     {formatRelativeTime(vault.modifiedAt)}
                   </span>
                   {#if vault.encrypted}
                     <span class="text-chart-success flex items-center gap-1">
                       <ShieldCheck class="size-3" />
-                      {t(locale, 'settingsVaultEncrypted')}
+                      {t('settingsVaultEncrypted')}
                     </span>
                   {:else}
                     <span class="text-destructive flex items-center gap-1">
                       <ShieldAlert class="size-3" />
-                      {t(locale, 'settingsVaultNotEncrypted')}
+                      {t('settingsVaultNotEncrypted')}
                     </span>
                   {/if}
                 </div>
@@ -540,10 +531,10 @@
           <div class="flex items-start justify-between gap-2">
             <div>
               <p class="text-foreground text-sm font-semibold">
-                {t(locale, 'settingsVaultSelectedTitle')}
+                {t('settingsVaultSelectedTitle')}
               </p>
               <p class="text-muted-foreground text-xs">
-                {t(locale, 'settingsVaultSelectedSubtitle')}
+                {t('settingsVaultSelectedSubtitle')}
               </p>
             </div>
             <Button
@@ -552,8 +543,8 @@
               size="icon"
               class="text-muted-foreground hover:text-destructive size-8"
               aria-label={$selectedVault
-                ? t(locale, 'settingsVaultRemoveAria', { name: $selectedVault.name })
-                : t(locale, 'settingsVaultRemoveAriaFallback')}
+                ? t('settingsVaultRemoveAria', { name: $selectedVault.name })
+                : t('settingsVaultRemoveAriaFallback')}
               onclick={() => $selectedVault && removeVault($selectedVault.id)}
               disabled={!$selectedVault || busyAction !== null}
             >
@@ -564,13 +555,13 @@
           {#if $selectedVault}
             <div class="space-y-3">
               <Label for="vault-name" class="text-foreground text-sm font-medium">
-                {t(locale, 'settingsVaultDisplayName')}
+                {t('settingsVaultDisplayName')}
               </Label>
               <Input
                 id="vault-name"
                 type="text"
-                value={$vaultSettings.name}
-                placeholder={t(locale, 'settingsVaultNamePlaceholder')}
+                value={activeVaultSettings.name}
+                placeholder={t('settingsVaultNamePlaceholder')}
                 oninput={updateVaultName}
               />
             </div>
@@ -581,14 +572,14 @@
               >
                 <div>
                   <p class="text-foreground text-sm font-medium">
-                    {t(locale, 'settingsVaultTotpTitle')}
+                    {t('settingsVaultTotpTitle')}
                   </p>
                   <p class="text-muted-foreground text-xs">
-                    {t(locale, 'settingsVaultTotpDesc')}
+                    {t('settingsVaultTotpDesc')}
                   </p>
                 </div>
                 <Switch
-                  checked={$vaultSettings.totp}
+                  checked={activeVaultSettings.totp}
                   aria-label="Toggle per-entry TOTP storage"
                   onclick={() => updateVaultSetting('totp')}
                   disabled={busyAction !== null}
@@ -600,14 +591,14 @@
               >
                 <div>
                   <p class="text-foreground text-sm font-medium">
-                    {t(locale, 'settingsVaultAutoBackupTitle')}
+                    {t('settingsVaultAutoBackupTitle')}
                   </p>
                   <p class="text-muted-foreground text-xs">
-                    {t(locale, 'settingsVaultAutoBackupDesc')}
+                    {t('settingsVaultAutoBackupDesc')}
                   </p>
                 </div>
                 <Switch
-                  checked={$vaultSettings.backups}
+                  checked={activeVaultSettings.backups}
                   aria-label="Toggle automatic backups"
                   onclick={() => updateVaultSetting('backups')}
                   disabled={busyAction !== null}
@@ -619,14 +610,14 @@
               >
                 <div>
                   <p class="text-foreground text-sm font-medium">
-                    {t(locale, 'settingsVaultCompressionTitle')}
+                    {t('settingsVaultCompressionTitle')}
                   </p>
                   <p class="text-muted-foreground text-xs">
-                    {t(locale, 'settingsVaultCompressionDesc')}
+                    {t('settingsVaultCompressionDesc')}
                   </p>
                 </div>
                 <Switch
-                  checked={$vaultSettings.compression}
+                  checked={activeVaultSettings.compression}
                   aria-label="Toggle compression"
                   onclick={() => updateVaultSetting('compression')}
                   disabled={busyAction !== null}
@@ -643,7 +634,7 @@
                 disabled={busyAction !== null}
               >
                 <Archive class="size-4" aria-hidden="true" />
-                {t(locale, 'settingsVaultBackupNow')}
+                {t('settingsVaultBackupNow')}
               </Button>
               <Button
                 type="button"
@@ -653,7 +644,7 @@
                 disabled={busyAction !== null}
               >
                 <Database class="size-4" aria-hidden="true" />
-                {t(locale, 'settingsVaultRestore')}
+                {t('settingsVaultRestore')}
               </Button>
               <Button
                 type="button"
@@ -663,12 +654,12 @@
                 disabled={busyAction !== null}
               >
                 <HardDriveDownload class="size-4" aria-hidden="true" />
-                {t(locale, 'settingsVaultExport')}
+                {t('settingsVaultExport')}
               </Button>
             </div>
           {:else}
             <p class="text-muted-foreground text-sm">
-              {t(locale, 'settingsVaultSelectPrompt')}
+              {t('settingsVaultSelectPrompt')}
             </p>
           {/if}
         </div>
@@ -685,10 +676,10 @@
       </div>
       <div>
         <CardTitle>
-          {t(locale, 'settingsVaultInsightsTitle')}
+          {t('settingsVaultInsightsTitle')}
         </CardTitle>
         <CardDescription>
-          {t(locale, 'settingsVaultInsightsDesc')}
+          {t('settingsVaultInsightsDesc')}
         </CardDescription>
       </div>
     </CardHeader>
@@ -696,25 +687,25 @@
       <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div class="border-border/60 bg-background/80 rounded-xl border p-4">
           <p class="text-muted-foreground text-xs">
-            {t(locale, 'settingsVaultStatTotalItems')}
+            {t('settingsVaultStatTotalItems')}
           </p>
           <p class="text-foreground text-2xl font-semibold">{$totalItems}</p>
         </div>
         <div class="border-border/60 bg-background/80 rounded-xl border p-4">
           <p class="text-muted-foreground text-xs">
-            {t(locale, 'settingsVaultStatWeakPasswords')}
+            {t('settingsVaultStatWeakPasswords')}
           </p>
           <p class="text-destructive text-2xl font-semibold">{WEAK_PASSWORDS}</p>
         </div>
         <div class="border-border/60 bg-background/80 rounded-xl border p-4">
           <p class="text-muted-foreground text-xs">
-            {t(locale, 'settingsVaultStatDuplicateEntries')}
+            {t('settingsVaultStatDuplicateEntries')}
           </p>
           <p class="text-chart-warning text-2xl font-semibold">{DUPLICATES}</p>
         </div>
         <div class="border-border/60 bg-background/80 rounded-xl border p-4">
           <p class="text-muted-foreground text-xs">
-            {t(locale, 'settingsVaultStatEncrypted')}
+            {t('settingsVaultStatEncrypted')}
           </p>
           <p class="text-chart-success text-2xl font-semibold">
             {$encryptedCount}/{$vaultsStore.length}

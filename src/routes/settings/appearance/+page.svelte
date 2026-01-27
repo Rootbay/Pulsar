@@ -1,7 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
-  import { settingsStore } from '$lib/stores';
-  import { appearanceSettings } from '$lib/stores/appearance';
+  import { settings } from '$lib/stores/appSettings.svelte';
   import type { AppearanceSettings } from '$lib/config/settings';
   import { Button } from '$lib/components/ui/button';
   import {
@@ -16,7 +14,7 @@
   import { Switch } from '$lib/components/ui/switch';
   import { cn } from '$lib/utils';
   import { Palette, Contrast, LayoutDashboard, Waves, Monitor } from '@lucide/svelte';
-  import { currentLocale, t, type Locale } from '$lib/i18n';
+  import { i18n, t as translate, type Locale } from '$lib/i18n.svelte';
 
   type ThemeOption = AppearanceSettings['theme'];
   type DensityOption = AppearanceSettings['pageDensity'];
@@ -24,7 +22,8 @@
     [K in keyof AppearanceSettings]: AppearanceSettings[K] extends boolean ? K : never;
   }[keyof AppearanceSettings];
 
-  const locale = $derived($currentLocale);
+  const locale = $derived(i18n.locale);
+  const t = (key: string, vars = {}) => translate(locale, key as any, vars);
 
   const themeOptions: ThemeOption[] = ['system', 'light', 'dark'];
 
@@ -80,7 +79,7 @@
   const FONT_MIN = 12;
   const FONT_MAX = 20;
 
-  let currentSettings = $state<AppearanceSettings>({} as AppearanceSettings);
+  let currentSettings = $derived(settings.state.appearance);
   let theme = $derived(currentSettings.theme || 'system');
   let compactMode = $derived(currentSettings.compactMode || false);
   let fontSize = $derived(currentSettings.fontSize || 14);
@@ -88,18 +87,9 @@
   let reducedMotion = $derived(currentSettings.reducedMotion || false);
   let pageDensity = $derived(currentSettings.pageDensity || 'comfortable');
 
-  $effect(() => {
-    return appearanceSettings.subscribe((settings) => {
-      currentSettings = settings;
-    });
-  });
-
-  onMount(() => {
-    settingsStore.registerModule('appearance', appearanceSettings);
-  });
-
   function applyChanges(partial: Partial<AppearanceSettings>) {
-    appearanceSettings.set({ ...currentSettings, ...partial });
+    settings.state.appearance = { ...settings.state.appearance, ...partial };
+    settings.save();
   }
 
   function isThemeOption(value: string): value is ThemeOption {
@@ -128,9 +118,9 @@
   }
 
   function getThemeLabel(value: ThemeOption, locale: Locale) {
-    if (value === 'system') return t(locale, 'System');
-    if (value === 'light') return t(locale, 'Light');
-    if (value === 'dark') return t(locale, 'Dark');
+    if (value === 'system') return t('System');
+    if (value === 'light') return t('Light');
+    if (value === 'dark') return t('Dark');
     return 'System';
   }
 </script>
@@ -144,9 +134,9 @@
         <Palette class="h-5 w-5" aria-hidden="true" />
       </div>
       <div>
-        <CardTitle>{t(locale, 'Theme & Display')}</CardTitle>
+        <CardTitle>{t('Theme & Display')}</CardTitle>
         <CardDescription>
-          {t(locale, 'Customise the application look and spacing.')}
+          {t('Customise the application look and spacing.')}
         </CardDescription>
       </div>
     </CardHeader>
@@ -154,7 +144,7 @@
       <div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
         <div class="space-y-2">
           <Label class="text-foreground text-sm font-medium">
-            {t(locale, 'Theme')}
+            {t('Theme')}
           </Label>
           {#key locale}
             <Select type="single" value={theme} onValueChange={updateTheme}>
@@ -178,10 +168,10 @@
         >
           <div class="space-y-1">
             <p class="text-foreground text-sm font-semibold">
-              {t(locale, 'Compact Mode')}
+              {t('Compact Mode')}
             </p>
             <p class="text-muted-foreground text-sm">
-              {t(locale, 'Reduce spacing and padding.')}
+              {t('Reduce spacing and padding.')}
             </p>
           </div>
           <Switch
@@ -194,7 +184,7 @@
 
       <div class="space-y-2">
         <Label class="text-foreground text-sm font-medium">
-          {t(locale, 'Font Size')}
+          {t('Font Size')}
         </Label>
         <div class="flex items-center gap-4">
           <input
@@ -217,13 +207,13 @@
             <div class="space-y-1">
               <p class="text-foreground text-sm font-semibold">
                 {option.key === 'highContrast'
-                  ? t(locale, 'High Contrast')
-                  : t(locale, 'Reduced Motion')}
+                  ? t('High Contrast')
+                  : t('Reduced Motion')}
               </p>
               <p class="text-muted-foreground text-sm">
                 {option.key === 'highContrast'
-                  ? t(locale, 'Increase contrast for improved readability.')
-                  : t(locale, 'Minimise animations and motion effects.')}
+                  ? t('Increase contrast for improved readability.')
+                  : t('Minimise animations and motion effects.')}
               </p>
             </div>
             <Switch
@@ -245,9 +235,9 @@
         <LayoutDashboard class="h-5 w-5" aria-hidden="true" />
       </div>
       <div>
-        <CardTitle>{t(locale, 'Page Density')}</CardTitle>
+        <CardTitle>{t('Page Density')}</CardTitle>
         <CardDescription>
-          {t(locale, 'Choose how much information appears on each view.')}
+          {t('Choose how much information appears on each view.')}
         </CardDescription>
       </div>
     </CardHeader>
@@ -270,10 +260,10 @@
             <div>
               <p class="text-foreground text-sm font-semibold">
                 {option.value === 'comfortable'
-                  ? t(locale, 'Comfortable')
+                  ? t('Comfortable')
                   : option.value === 'compact'
-                    ? t(locale, 'Compact')
-                    : t(locale, 'Dense')}
+                    ? t('Compact')
+                    : t('Dense')}
               </p>
             </div>
             <div

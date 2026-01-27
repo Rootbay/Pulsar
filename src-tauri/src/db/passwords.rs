@@ -1,5 +1,5 @@
 use crate::state::AppState;
-use crate::types::{PasswordItem, SecretString, CustomField, Attachment};
+use crate::types::{PasswordItem, PasswordItemOverview, SecretString, CustomField, Attachment};
 use crate::error::{Error, Result};
 use crate::db::utils::{get_key, get_db_pool, CryptoHelper};
 use tauri::State;
@@ -85,6 +85,57 @@ async fn decrypt_password_item_row(row: &sqlx::sqlite::SqliteRow, helper: &Crypt
         field_order,
         attachments,
     })
+}
+
+fn decrypt_password_item_overview_row(row: &sqlx::sqlite::SqliteRow, helper: &CryptoHelper) -> Result<PasswordItemOverview> {
+    let id: i64 = row.get("id");
+    
+    let category_enc: String = row.get("category");
+    let category = helper.decrypt(&category_enc).unwrap_or_else(|_| "login".to_string());
+
+    let title_enc: String = row.get("title");
+    let title = helper.decrypt(&title_enc)?;
+
+    let description = helper.decrypt_opt(row.get("description"))?;
+    let img = helper.decrypt_opt(row.get("img"))?;
+    let tags = helper.decrypt_opt(row.get("tags"))?;
+    let username = helper.decrypt_opt(row.get("username"))?;
+    let url = helper.decrypt_opt(row.get("url"))?;
+
+    Ok(PasswordItemOverview {
+        id,
+        category,
+        title,
+        description,
+        img,
+        tags,
+        username,
+        url,
+        created_at: row.get("created_at"),
+        updated_at: row.get("updated_at"),
+        color: row.get("color"),
+    })
+}
+
+pub async fn get_password_overviews_impl(db_pool: &SqlitePool, key: &[u8]) -> Result<Vec<PasswordItemOverview>> {
+    let rows = sqlx::query("SELECT id, category, title, description, img, tags, username, url, created_at, updated_at, color FROM password_items")
+        .fetch_all(db_pool)
+        .await?;
+
+    let helper = CryptoHelper::new(key)?;
+    let mut items = Vec::with_capacity(rows.len());
+    for row in rows {
+        items.push(decrypt_password_item_overview_row(&row, &helper)?);
+    }
+
+    Ok(items)
+}
+
+#[tauri::command]
+pub async fn get_password_overviews(state: State<'_, AppState>) -> Result<Vec<PasswordItemOverview>> {
+    let key = get_key(&state).await?;
+    let db_pool = get_db_pool(&state).await?;
+    get_password_overviews_impl(&db_pool, key.as_slice()).await
 }
 
 pub async fn get_password_items_impl(db_pool: &SqlitePool, key: &[u8]) -> Result<Vec<PasswordItem>> {

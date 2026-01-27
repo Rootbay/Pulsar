@@ -7,7 +7,7 @@ export interface Attachment {
   created_at: string;
 }
 
-export interface PasswordItem {
+export interface PasswordItemOverview {
   id: number;
   category: 'login' | 'card' | 'identity' | 'note';
   title: string;
@@ -16,12 +16,15 @@ export interface PasswordItem {
   tags: string | null;
   username: string | null;
   url: string | null;
-  notes: string | null;
-  password: string;
-  totp_secret?: string | null;
   created_at: string;
   updated_at: string;
   color: string | null;
+}
+
+export interface PasswordItem extends PasswordItemOverview {
+  notes: string | null;
+  password: string;
+  totp_secret?: string | null;
   custom_fields: { name: string; value: string; field_type: string }[];
   field_order?: string[] | null;
   attachments?: Attachment[];

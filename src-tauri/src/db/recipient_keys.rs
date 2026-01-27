@@ -1,5 +1,5 @@
 use crate::state::AppState;
-use crate::types::RecipientKey;
+use crate::types::{RecipientKey, SecretString};
 use crate::encryption::{encrypt, decrypt};
 use crate::error::Result;
 use crate::db::utils::{get_key, get_db_pool};
@@ -11,12 +11,12 @@ pub async fn save_recipient_key(
     state: State<'_, AppState>,
     name: String,
     public_key: String,
-    private_key: String,
+    private_key: SecretString,
 ) -> Result<()> {
     let key = get_key(&state).await?;
     let name_enc = encrypt(&name, key.as_slice())?;
     let public_key_enc = encrypt(&public_key, key.as_slice())?;
-    let private_key_enc = encrypt(&private_key, key.as_slice())?;
+    let private_key_enc = encrypt(private_key.as_str(), key.as_slice())?;
 
     let db_pool = get_db_pool(&state).await?;
     sqlx::query("INSERT INTO recipient_keys (name, public_key, private_key) VALUES (?, ?, ?)")
@@ -43,11 +43,12 @@ pub async fn get_recipient_keys_impl(db_pool: &SqlitePool, key: &[u8]) -> Result
             id: row.get("id"),
             name: decrypt(name_enc.as_str(), key)?,
             public_key: decrypt(public_key_enc.as_str(), key)?,
-            private_key: decrypt(private_key_enc.as_str(), key)?,
+            private_key: SecretString::new(decrypt(private_key_enc.as_str(), key)?),
         });
     }
     Ok(keys)
 }
+
 
 #[tauri::command]
 pub async fn get_recipient_keys(state: State<'_, AppState>) -> Result<Vec<RecipientKey>> {

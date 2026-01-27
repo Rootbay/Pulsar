@@ -1,8 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { generatorSettings } from '$lib/stores/generator';
-  import { passwordPresets } from '$lib/stores/passwordPresets';
-  import { siteRules } from '$lib/stores/siteRules';
+  import { settings } from '$lib/stores/appSettings.svelte';
   import type { GeneratorSettings, PasswordPreset, SiteRule } from '$lib/config/settings';
   import EditModal from '$lib/components/ui/EditModal.svelte';
   import { Button } from '$lib/components/ui/button';
@@ -30,7 +28,7 @@
     Sparkles,
     Trash2
   } from '@lucide/svelte';
-  import { currentLocale, t } from '$lib/i18n';
+  import { i18n, t as translate } from '$lib/i18n.svelte';
   import { copyText } from '$lib/utils/copyHelper';
 
   import { GeneratorService } from '$lib/utils/generator';
@@ -57,7 +55,8 @@
 
   type StrengthLevel = 'weak' | 'medium' | 'strong';
 
-  const locale = $derived($currentLocale);
+  const locale = $derived(i18n.locale);
+  const t = (key: string, vars = {}) => translate(locale, key as any, vars);
 
   const STRENGTH_META: Record<
     StrengthLevel,
@@ -127,11 +126,11 @@
     }
   ];
 
-  let presets = $state<PasswordPreset[]>([]);
-  let rules = $state<SiteRule[]>([]);
+  let presets = $derived(settings.state.passwordPresets);
+  let rules = $derived(settings.state.siteRules);
+  let passwordLength = $derived(settings.state.generator.passwordLength);
+  let options = $derived(settings.state.generator.options);
 
-  let passwordLength = $state(DEFAULT_PASSWORD_LENGTH);
-  let options = $state<GeneratorOptions>({ ...DEFAULT_OPTIONS });
   let generatedPassword = $state('');
   let hasCharacterPool = $state(true);
   let copyButtonText = $state('Copy');
@@ -199,28 +198,27 @@
     if (options.digits) charSets.push('0-9');
     if (options.symbols) charSets.push('!@#$');
 
-    passwordPresets.addPreset({
+    const newPreset: PasswordPreset = {
       name,
       length: passwordLength,
       charSet: charSets.join(', '),
       strength: strengthEntropy,
       settings: JSON.parse(JSON.stringify(options))
-    });
+    };
+
+    settings.state.passwordPresets = [...settings.state.passwordPresets, newPreset];
+    settings.save();
   }
 
   function resetOptions() {
-    generatorSettings.update((current) => ({
-      ...current,
-      passwordLength: DEFAULT_PASSWORD_LENGTH,
-      options: { ...DEFAULT_OPTIONS }
-    }));
+    settings.state.generator.passwordLength = DEFAULT_PASSWORD_LENGTH;
+    settings.state.generator.options = { ...DEFAULT_OPTIONS };
+    settings.save();
   }
 
   function updateLength(val: number) {
-    generatorSettings.update((current) => ({
-      ...current,
-      passwordLength: val
-    }));
+    settings.state.generator.passwordLength = val;
+    settings.save();
   }
 
   function handlePresetSelect(name: string) {
@@ -232,21 +230,14 @@
   }
 
   function toggleOption(key: GeneratorOptionKey) {
-    generatorSettings.update((current) => ({
-      ...current,
-      options: {
-        ...current.options,
-        [key]: !current.options[key]
-      }
-    }));
+    settings.state.generator.options[key] = !settings.state.generator.options[key];
+    settings.save();
   }
 
   function applyPreset(preset: PasswordPreset) {
-    generatorSettings.update((current) => ({
-      ...current,
-      passwordLength: preset.length,
-      options: { ...preset.settings }
-    }));
+    settings.state.generator.passwordLength = preset.length;
+    settings.state.generator.options = { ...preset.settings };
+    settings.save();
   }
 
   function handleEditPreset(preset: PasswordPreset) {
@@ -257,7 +248,8 @@
 
   function removePreset(name: string) {
     if (confirm(`Are you sure you want to delete preset "${name}"?`)) {
-      passwordPresets.deletePreset(name);
+      settings.state.passwordPresets = settings.state.passwordPresets.filter(p => p.name !== name);
+      settings.save();
     }
   }
 
@@ -269,7 +261,8 @@
 
   function removeRule(url: string) {
     if (confirm(`Are you sure you want to delete rule for "${url}"?`)) {
-      siteRules.deleteRule(url);
+      settings.state.siteRules = settings.state.siteRules.filter(r => r.url !== url);
+      settings.save();
     }
   }
 
@@ -289,46 +282,36 @@
 
   function handleSaveEdit(updatedItem: PasswordPreset | SiteRule) {
     if (editModalType === 'preset' && itemToEdit && isPreset(itemToEdit) && isPreset(updatedItem)) {
-      passwordPresets.updatePreset(itemToEdit.name, updatedItem);
+      const originalName = itemToEdit.name;
+      const index = settings.state.passwordPresets.findIndex(p => p.name === originalName);
+      if (index !== -1) {
+          settings.state.passwordPresets[index] = updatedItem;
+          settings.save();
+      }
     } else if (
       editModalType === 'rule' &&
       itemToEdit &&
       isRule(itemToEdit) &&
       isRule(updatedItem)
     ) {
-      siteRules.updateRule(itemToEdit.url, updatedItem);
+      const originalUrl = itemToEdit.url;
+      const index = settings.state.siteRules.findIndex(r => r.url === originalUrl);
+      if (index !== -1) {
+          settings.state.siteRules[index] = updatedItem;
+          settings.save();
+      }
     }
     closeModal();
   }
 
   $effect(() => {
-    return generatorSettings.subscribe((settings) => {
-      passwordLength = settings.passwordLength;
-      options = { ...settings.options };
-      refreshPassword();
-    });
-  });
-
-  $effect(() => {
-    return passwordPresets.subscribe((value) => {
-      presets = value;
-      if (selectedPresetName && !value.some((preset) => preset.name === selectedPresetName)) {
-        selectedPresetName = null;
-      }
-    });
-  });
-
-  $effect(() => {
-    return siteRules.subscribe((value) => {
-      rules = value;
-    });
+    void passwordLength;
+    void options;
+    refreshPassword();
   });
 
   onMount(() => {
-    generatorSettings.update((current) => ({
-      ...current,
-      options: { ...DEFAULT_OPTIONS, ...current.options }
-    }));
+    refreshPassword();
   });
 
   $effect(() => {
@@ -356,15 +339,15 @@
         </div>
         <div>
           <CardTitle>
-            {t(locale, 'Password Generator')}
+            {t('Password Generator')}
           </CardTitle>
           <CardDescription>
-            {t(locale, 'Generate strong and secure passwords on demand.')}
+            {t('Generate strong and secure passwords on demand.')}
           </CardDescription>
         </div>
       </div>
       <Badge variant="secondary" class="mt-2 w-fit sm:mt-0">
-        {t(locale, 'Length')}&nbsp;{passwordLength}
+        {t('Length')}&nbsp;{passwordLength}
       </Badge>
     </CardHeader>
 
@@ -372,7 +355,7 @@
       <div class="border-border/60 bg-muted/10 space-y-3 rounded-xl border p-4">
         <div class="flex flex-wrap items-center justify-between gap-2">
           <p class="text-muted-foreground text-sm font-medium">
-            {t(locale, 'Generated password')}
+            {t('Generated password')}
           </p>
           <Button
             type="button"
@@ -383,7 +366,7 @@
             disabled={!hasCharacterPool}
           >
             <RefreshCcw class="size-4" aria-hidden="true" />
-            {t(locale, 'Generate new')}
+            {t('Generate new')}
           </Button>
         </div>
         <div
@@ -393,7 +376,7 @@
             <span class="break-all">{generatedPassword}</span>
           {:else}
             <span class="text-muted-foreground text-sm">
-              {t(locale, 'Select at least one character set to generate a password.')}
+              {t('Select at least one character set to generate a password.')}
             </span>
           {/if}
         </div>
@@ -415,11 +398,11 @@
             onclick={saveCurrentSettingsAsPreset}
           >
             <Save class="size-4" aria-hidden="true" />
-            {t(locale, 'Save as preset')}
+            {t('Save as preset')}
           </Button>
           <Button type="button" variant="outline" class="gap-2" onclick={resetOptions}>
             <RotateCcw class="size-4" aria-hidden="true" />
-            {t(locale, 'Reset to defaults')}
+            {t('Reset to defaults')}
           </Button>
         </div>
       </div>
@@ -428,19 +411,19 @@
         <div class="flex flex-wrap items-center justify-between gap-3">
           <div>
             <p class="text-foreground text-sm font-semibold">
-              {t(locale, 'Password strength')}
+              {t('Password strength')}
             </p>
             <p class="text-muted-foreground text-xs">
-              {t(locale, 'Entropy')} ≈ {strengthEntropy}
-              {t(locale, 'bits')}
+              {t('Entropy')} ≈ {strengthEntropy}
+              {t('bits')}
             </p>
           </div>
           <span class={cn('text-sm font-semibold', strengthMeta.textClass)}>
             {strengthLevel === 'weak'
-              ? t(locale, 'Weak')
+              ? t('Weak')
               : strengthLevel === 'medium'
-                ? t(locale, 'Good')
-                : t(locale, 'Very strong')}
+                ? t('Good')
+                : t('Very strong')}
           </span>
         </div>
         <Progress value={strengthProgress} class={cn('bg-muted/40', strengthMeta.barClass)} />
@@ -450,7 +433,7 @@
         <div class="space-y-4">
           <div class="space-y-2">
             <p class="text-foreground text-sm font-medium">
-              {t(locale, 'Password length')}
+              {t('Password length')}
             </p>
             <input
               type="range"
@@ -468,7 +451,7 @@
 
           <div class="space-y-2">
             <p class="text-foreground text-sm font-medium">
-              {t(locale, 'Apply saved preset')}
+              {t('Apply saved preset')}
             </p>
             {#if presets.length}
               <Select
@@ -478,7 +461,7 @@
               >
                 <SelectTrigger aria-label="Select password preset" class="w-full">
                   <span data-slot="select-value" class="flex items-center gap-2 truncate text-sm">
-                    {selectedPresetName ?? t(locale, 'Choose a preset')}
+                    {selectedPresetName ?? t('Choose a preset')}
                   </span>
                 </SelectTrigger>
                 <SelectContent>
@@ -489,7 +472,7 @@
               </Select>
             {:else}
               <p class="text-muted-foreground text-sm">
-                {t(locale, 'No presets available yet.')}
+                {t('No presets available yet.')}
               </p>
             {/if}
           </div>
@@ -497,7 +480,7 @@
 
         <div class="space-y-4">
           <p class="text-foreground text-sm font-semibold">
-            {t(locale, 'Character options')}
+            {t('Character options')}
           </p>
           <div class="space-y-3">
             {#each CHARACTER_TOGGLES as option (option.key)}
@@ -507,21 +490,21 @@
                 <div>
                   <p class="text-foreground text-sm font-medium">
                     {option.key === 'uppercase'
-                      ? t(locale, 'Include uppercase (A-Z)')
+                      ? t('Include uppercase (A-Z)')
                       : option.key === 'lowercase'
-                        ? t(locale, 'Include lowercase (a-z)')
+                        ? t('Include lowercase (a-z)')
                         : option.key === 'digits'
-                          ? t(locale, 'Include digits (0-9)')
-                          : t(locale, 'Include symbols (!@#$)')}
+                          ? t('Include digits (0-9)')
+                          : t('Include symbols (!@#$)')}
                   </p>
                   <p class="text-muted-foreground text-xs">
                     {option.key === 'uppercase'
-                      ? t(locale, 'Adds capital letters to the character pool.')
+                      ? t('Adds capital letters to the character pool.')
                       : option.key === 'lowercase'
-                        ? t(locale, 'Adds lowercase letters to the character pool.')
+                        ? t('Adds lowercase letters to the character pool.')
                         : option.key === 'digits'
-                          ? t(locale, 'Adds numeric characters to the password.')
-                          : t(locale, 'Adds punctuation and symbol characters.')}
+                          ? t('Adds numeric characters to the password.')
+                          : t('Adds punctuation and symbol characters.')}
                   </p>
                 </div>
                 <Switch
@@ -539,7 +522,7 @@
         <div class="flex items-center gap-2">
           <Sparkles class="text-muted-foreground size-4" aria-hidden="true" />
           <p class="text-foreground text-sm font-semibold">
-            {t(locale, 'Advanced options')}
+            {t('Advanced options')}
           </p>
         </div>
         <div class="grid gap-3 md:grid-cols-2">
@@ -550,17 +533,17 @@
               <div>
                 <p class="text-foreground text-sm font-medium">
                   {option.key === 'ambiguous'
-                    ? t(locale, 'Avoid ambiguous characters')
+                    ? t('Avoid ambiguous characters')
                     : option.key === 'similar'
-                      ? t(locale, 'Exclude visually similar characters')
-                      : t(locale, 'Pronounceable mode')}
+                      ? t('Exclude visually similar characters')
+                      : t('Pronounceable mode')}
                 </p>
                 <p class="text-muted-foreground text-xs">
                   {option.key === 'ambiguous'
-                    ? t(locale, 'Exclude characters like i, l, O, and 0.')
+                    ? t('Exclude characters like i, l, O, and 0.')
                     : option.key === 'similar'
-                      ? t(locale, 'Avoid characters that look alike in some fonts.')
-                      : t(locale, 'Alternate vowels and consonants for readability.')}
+                      ? t('Avoid characters that look alike in some fonts.')
+                      : t('Alternate vowels and consonants for readability.')}
                 </p>
               </div>
               <Switch
@@ -584,10 +567,10 @@
       </div>
       <div>
         <CardTitle>
-          {t(locale, 'Saved presets')}
+          {t('Saved presets')}
         </CardTitle>
         <CardDescription>
-          {t(locale, 'Manage and reuse your favourite password configurations.')}
+          {t('Manage and reuse your favourite password configurations.')}
         </CardDescription>
       </div>
     </CardHeader>
@@ -602,7 +585,7 @@
                 <div>
                   <p class="text-foreground text-sm font-semibold">{preset.name}</p>
                   <p class="text-muted-foreground text-xs">
-                    {t(locale, 'Length')}
+                    {t('Length')}
                     {preset.length} · {preset.charSet}
                   </p>
                 </div>
@@ -641,14 +624,14 @@
                 class="mt-1 w-full"
                 onclick={() => applyPreset(preset)}
               >
-                {t(locale, 'Use preset')}
+                {t('Use preset')}
               </Button>
             </div>
           {/each}
         </div>
       {:else}
         <p class="text-muted-foreground text-sm">
-          {t(locale, 'No saved presets yet. Configure the generator and save your first preset.')}
+          {t('No saved presets yet. Configure the generator and save your first preset.')}
         </p>
       {/if}
     </CardContent>
@@ -663,10 +646,10 @@
       </div>
       <div>
         <CardTitle>
-          {t(locale, 'Site rule templates')}
+          {t('Site rule templates')}
         </CardTitle>
         <CardDescription>
-          {t(locale, 'Maintain site-specific password requirements.')}
+          {t('Maintain site-specific password requirements.')}
         </CardDescription>
       </div>
     </CardHeader>
@@ -707,7 +690,7 @@
               </div>
               <div class="text-muted-foreground flex flex-wrap gap-2 text-xs">
                 <Badge variant="secondary">
-                  {t(locale, 'Length')}
+                  {t('Length')}
                   {rule.length}
                 </Badge>
                 <Badge variant="outline">{rule.type}</Badge>
@@ -717,7 +700,7 @@
         </div>
       {:else}
         <p class="text-muted-foreground text-sm">
-          {t(locale, 'No site rule templates configured yet.')}
+          {t('No site rule templates configured yet.')}
         </p>
       {/if}
     </CardContent>

@@ -5,21 +5,18 @@
   import { dndzone } from 'svelte-dnd-action';
   import { flip } from 'svelte/animate';
   import { cubicOut } from 'svelte/easing';
-  import { Eye, EyeOff, ArrowDownUp, Copy, ShieldAlert, ShieldCheck, Shield } from '@lucide/svelte';
+  import { Eye, EyeOff, ArrowDownUp, Copy, ShieldAlert, ShieldCheck, Shield, WandSparkles } from '@lucide/svelte';
   import Input from '$lib/components/ui/FieldInput.svelte';
   import { Button } from '$lib/components/ui/button';
   import { Badge } from '$lib/components/ui/badge';
   import { Skeleton } from '$lib/components/ui/skeleton';
   import type { DisplayField } from '$lib/types/password-fields';
   import type { PasswordItem } from '$lib/types/password';
-  import { securityDashboard } from '$lib/stores/security-dashboard';
+  import { securityDashboard } from '$lib/stores/security-dashboard.svelte';
   import { copyPassword, copyText, copyUrl, copyUsername } from '$lib/utils/copyHelper';
   import { toast } from '$lib/components/ui/sonner';
-
   import { GeneratorService } from '$lib/utils/generator';
   import PasswordStrength from '$lib/components/password/PasswordStrength.svelte';
-  import { Wand2 } from '@lucide/svelte';
-  import type { PasswordHealth } from '$lib/utils/security';
 
   interface Props {
     isEditing: boolean;
@@ -375,7 +372,7 @@
                       title="Generate password"
                       onclick={generatePassword}
                     >
-                      <Wand2 class="h-4.5 w-4.5" />
+                      <WandSparkles class="h-4.5 w-4.5" />
                     </Button>
                   {/if}
 

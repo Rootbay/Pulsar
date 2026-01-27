@@ -5,7 +5,7 @@
   import { goto } from '$app/navigation';
   import { page } from '$app/stores';
   import { appState } from '$lib/stores';
-  import { appearanceSettings } from '$lib/stores/appearance';
+  import { settings } from '$lib/stores/appSettings.svelte';
   import { initClipboardService } from '$lib/utils/clipboardService';
   import SecurityManager from '$lib/components/SecurityManager.svelte';
   import { Toaster } from '$lib/components/ui/sonner';
@@ -21,9 +21,9 @@
   });
 
   $effect(() => {
-    if (browser) {
+    if (browser && settings.isInitialized) {
       const htmlElement = document.documentElement;
-      const currentTheme = $appearanceSettings.theme;
+      const currentTheme = settings.state.appearance.theme;
 
       htmlElement.classList.remove('theme-light', 'theme-dark', 'theme-system');
 

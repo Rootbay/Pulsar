@@ -1,6 +1,5 @@
 <script lang="ts">
-  import { derived } from 'svelte/store';
-  import { backupSettings } from '$lib/stores/backup';
+  import { settings } from '$lib/stores/appSettings.svelte';
   import { Button } from '$lib/components/ui/button';
   import {
     Card,
@@ -36,10 +35,13 @@
   import { quintOut } from 'svelte/easing';
   import { exportVaultBackup, importVaultBackup, notifyVaultRefresh } from '$lib/utils/backup';
   import type { ImportVaultProgressStage } from '$lib/utils/backup';
-  import { currentLocale, t, type Locale } from '$lib/i18n';
+  import { i18n, t as translate, type Locale } from '$lib/i18n.svelte';
 
-  const locale = $derived($currentLocale);
+  const locale = $derived(i18n.locale);
+  const t = (key: string, vars = {}) => translate(locale, key as any, vars);
   const isDev = import.meta.env.DEV;
+
+  let backupSettings = $derived(settings.state.backup);
 
   const frequencies = [
     { value: 'daily', label: 'Daily (Default)' },
@@ -48,9 +50,9 @@
   ];
 
   function getFrequencyLabel(value: string, locale: Locale): string {
-    if (value === 'daily') return t(locale, 'Daily (Default)');
-    if (value === 'weekly') return t(locale, 'Weekly');
-    if (value === 'custom') return t(locale, 'Custom interval');
+    if (value === 'daily') return t('Daily (Default)');
+    if (value === 'weekly') return t('Weekly');
+    if (value === 'custom') return t('Custom interval');
     return value;
   }
 
@@ -101,9 +103,6 @@
       icon: HardHat
     }
   ];
-
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const backupState = derived(backupSettings, ($settings) => ({ ...$settings }));
 
   let showModal = $state(false);
   let modalTitle = $state('');
@@ -171,12 +170,11 @@
 
   async function handleManualBackup() {
     openModal({
-      title: t(locale, 'Create manual backup?'),
+      title: t('Create manual backup?'),
       description: t(
-        locale,
         'This creates a fresh encrypted backup of your vault using the active settings.'
       ),
-      confirmLabel: t(locale, 'Export backup'),
+      confirmLabel: t('Export backup'),
       requiresMasterPassword: true,
       onConfirm: async (passphrase) => {
         const message = await exportVaultBackup(passphrase, {
@@ -189,12 +187,11 @@
 
   async function handleExportEncrypted() {
     openModal({
-      title: t(locale, 'Export encrypted data?'),
+      title: t('Export encrypted data?'),
       description: t(
-        locale,
         'Export your vault in encrypted form. Keep the generated file secure.'
       ),
-      confirmLabel: t(locale, 'Export encrypted'),
+      confirmLabel: t('Export encrypted'),
       requiresMasterPassword: true,
       onConfirm: async (passphrase) => {
         const message = await exportVaultBackup(passphrase, {
@@ -207,12 +204,11 @@
 
   async function handleExportPlaintext() {
     openModal({
-      title: t(locale, 'Export plaintext data?'),
+      title: t('Export plaintext data?'),
       description: t(
-        locale,
         'WARNING: This exports all vault contents without encryption. Only proceed on trusted devices.'
       ),
-      confirmLabel: t(locale, 'Export plaintext'),
+      confirmLabel: t('Export plaintext'),
       danger: true,
       requiresMasterPassword: true,
       onConfirm: async (passphrase) => {
@@ -227,12 +223,11 @@
 
   async function handleImport() {
     openModal({
-      title: t(locale, 'Start import process?'),
+      title: t('Start import process?'),
       description: t(
-        locale,
         'Select a previous Pulsar backup and provide its passphrase to restore your vault contents.'
       ),
-      confirmLabel: t(locale, 'Import backup'),
+      confirmLabel: t('Import backup'),
       requiresMasterPassword: true,
       onConfirm: async (passphrase) => {
         const snapshot = await importVaultBackup(passphrase, {
@@ -251,38 +246,34 @@
   }
 
   function toggleSetting(setting: 'automaticBackups' | 'enablePlaintextExport') {
-    backupSettings.update((current) => ({
-      ...current,
-      [setting]: !current[setting]
-    }));
+    settings.state.backup[setting] = !settings.state.backup[setting];
+    settings.save();
   }
 
   function updateFrequency(value: string) {
-    backupSettings.update((current) => ({
-      ...current,
-      backupFrequency: value
-    }));
+    settings.state.backup.backupFrequency = value;
+    settings.save();
   }
 
   function updateRetention(event: Event) {
     const value = Number((event.target as HTMLInputElement).value);
-    backupSettings.update((current) => ({
-      ...current,
-      retentionCount: Number.isNaN(value)
-        ? current.retentionCount
-        : Math.min(Math.max(value, 1), 100)
-    }));
+    const retention = Number.isNaN(value) ? backupSettings.retentionCount : Math.min(Math.max(value, 1), 100);
+    settings.state.backup.retentionCount = retention;
+    settings.save();
   }
 
   function updateSyncMode(mode: string) {
-    backupSettings.update((current) => ({ ...current, syncMode: mode }));
+    settings.state.backup.syncMode = mode;
+    settings.save();
   }
 
   function openProvider(provider: string) {
-    backupSettings.update((current) => ({ ...current, selectedProvider: provider }));
+    settings.state.backup.selectedProvider = provider;
+    settings.save();
+    
     openModal({
-      title: t(locale, 'Configure {provider}', { provider }),
-      description: t(locale, 'Provide credentials for your {provider} connection.', { provider }),
+      title: t('Configure {provider}', { provider }),
+      description: t('Provide credentials for your {provider} connection.', { provider }),
       requiresMasterPassword: false,
       onConfirm: () => {}
     });
@@ -297,8 +288,8 @@
     >
       <AlertTitle>
         {feedback.type === 'error'
-          ? t(locale, 'Something went wrong')
-          : t(locale, 'Action completed')}
+          ? t('Something went wrong')
+          : t('Action completed')}
       </AlertTitle>
       <AlertDescription>{feedback.message}</AlertDescription>
     </Alert>
@@ -313,16 +304,16 @@
           <Archive class="size-5" aria-hidden="true" />
         </div>
         <div>
-          <CardTitle>{t(locale, 'Backups')}</CardTitle>
+          <CardTitle>{t('Backups')}</CardTitle>
           <CardDescription>
-            {t(locale, 'Manage automated and on-demand backups for your vault.')}
+            {t('Manage automated and on-demand backups for your vault.')}
           </CardDescription>
         </div>
       </div>
       <Badge variant="secondary" class="w-fit">
-        {t(locale, 'Retaining')}
-        {$backupSettings.retentionCount}
-        {t(locale, 'copies')}
+        {t('Retaining')}
+        {backupSettings.retentionCount}
+        {t('copies')}
       </Badge>
     </CardHeader>
 
@@ -333,14 +324,14 @@
         >
           <div>
             <p class="text-foreground text-sm font-medium">
-              {t(locale, 'Automatic backups')}
+              {t('Automatic backups')}
             </p>
             <p class="text-muted-foreground text-xs">
-              {t(locale, 'Create backups at regular intervals based on your chosen schedule.')}
+              {t('Create backups at regular intervals based on your chosen schedule.')}
             </p>
           </div>
           <Switch
-            checked={$backupSettings.automaticBackups}
+            checked={backupSettings.automaticBackups}
             aria-label="Toggle automatic backups"
             onclick={() => toggleSetting('automaticBackups')}
           />
@@ -349,18 +340,18 @@
         <div class="grid gap-4 md:grid-cols-2">
           <div class="space-y-2">
             <Label class="text-foreground text-sm font-medium">
-              {t(locale, 'Backup frequency')}
+              {t('Backup frequency')}
             </Label>
             {#key locale}
               <Select
                 type="single"
-                value={$backupSettings.backupFrequency}
+                value={backupSettings.backupFrequency}
                 onValueChange={updateFrequency}
               >
                 <SelectTrigger aria-label="Select backup frequency" class="w-full">
                   <span data-slot="select-value" class="truncate text-sm">
-                    {getFrequencyLabel($backupSettings.backupFrequency, locale) ??
-                      t(locale, 'Select frequency')}
+                    {getFrequencyLabel(backupSettings.backupFrequency, locale) ??
+                      t('Select frequency')}
                   </span>
                 </SelectTrigger>
                 <SelectContent>
@@ -376,18 +367,18 @@
 
           <div class="space-y-2">
             <Label for="retention-count" class="text-foreground text-sm font-medium">
-              {t(locale, 'Retention count')}
+              {t('Retention count')}
             </Label>
             <Input
               id="retention-count"
               type="number"
               min="1"
               max="100"
-              value={$backupSettings.retentionCount}
+              value={backupSettings.retentionCount}
               oninput={updateRetention}
             />
             <p class="text-muted-foreground text-xs">
-              {t(locale, 'Number of backup versions to keep on disk.')}
+              {t('Number of backup versions to keep on disk.')}
             </p>
           </div>
         </div>
@@ -396,11 +387,11 @@
       <div class="flex flex-wrap gap-2">
         <Button type="button" class="gap-2" onclick={handleManualBackup}>
           <Download class="size-4" aria-hidden="true" />
-          {t(locale, 'Create manual backup')}
+          {t('Create manual backup')}
         </Button>
         <Button type="button" variant="outline" class="gap-2" onclick={handleImport}>
           <CloudUpload class="size-4" aria-hidden="true" />
-          {t(locale, 'Import data')}
+          {t('Import data')}
         </Button>
       </div>
     </CardContent>
@@ -414,9 +405,9 @@
         <Archive class="size-5" aria-hidden="true" />
       </div>
       <div>
-        <CardTitle>{t(locale, 'Export options')}</CardTitle>
+        <CardTitle>{t('Export options')}</CardTitle>
         <CardDescription>
-          {t(locale, 'Generate encrypted or plaintext exports of your vault.')}
+          {t('Generate encrypted or plaintext exports of your vault.')}
         </CardDescription>
       </div>
     </CardHeader>
@@ -424,14 +415,14 @@
       <div class="grid gap-4 md:grid-cols-2">
         <div class="border-border/60 bg-muted/10 space-y-2 rounded-xl border p-4">
           <p class="text-foreground text-sm font-semibold">
-            {t(locale, 'Encrypted export')}
+            {t('Encrypted export')}
           </p>
           <p class="text-muted-foreground text-xs">
-            {t(locale, 'Secured with your export passphrase.')}
+            {t('Secured with your export passphrase.')}
           </p>
           <Button type="button" class="gap-2" onclick={handleExportEncrypted}>
             <ShieldCheck class="size-4" aria-hidden="true" />
-            {t(locale, 'Export encrypted')}
+            {t('Export encrypted')}
           </Button>
         </div>
 
@@ -440,15 +431,15 @@
             <div class="flex items-center gap-2">
               <ShieldAlert class="text-destructive size-4" aria-hidden="true" />
               <p class="text-foreground text-sm font-semibold">
-                {t(locale, 'Plaintext export')}
+                {t('Plaintext export')}
               </p>
             </div>
             <p class="text-muted-foreground text-xs">
-              {t(locale, 'Only use on trusted devices. Sensitive data remains unprotected.')}
+              {t('Only use on trusted devices. Sensitive data remains unprotected.')}
             </p>
             <div class="flex items-center justify-between gap-2">
               <Switch
-                checked={$backupSettings.enablePlaintextExport}
+                checked={backupSettings.enablePlaintextExport}
                 aria-label="Allow plaintext exports"
                 onclick={() => toggleSetting('enablePlaintextExport')}
               />
@@ -457,10 +448,10 @@
                 variant="outline"
                 class="text-destructive gap-2"
                 onclick={handleExportPlaintext}
-                disabled={!$backupSettings.enablePlaintextExport}
+                disabled={!backupSettings.enablePlaintextExport}
               >
                 <Shield class="size-4" aria-hidden="true" />
-                {t(locale, 'Export plaintext')}
+                {t('Export plaintext')}
               </Button>
             </div>
           </div>
@@ -477,9 +468,9 @@
         <Cloud class="size-5" aria-hidden="true" />
       </div>
       <div>
-        <CardTitle>{t(locale, 'Sync')}</CardTitle>
+        <CardTitle>{t('Sync')}</CardTitle>
         <CardDescription>
-          {t(locale, 'Configure cloud providers to replicate backups across devices.')}
+          {t('Configure cloud providers to replicate backups across devices.')}
         </CardDescription>
       </div>
     </CardHeader>
@@ -490,28 +481,28 @@
             type="button"
             class={cn(
               'border-border/60 bg-background/70 flex h-full flex-col items-start gap-3 rounded-xl border p-4 text-left transition',
-              $backupSettings.syncMode === mode.id
+              backupSettings.syncMode === mode.id
                 ? 'border-primary/60 bg-primary/10 text-primary shadow-sm'
                 : 'hover:border-primary/40 hover:bg-muted/40'
             )}
-            aria-pressed={$backupSettings.syncMode === mode.id}
+            aria-pressed={backupSettings.syncMode === mode.id}
             onclick={() => updateSyncMode(mode.id)}
           >
             <mode.icon class="size-5" aria-hidden="true" />
             <div>
               <p class="text-foreground text-sm font-semibold">
                 {mode.id === 'off'
-                  ? t(locale, 'Turned off')
+                  ? t('Turned off')
                   : mode.id === 'manual'
-                    ? t(locale, 'Manual sync')
-                    : t(locale, 'Automatic sync')}
+                    ? t('Manual sync')
+                    : t('Automatic sync')}
               </p>
               <p class="text-muted-foreground text-xs">
                 {mode.id === 'off'
-                  ? t(locale, 'Backups stay local to this device.')
+                  ? t('Backups stay local to this device.')
                   : mode.id === 'manual'
-                    ? t(locale, 'Trigger cloud sync on demand.')
-                    : t(locale, 'Keep cloud copy in sync automatically.')}
+                    ? t('Trigger cloud sync on demand.')
+                    : t('Keep cloud copy in sync automatically.')}
               </p>
             </div>
           </button>
@@ -526,11 +517,11 @@
             type="button"
             class={cn(
               'border-border/60 bg-background/70 flex h-full flex-col items-start gap-3 rounded-xl border p-4 text-left transition',
-              $backupSettings.selectedProvider === provider.id
+              backupSettings.selectedProvider === provider.id
                 ? 'border-primary/60 bg-primary/10 text-primary shadow-sm'
                 : 'hover:border-primary/40 hover:bg-muted/40'
             )}
-            aria-pressed={$backupSettings.selectedProvider === provider.id}
+            aria-pressed={backupSettings.selectedProvider === provider.id}
             onclick={() => openProvider(provider.id)}
           >
             <provider.icon class="size-5" aria-hidden="true" />
@@ -538,12 +529,12 @@
               <p class="text-foreground text-sm font-semibold">{provider.name}</p>
               <p class="text-muted-foreground text-xs">
                 {provider.id === 'webdav'
-                  ? t(locale, 'backupProviderWebdavDesc')
+                  ? t('backupProviderWebdavDesc')
                   : provider.id === 'dropbox'
-                    ? t(locale, 'backupProviderDropboxDesc')
+                    ? t('backupProviderDropboxDesc')
                     : provider.id === 's3'
-                      ? t(locale, 'backupProviderS3Desc')
-                      : t(locale, 'backupProviderCustomDesc')}
+                      ? t('backupProviderS3Desc')
+                      : t('backupProviderCustomDesc')}
               </p>
             </div>
           </button>
@@ -576,7 +567,7 @@
       {#if modalRequiresPassphrase}
         <div class="mt-6 space-y-2">
           <Label for="backup-passphrase" class="text-foreground text-sm font-medium">
-            {t(locale, 'Backup passphrase')}
+            {t('Backup passphrase')}
           </Label>
           <Input
             id="backup-passphrase"
@@ -590,7 +581,6 @@
           />
           <p class="text-muted-foreground text-xs">
             {t(
-              locale,
               'This passphrase encrypts or decrypts your vault backup. Use the same passphrase you will remember later.'
             )}
           </p>
@@ -600,7 +590,7 @@
       {#if modalRequiresMasterPassword}
         <div class="mt-4 space-y-2">
           <Label for="master-password" class="text-foreground text-sm font-medium">
-            {t(locale, 'loginMasterPasswordLabel')}
+            {t('loginMasterPasswordLabel')}
           </Label>
           <Input
             id="master-password"
@@ -613,7 +603,7 @@
             }}
           />
           <p class="text-muted-foreground text-xs">
-            {t(locale, 'Confirm with your master password to proceed.')}
+            {t('Confirm with your master password to proceed.')}
           </p>
         </div>
       {/if}
@@ -631,7 +621,7 @@
 
       <div class="mt-6 flex justify-end gap-2">
         <Button type="button" variant="ghost" onclick={closeModal}>
-          {t(locale, 'Cancel')}
+          {t('Cancel')}
         </Button>
         <Button
           type="button"
@@ -653,7 +643,7 @@
               return;
             }
             if (modalRequiresMasterPassword && masterTrimmed.length === 0) {
-              modalError = t(locale, 'loginMasterPasswordPlaceholder');
+              modalError = t('loginMasterPasswordPlaceholder');
               return;
             }
 

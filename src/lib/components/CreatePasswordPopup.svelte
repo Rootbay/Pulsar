@@ -15,7 +15,7 @@
   import { Label } from '$lib/components/ui/label';
   import { Badge } from '$lib/components/ui/badge';
   import { ScrollArea } from '$lib/components/ui/scroll-area';
-  import { Check, X, Key, CreditCard, User, StickyNote, Wand2, Eye, EyeOff } from '@lucide/svelte';
+  import { Check, X, Key, CreditCard, User, StickyNote, WandSparkles, Eye, EyeOff } from '@lucide/svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
   import { cn } from '$lib/utils';
   import { GeneratorService } from '$lib/utils/generator';
@@ -180,7 +180,7 @@
               class="h-7 px-2 text-xs"
               onclick={generatePassword}
             >
-              <Wand2 class="mr-1.5 size-3" />
+              <WandSparkles class="mr-1.5 size-3" />
               Generate
             </Button>
           </div>

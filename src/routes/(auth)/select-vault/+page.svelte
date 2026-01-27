@@ -5,10 +5,11 @@
   import { open, save } from '@tauri-apps/plugin-dialog';
   import ImportManagerPopup from '$lib/components/ImportManagerPopup.svelte';
   import { appState } from '$lib/stores';
-  import { recentDatabases } from '$lib/stores/recentDatabases';
+  import { settings } from '$lib/stores/appSettings.svelte';
+  import { addRecentDatabase, removeRecentDatabase } from '$lib/stores/recentDatabases.svelte';
   import { importVaultBackup, notifyVaultRefresh } from '$lib/utils/backup';
   import type { ImportVaultProgressStage } from '$lib/utils/backup';
-  import { currentLocale, t } from '$lib/i18n';
+  import { i18n, t as translate } from '$lib/i18n.svelte';
   import { Spinner } from '$lib/components/ui/spinner/index.js';
   import { Button } from '$lib/components/ui/button';
 
@@ -19,10 +20,12 @@
     Upload,
     ArrowRight,
     Clock,
-    FileWarning
+    MailWarning
   } from '@lucide/svelte';
 
-  let locale = $derived($currentLocale);
+  let locale = $derived(i18n.locale);
+  const t = (key: string, vars = {}) => translate(locale, key as any, vars);
+
   let error = $state<string | null>(null);
   let importMessage = $state<string | null>(null);
   let importProgress = $state<string | null>(null);
@@ -30,10 +33,11 @@
   let lastAttemptedPath = $state<string | null>(null);
   let triedElevated = $state(false);
   let isLoading = $state(false);
+  let recentDbPaths = $derived(settings.state.recentDatabases || []);
 
   const importProgressMessages = $derived<Record<ImportVaultProgressStage, string>>({
-    decrypting: t(locale, 'decryptingBackup'),
-    restoring: t(locale, 'restoringVault')
+    decrypting: t('decryptingBackup'),
+    restoring: t('restoringVault')
   });
 
   const hasAccessDeniedError = $derived(Boolean(error?.toLowerCase().includes('access is denied')));
@@ -77,11 +81,11 @@
       }
 
       appState.isDatabaseLoaded = true;
-      recentDatabases.addRecentDatabase(path);
+      await addRecentDatabase(path);
     } catch (cause: unknown) {
       console.error('Failed to load database:', cause);
       error =
-        ((cause as Record<string, unknown>).message as string) || t(locale, 'failedToLoadVault');
+        ((cause as Record<string, unknown>).message as string) || t('failedToLoadVault');
 
       const message =
         ((cause as Record<string, unknown>).message as string) || cause?.toString() || '';
@@ -107,7 +111,7 @@
     } catch (cause: unknown) {
       console.error('Elevated copy failed:', cause);
       error =
-        ((cause as Record<string, unknown>).message as string) || t(locale, 'elevatedCopyFailed');
+        ((cause as Record<string, unknown>).message as string) || t('elevatedCopyFailed');
     }
   };
 
@@ -122,8 +126,8 @@
   const selectExistingVault = async () => {
     try {
       const picked = await open({
-        title: t(locale, 'selectVaultDialogTitle'),
-        filters: [{ name: t(locale, 'vaultFileFilterName'), extensions: ['psec'] }],
+        title: t('selectVaultDialogTitle'),
+        filters: [{ name: t('vaultFileFilterName'), extensions: ['psec'] }],
         multiple: false
       });
 
@@ -145,8 +149,8 @@
   const createNewVault = async () => {
     try {
       const picked = await save({
-        title: t(locale, 'createVaultDialogTitle'),
-        filters: [{ name: t(locale, 'vaultFileFilterName'), extensions: ['psec'] }]
+        title: t('createVaultDialogTitle'),
+        filters: [{ name: t('vaultFileFilterName'), extensions: ['psec'] }]
       });
 
       if (picked) {
@@ -179,12 +183,12 @@
     const passphrase = typeof detail?.passphrase === 'string' ? detail.passphrase.trim() : '';
 
     if (!importedPath) {
-      error = t(locale, 'noBackupFileSelected');
+      error = t('noBackupFileSelected');
       return;
     }
 
     if (!passphrase) {
-      error = t(locale, 'passphraseRequired');
+      error = t('passphraseRequired');
       return;
     }
 
@@ -202,18 +206,17 @@
       const itemCount = snapshot.passwordItems.length;
       const tagCount = snapshot.buttons.length;
 
-      const itemLabel = itemCount === 1 ? t(locale, 'itemSingular') : t(locale, 'itemPlural');
-      const tagLabel = tagCount === 1 ? t(locale, 'tagSingular') : t(locale, 'tagPlural');
-      importMessage = `${t(locale, 'vaultRestoredPrefix')} ${itemCount} ${itemLabel} ${t(
-        locale,
+      const itemLabel = itemCount === 1 ? t('itemSingular') : t('itemPlural');
+      const tagLabel = tagCount === 1 ? t('tagSingular') : t('tagPlural');
+      importMessage = `${t('vaultRestoredPrefix')} ${itemCount} ${itemLabel} ${t(
         'and'
-      )} ${tagCount} ${tagLabel} ${t(locale, 'vaultRestoredSuffix')}`;
+      )} ${tagCount} ${tagLabel} ${t('vaultRestoredSuffix')}`;
 
       importProgress = null;
       notifyVaultRefresh('import');
     } catch (cause: unknown) {
       console.error('Failed to import backup:', cause);
-      error = ((cause as Record<string, unknown>).message as string) || t(locale, 'importFailed');
+      error = ((cause as Record<string, unknown>).message as string) || t('importFailed');
       importProgress = null;
     }
   };
@@ -228,12 +231,12 @@
       if (exists) {
         await loadAndCheckDatabase(path);
       } else {
-        recentDatabases.removeRecentDatabase(path);
-        error = t(locale, 'selectedRecentNotFound');
+        removeRecentDatabase(path);
+        error = t('selectedRecentNotFound');
       }
     } catch (cause) {
       console.error(`Failed to check file existence for ${path}:`, cause);
-      error = t(locale, 'fileCheckError');
+      error = t('fileCheckError');
     }
   };
 </script>
@@ -252,10 +255,10 @@
     <div class="mb-12 w-full text-center">
       <img src="/logo.png" alt="Pulsar Logo" class="mx-auto mb-6 h-20 w-20" />
       <h1 class="text-foreground text-4xl font-bold tracking-tight">
-        {t(locale, 'welcomeTitle')}
+        {t('welcomeTitle')}
       </h1>
       <p class="text-muted-foreground mt-3 text-lg">
-        {t(locale, 'welcomeSubtitle')}
+        {t('welcomeSubtitle')}
       </p>
     </div>
 
@@ -272,13 +275,13 @@
           <Plus class="h-6 w-6" />
         </div>
         <h3 class="text-foreground text-lg font-semibold">
-          {t(locale, 'createNewVaultTitle')}
+          {t('createNewVaultTitle')}
         </h3>
         <p class="text-muted-foreground mt-2 text-sm leading-relaxed">
-          {t(locale, 'createNewVaultDesc')}
+          {t('createNewVaultDesc')}
         </p>
         <div class="text-primary mt-auto flex items-center gap-2 pt-4 text-xs font-medium">
-          {t(locale, 'createNewVaultCta')}
+          {t('createNewVaultCta')}
           <ArrowRight class="h-3 w-3 transition-transform group-hover:translate-x-1" />
         </div>
       </button>
@@ -295,13 +298,13 @@
           <FolderOpen class="h-6 w-6" />
         </div>
         <h3 class="text-foreground text-lg font-semibold">
-          {t(locale, 'openExistingTitle')}
+          {t('openExistingTitle')}
         </h3>
         <p class="text-muted-foreground mt-2 text-sm leading-relaxed">
-          {t(locale, 'openExistingDesc')}
+          {t('openExistingDesc')}
         </p>
         <div class="text-primary mt-auto flex items-center gap-2 pt-4 text-xs font-medium">
-          {t(locale, 'openExistingCta')}
+          {t('openExistingCta')}
           <ArrowRight class="h-3 w-3 transition-transform group-hover:translate-x-1" />
         </div>
       </button>
@@ -318,13 +321,13 @@
           <Upload class="h-6 w-6" />
         </div>
         <h3 class="text-foreground text-lg font-semibold">
-          {t(locale, 'migrateTitle')}
+          {t('migrateTitle')}
         </h3>
         <p class="text-muted-foreground mt-2 text-sm leading-relaxed">
-          {t(locale, 'migrateDesc')}
+          {t('migrateDesc')}
         </p>
         <div class="text-primary mt-auto flex items-center gap-2 pt-4 text-xs font-medium">
-          {t(locale, 'migrateCta')}
+          {t('migrateCta')}
           <ArrowRight class="h-3 w-3 transition-transform group-hover:translate-x-1" />
         </div>
       </button>
@@ -335,13 +338,13 @@
         <div class="flex items-center gap-2 px-1">
           <Clock class="text-muted-foreground h-4 w-4" />
           <h2 class="text-foreground text-sm font-semibold tracking-wider uppercase">
-            {t(locale, 'recentlyOpenedTitle')}
+            {t('recentlyOpenedTitle')}
           </h2>
         </div>
 
-        {#if $recentDatabases.length > 0}
+        {#if recentDbPaths.length > 0}
           <div class="space-y-2">
-            {#each $recentDatabases as dbPath (dbPath)}
+            {#each recentDbPaths as dbPath (dbPath)}
               <button
                 type="button"
                 class="border-border/40 bg-card/30 hover:border-primary/30 hover:bg-primary/5 group flex w-full cursor-pointer items-center justify-between rounded-xl border px-4 py-3 transition-all disabled:pointer-events-none disabled:opacity-50"
@@ -373,7 +376,7 @@
           >
             <Database class="text-muted-foreground/30 mb-2 h-8 w-8" />
             <p class="text-muted-foreground text-xs italic">
-              {t(locale, 'noRecentVaults')}
+              {t('noRecentVaults')}
             </p>
           </div>
         {/if}
@@ -382,9 +385,9 @@
       <div class="space-y-4">
         {#if error || importProgress || importMessage || isLoading}
           <div class="flex items-center gap-2 px-1">
-            <FileWarning class="text-muted-foreground h-4 w-4" />
+            <MailWarning class="text-muted-foreground h-4 w-4" />
             <h2 class="text-foreground text-sm font-semibold tracking-wider uppercase">
-              {t(locale, 'statusTitle')}
+              {t('statusTitle')}
             </h2>
           </div>
 
@@ -395,7 +398,7 @@
               >
                 <Spinner class="text-primary h-4 w-4" />
                 <p class="text-foreground text-sm font-medium">
-                  {t(locale, 'settingsVaultLoading')}
+                  {t('settingsVaultLoading')}
                 </p>
               </div>
             {/if}
@@ -410,7 +413,7 @@
                     class="border-destructive/20 bg-destructive/5 hover:bg-destructive/10 mt-3 w-full"
                     onclick={attemptElevatedCopy}
                   >
-                    {t(locale, 'tryElevatedAccess')}
+                    {t('tryElevatedAccess')}
                   </Button>
                 {/if}
               </div>
@@ -436,10 +439,10 @@
             class="bg-primary/5 border-primary/10 flex h-full flex-col justify-center rounded-2xl border p-6"
           >
             <h4 class="text-primary text-sm font-bold tracking-widest uppercase">
-              {t(locale, 'pulsarTipTitle')}
+              {t('pulsarTipTitle')}
             </h4>
             <p class="text-muted-foreground mt-2 text-sm leading-relaxed italic">
-              {t(locale, 'pulsarTipBody')}
+              {t('pulsarTipBody')}
             </p>
           </div>
         {/if}

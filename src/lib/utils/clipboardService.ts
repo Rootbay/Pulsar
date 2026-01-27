@@ -1,8 +1,8 @@
-import { get, writable } from 'svelte/store';
+import { writable } from 'svelte/store';
 import { invoke } from '@tauri-apps/api/core';
 
 import type { ClipboardSettings } from '$lib/config/settings';
-import { clipboardSettings } from '$lib/stores/clipboard';
+import { settings } from '$lib/stores/appSettings.svelte';
 
 interface ClipboardPolicyStatus {
   integrationAvailable: boolean;
@@ -49,12 +49,12 @@ function updateStateFromStatus(status: ClipboardPolicyStatus) {
   }));
 }
 
-async function applyPolicy(settings: ClipboardSettings): Promise<ClipboardPolicyStatus> {
+async function applyPolicy(clipboardSettings: ClipboardSettings): Promise<ClipboardPolicyStatus> {
   return invoke<ClipboardPolicyStatus>('apply_clipboard_policy', {
     payload: {
-      clipboardIntegration: settings.clipboardIntegration,
-      blockHistory: settings.blockHistory,
-      onlyUnlocked: settings.onlyUnlocked
+      clipboardIntegration: clipboardSettings.clipboardIntegration,
+      blockHistory: clipboardSettings.blockHistory,
+      onlyUnlocked: clipboardSettings.onlyUnlocked
     }
   });
 }
@@ -74,10 +74,10 @@ export async function initClipboardService(): Promise<void> {
     }));
   }
 
-  const settings = get(clipboardSettings);
+  const currentSettings = settings.state.clipboard;
 
   try {
-    const status = await applyPolicy(settings);
+    const status = await applyPolicy(currentSettings);
     updateStateFromStatus(status);
   } catch (error) {
     const message = extractErrorMessage(error);
@@ -86,9 +86,11 @@ export async function initClipboardService(): Promise<void> {
       lastError: message
     }));
 
-    if (settings.blockHistory && message.toLowerCase().includes('not supported')) {
-      const sanitized: ClipboardSettings = { ...settings, blockHistory: false };
-      clipboardSettings.set(sanitized);
+    if (currentSettings.blockHistory && message.toLowerCase().includes('not supported')) {
+      settings.state.clipboard.blockHistory = false;
+      settings.save();
+      
+      const sanitized = settings.state.clipboard;
       try {
         const status = await applyPolicy(sanitized);
         updateStateFromStatus(status);
@@ -107,14 +109,16 @@ export async function initClipboardService(): Promise<void> {
 }
 
 export async function updateClipboardSettings(partial: Partial<ClipboardSettings>): Promise<void> {
-  const current = get(clipboardSettings);
+  const current = settings.state.clipboard;
   const next: ClipboardSettings = { ...current, ...partial };
 
   clipboardIntegrationState.update((state) => ({ ...state, applying: true, lastError: null }));
 
   try {
     const status = await applyPolicy(next);
-    clipboardSettings.set(next);
+    settings.state.clipboard = next;
+    settings.save();
+    
     updateStateFromStatus(status);
   } catch (error) {
     const message = extractErrorMessage(error);

@@ -3,7 +3,7 @@
   import { Avatar, AvatarFallback, AvatarImage } from '$lib/components/ui/avatar';
   import { Input } from '$lib/components/ui/input';
   import { Button } from '$lib/components/ui/button';
-  import { settingsStore } from '$lib/stores';
+  import { settings } from '$lib/stores/appSettings.svelte';
   import {
     Bell,
     Menu,
@@ -19,13 +19,14 @@
     Globe,
     ArrowLeft
   } from '@lucide/svelte';
-  import { currentLocale, t } from '$lib/i18n';
-  import type { I18nKey } from '$lib/i18n';
+  import { i18n, t as translate } from '$lib/i18n.svelte';
+  import type { I18nKey } from '$lib/i18n.svelte';
   import { goto } from '$app/navigation';
 
   let { children } = $props();
 
-  const locale = $derived($currentLocale);
+  const locale = $derived(i18n.locale);
+  const t = (key: string, vars = {}) => translate(locale, key as any, vars);
 
   type NavItem = { href: string; labelKey: I18nKey; Icon: typeof Settings };
   const navItems: NavItem[] = [
@@ -59,21 +60,21 @@
           }`}
         >
           <Icon class="size-4" />
-          <span>{t(locale, labelKey)}</span>
+          <span>{t(labelKey)}</span>
         </a>
       {/each}
     </nav>
 
     <div class="border-border/60 mt-6 border-t pt-4">
       <p class="text-muted-foreground px-3 text-xs font-medium">
-        {t(locale, 'More')}
+        {t('More')}
       </p>
       <a
         href="/settings/security"
         class="text-muted-foreground hover:bg-muted/60 mt-2 flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm"
       >
         <ShieldCheck class="size-4" />
-        <span>{t(locale, 'Sessions')}</span>
+        <span>{t('Sessions')}</span>
       </a>
     </div>
   </aside>
@@ -88,41 +89,31 @@
           size="icon"
           class="text-muted-foreground hover:bg-muted hidden md:inline-flex"
           onclick={() => goto('/')}
-          aria-label={t(locale, 'back')}
+          aria-label={t('back')}
         >
           <ArrowLeft class="size-4" />
         </Button>
 
         <button
           class="text-muted-foreground hover:bg-muted inline-flex items-center justify-center rounded-md p-2 md:hidden"
-          aria-label={t(locale, 'Open menu')}
+          aria-label={t('Open menu')}
         >
           <Menu class="size-4" />
         </button>
 
         <div class="relative ml-1 hidden w-95 items-center md:flex">
           <Search class="text-muted-foreground pointer-events-none absolute left-2 size-4" />
-          <Input class="w-full pl-8 text-sm" placeholder={t(locale, 'Search settings')} />
+          <Input class="w-full pl-8 text-sm" placeholder={t('Search settings')} />
         </div>
 
         <div class="ml-auto flex items-center gap-2">
           <button
             class="text-muted-foreground hover:bg-muted rounded-md p-2"
-            aria-label={t(locale, 'Notifications')}
+            aria-label={t('Notifications')}
           >
             <Bell class="size-4" />
           </button>
-          <Button
-            variant="ghost"
-            class="h-8 px-2 disabled:opacity-50"
-            onclick={() => settingsStore.resetAll()}
-            disabled={!$settingsStore}>{t(locale, 'Reset')}</Button
-          >
-          <Button
-            class="h-8 px-3 disabled:opacity-50"
-            onclick={() => settingsStore.saveAll()}
-            disabled={!$settingsStore}>{t(locale, 'Save')}</Button
-          >
+          
           <Avatar class="h-8 w-8">
             <AvatarImage src="/logo.png" alt="Avatar" />
             <AvatarFallback>PV</AvatarFallback>

@@ -1,6 +1,5 @@
 <script lang="ts">
   import { tick } from 'svelte';
-  import { get } from 'svelte/store';
   import { fade, slide } from 'svelte/transition';
   import { Button } from '$lib/components/ui/button';
   import {
@@ -13,10 +12,10 @@
   import { Switch } from '$lib/components/ui/switch';
   import { Badge } from '$lib/components/ui/badge';
   import { Separator } from '$lib/components/ui/separator';
-  import { clipboardSettings } from '$lib/stores/clipboard';
   import { cn } from '$lib/utils';
   import type { ClipboardSettings } from '$lib/config/settings';
-  import { currentLocale, t } from '$lib/i18n';
+  import { settings } from '$lib/stores/appSettings.svelte';
+  import { i18n, t as translate } from '$lib/i18n.svelte';
   import {
     clearClipboardNow,
     clipboardIntegrationState,
@@ -33,26 +32,16 @@
   } from '@lucide/svelte';
   import { toast } from '$lib/components/ui/sonner';
 
-  const locale = $derived($currentLocale);
+  const locale = $derived(i18n.locale);
+  const t = (key: string, vars = {}) => translate(locale, key as any, vars);
 
-  let currentSettings = $state<ClipboardSettings>({} as ClipboardSettings);
-  let clearAfterDuration = $state(12);
-  let permissionLevel = $state<string>('ask');
-  let clipboardIntegration = $state(false);
-  let blockHistory = $state(false);
-  let onlyUnlocked = $state(false);
+  let currentSettings = $derived(settings.state.clipboard);
   let showAuditLog = $state(false);
-
-  $effect(() => {
-    return clipboardSettings.subscribe((settings) => {
-      currentSettings = settings;
-      clearAfterDuration = settings.clearAfterDuration;
-      permissionLevel = settings.permissionLevel;
-      clipboardIntegration = settings.clipboardIntegration;
-      blockHistory = settings.blockHistory;
-      onlyUnlocked = settings.onlyUnlocked;
-    });
-  });
+  let clearAfterDuration = $derived(currentSettings.clearAfterDuration);
+  let permissionLevel = $derived(currentSettings.permissionLevel);
+  let clipboardIntegration = $derived(currentSettings.clipboardIntegration);
+  let blockHistory = $derived(currentSettings.blockHistory);
+  let onlyUnlocked = $derived(currentSettings.onlyUnlocked);
 
   const timeoutLabel = $derived(
     currentSettings.clearAfterDuration === 12
@@ -68,13 +57,11 @@
   ] satisfies Array<{ id: number; action: string; time: string; status: string }>;
 
   const handleSetTimeout = async (seconds: number) => {
-    clearAfterDuration = seconds;
     try {
       await updateClipboardSettings({ clearAfterDuration: seconds });
     } catch (error) {
       const message =
         error instanceof Error ? error.message : 'Failed to update clipboard timeout.';
-      clearAfterDuration = get(clipboardSettings).clearAfterDuration;
       toast.error('Unable to update clipboard timeout.', { description: message });
     }
   };
@@ -82,8 +69,7 @@
   const handleSwitchChange = async (
     setting: 'clipboardIntegration' | 'blockHistory' | 'onlyUnlocked'
   ) => {
-    const current = get(clipboardSettings);
-    const nextValue = !current[setting];
+    const nextValue = !currentSettings[setting];
 
     try {
       const patch: Partial<ClipboardSettings> = {
@@ -97,24 +83,23 @@
     }
   };
 
-  const handleRangeChange = async () => {
+  const handleRangeChange = async (e: Event & { currentTarget: HTMLInputElement }) => {
+    const val = parseInt(e.currentTarget.value);
     try {
-      await updateClipboardSettings({ clearAfterDuration });
+      await updateClipboardSettings({ clearAfterDuration: val });
     } catch (error) {
       const message =
         error instanceof Error ? error.message : 'Failed to update clipboard timeout.';
-      clearAfterDuration = get(clipboardSettings).clearAfterDuration;
       toast.error('Unable to update clipboard timeout.', { description: message });
     }
   };
 
-  const handleRadioChange = async () => {
+  const handleRadioChange = async (level: string) => {
     try {
-      await updateClipboardSettings({ permissionLevel });
+      await updateClipboardSettings({ permissionLevel: level });
     } catch (error) {
       const message =
         error instanceof Error ? error.message : 'Failed to update clipboard permission.';
-      permissionLevel = get(clipboardSettings).permissionLevel;
       toast.error('Unable to update clipboard permission.', { description: message });
     }
   };
@@ -150,9 +135,9 @@
         <ClipboardCheck class="h-5 w-5" aria-hidden="true" />
       </div>
       <div>
-        <CardTitle>{t(locale, 'Core Integration')}</CardTitle>
+        <CardTitle>{t('Core Integration')}</CardTitle>
         <CardDescription>
-          {t(locale, 'Configure basic clipboard functionality.')}
+          {t('Configure basic clipboard functionality.')}
         </CardDescription>
       </div>
     </CardHeader>
@@ -160,10 +145,10 @@
       <div class="flex items-start justify-between gap-4">
         <div class="space-y-1">
           <p class="text-foreground text-sm font-medium">
-            {t(locale, 'Clipboard integration')}
+            {t('Clipboard integration')}
           </p>
           <p class="text-muted-foreground text-sm">
-            {t(locale, 'Enable automatic clipboard functionality.')}
+            {t('Enable automatic clipboard functionality.')}
           </p>
         </div>
         <Switch
@@ -177,7 +162,7 @@
 
       {#if !$clipboardIntegrationState.integrationAvailable}
         <p class="text-destructive text-sm">
-          {t(locale, 'Clipboard integration is currently unavailable.')}
+          {t('Clipboard integration is currently unavailable.')}
         </p>
       {/if}
 
@@ -218,7 +203,7 @@
             min="3"
             max="60"
             step="1"
-            bind:value={clearAfterDuration}
+            value={clearAfterDuration}
             onchange={handleRangeChange}
             disabled={!$clipboardIntegrationState.integrationAvailable ||
               $clipboardIntegrationState.applying}
@@ -242,9 +227,9 @@
         <Shield class="h-5 w-5" aria-hidden="true" />
       </div>
       <div>
-        <CardTitle>{t(locale, 'Access control')}</CardTitle>
+        <CardTitle>{t('Access control')}</CardTitle>
         <CardDescription>
-          {t(locale, 'Fine-tune clipboard safety and permissions.')}
+          {t('Fine-tune clipboard safety and permissions.')}
         </CardDescription>
       </div>
     </CardHeader>
@@ -253,7 +238,7 @@
         <div class="space-y-1">
           <div class="flex items-center gap-2">
             <p class="text-foreground text-sm font-medium">
-              {t(locale, 'Block clipboard history')}
+              {t('Block clipboard history')}
             </p>
             <Badge
               variant={$clipboardIntegrationState.historyBlockingActive ? 'secondary' : 'outline'}
@@ -263,7 +248,7 @@
             </Badge>
           </div>
           <p class="text-muted-foreground text-sm">
-            {t(locale, 'Prevent system clipboard history from storing entries.')}
+            {t('Prevent system clipboard history from storing entries.')}
           </p>
         </div>
         <Switch
@@ -278,17 +263,17 @@
 
       {#if !$clipboardIntegrationState.historyBlockingSupported}
         <p class="text-muted-foreground pl-11 text-xs">
-          {t(locale, 'Clipboard history blocking is not supported on this platform.')}
+          {t('Clipboard history blocking is not supported on this platform.')}
         </p>
       {/if}
 
       <div class="flex items-start justify-between gap-4">
         <div class="space-y-1">
           <p class="text-foreground text-sm font-medium">
-            {t(locale, 'Only allow on unlocked session')}
+            {t('Only allow on unlocked session')}
           </p>
           <p class="text-muted-foreground text-sm">
-            {t(locale, 'Disable clipboard export when Pulsar is locked.')}
+            {t('Disable clipboard export when Pulsar is locked.')}
           </p>
         </div>
         <Switch
@@ -309,10 +294,10 @@
           </div>
           <div class="space-y-1">
             <p class="text-foreground text-sm font-medium">
-              {t(locale, 'Per-item clipboard permissions')}
+              {t('Per-item clipboard permissions')}
             </p>
             <p class="text-muted-foreground text-sm">
-              {t(locale, 'Choose how Pulsar prompts when copying credentials.')}
+              {t('Choose how Pulsar prompts when copying credentials.')}
             </p>
           </div>
         </div>
@@ -325,12 +310,9 @@
               variant={permissionLevel === 'ask' ? 'default' : 'outline'}
               class="h-8 px-3 text-xs"
               aria-pressed={permissionLevel === 'ask'}
-              onclick={async () => {
-                permissionLevel = 'ask';
-                await handleRadioChange();
-              }}
+              onclick={() => handleRadioChange('ask')}
             >
-              {t(locale, 'Allow once (ask each time)')}
+              {t('Allow once (ask each time)')}
             </Button>
             <Button
               type="button"
@@ -338,12 +320,9 @@
               variant={permissionLevel === 'remember' ? 'default' : 'outline'}
               class="h-8 px-3 text-xs"
               aria-pressed={permissionLevel === 'remember'}
-              onclick={async () => {
-                permissionLevel = 'remember';
-                await handleRadioChange();
-              }}
+              onclick={() => handleRadioChange('remember')}
             >
-              {t(locale, 'Always allow (remember choice)')}
+              {t('Always allow (remember choice)')}
             </Button>
           </div>
         </div>
@@ -354,10 +333,10 @@
   <Card class="border-border/60 bg-card/80 supports-backdrop-filter:bg-card/70 backdrop-blur">
     <CardHeader>
       <CardTitle>
-        {t(locale, 'Actions & monitoring')}
+        {t('Actions & monitoring')}
       </CardTitle>
       <CardDescription>
-        {t(locale, 'Manual controls and local activity tracking.')}
+        {t('Manual controls and local activity tracking.')}
       </CardDescription>
     </CardHeader>
     <CardContent class="space-y-6">
@@ -371,7 +350,7 @@
           onclick={handleClearClipboard}
         >
           <Trash2 class="size-4" />
-          {t(locale, 'Clear clipboard now')}
+          {t('Clear clipboard now')}
         </Button>
         <Button
           type="button"
@@ -380,7 +359,7 @@
           onclick={toggleAuditLog}
         >
           <History class="size-4" />
-          {showAuditLog ? t(locale, 'Hide audit log') : t(locale, 'View audit log')}
+          {showAuditLog ? t('Hide audit log') : t('View audit log')}
         </Button>
       </div>
 
@@ -389,10 +368,10 @@
           <Separator class="bg-border/60" />
           <div>
             <h4 class="text-foreground text-sm font-semibold">
-              {t(locale, 'Recent clipboard activity')}
+              {t('Recent clipboard activity')}
             </h4>
             <p class="text-muted-foreground text-sm">
-              {t(locale, 'Local activity log (not synced)')}
+              {t('Local activity log (not synced)')}
             </p>
           </div>
           <div class="max-h-64 space-y-2 overflow-y-auto pr-1">

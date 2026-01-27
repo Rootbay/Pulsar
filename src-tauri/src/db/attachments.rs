@@ -1,12 +1,13 @@
+use crate::encryption::{encrypt, encrypt_bytes, decrypt_bytes};
 use crate::state::AppState;
 use crate::types::Attachment;
-use crate::encryption::{encrypt, encrypt_bytes, decrypt_bytes};
 use crate::error::{Error, Result};
 use crate::db::utils::{get_key, get_db_pool};
 use tauri::State;
 use sqlx::Row;
 use chrono::Utc;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use tokio::fs;
 
 #[tauri::command]
 pub async fn add_attachment(
@@ -18,7 +19,7 @@ pub async fn add_attachment(
     let db_pool = get_db_pool(&state).await?;
 
     let path = Path::new(&file_path);
-    if !tokio::fs::try_exists(path).await.unwrap_or(false) {
+    if !fs::try_exists(path).await.unwrap_or(false) {
         return Err(Error::Internal("File not found".to_string()));
     }
 
@@ -28,7 +29,7 @@ pub async fn add_attachment(
         .ok_or_else(|| Error::Internal("Invalid file name".to_string()))?
         .to_string();
     
-    let file_data = tokio::fs::read(path).await?;
+    let file_data = fs::read(path).await?;
     let file_size = file_data.len() as i64;
     
     let mime_type = mime_guess::from_path(path).first_or_octet_stream().to_string();
@@ -93,16 +94,34 @@ pub async fn save_attachment_to_disk(
     Ok(())
 }
 
+#[tauri::command]
+pub async fn import_file_as_attachment(
+    state: State<'_, AppState>,
+    item_id: i64,
+    file_path: PathBuf,
+) -> Result<Attachment> {
+    add_attachment(state, item_id, file_path.to_string_lossy().to_string()).await
+}
+
+#[tauri::command]
+pub async fn export_attachment_to_file(
+    state: State<'_, AppState>,
+    attachment_id: i64,
+    save_path: PathBuf,
+) -> Result<()> {
+    save_attachment_to_disk(state, attachment_id, save_path.to_string_lossy().to_string()).await
+}
+
 async fn write_sensitive_bytes(path: &Path, bytes: &[u8]) -> Result<()> {
     let tmp_path = path.with_extension("tmp");
-    if tokio::fs::try_exists(&tmp_path).await.unwrap_or(false) {
-        let _ = tokio::fs::remove_file(&tmp_path).await;
+    if fs::try_exists(&tmp_path).await.unwrap_or(false) {
+        let _ = fs::remove_file(&tmp_path).await;
     }
 
     #[cfg(unix)]
     {
         use std::os::unix::fs::OpenOptionsExt;
-        let mut file = tokio::fs::OpenOptions::new()
+        let mut file = fs::OpenOptions::new()
             .create(true)
             .write(true)
             .truncate(true)
@@ -114,7 +133,7 @@ async fn write_sensitive_bytes(path: &Path, bytes: &[u8]) -> Result<()> {
 
     #[cfg(not(unix))]
     {
-        let mut file = tokio::fs::OpenOptions::new()
+        let mut file = fs::OpenOptions::new()
             .create(true)
             .write(true)
             .truncate(true)
@@ -123,6 +142,6 @@ async fn write_sensitive_bytes(path: &Path, bytes: &[u8]) -> Result<()> {
         file.sync_all().await?;
     }
 
-    tokio::fs::rename(&tmp_path, path).await?;
+    fs::rename(&tmp_path, path).await?;
     Ok(())
 }

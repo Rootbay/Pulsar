@@ -19,6 +19,11 @@
     CloudUpload
   } from '@lucide/svelte';
   import { i18n, t as translate, type I18nKey } from '$lib/i18n.svelte';
+  import { getVersion, getTauriVersion } from '@tauri-apps/api/app';
+  import { openUrl, openPath } from '@tauri-apps/plugin-opener';
+  import { appLogDir } from '@tauri-apps/api/path';
+  import { onMount } from 'svelte';
+  import { toast } from 'svelte-sonner';
 
   type UpdateStatus = 'idle' | 'checking' | 'uptoDate';
   type IconComponent = typeof FileText;
@@ -29,31 +34,56 @@
     translate(locale, key as I18nKey, vars);
   let uploadDiagnostics = $state(false);
 
-  const versionDetails = [
-    { label: 'Version', value: '2.1.4' },
-    { label: 'Build', value: 'a7f3d2e' },
-    { label: 'Runtime', value: 'Rust 1.75' },
-    { label: 'UI', value: 'Svelte 4.2' },
-    { label: 'Status', value: 'Up to date', accentClass: 'text-chart-success' }
-  ];
+  let appVersion = $state('...');
+  let tauriVersion = $state('...');
+
+  onMount(async () => {
+    try {
+      appVersion = await getVersion();
+      tauriVersion = await getTauriVersion();
+    } catch (err) {
+      console.error('Failed to fetch version info:', err);
+    }
+  });
+
+  const versionDetails = $derived([
+    { label: t('Version'), value: appVersion },
+    { label: t('Build'), value: 'a7f3d2e' },
+    { label: t('Runtime'), value: `Tauri ${tauriVersion}` },
+    { label: t('UI'), value: 'Svelte 5' },
+    { label: t('Status'), value: t('Up to date'), accentClass: 'text-chart-success' }
+  ]);
 
   type ResourceLink = { label: string; Icon: IconComponent; action: () => void };
 
   const resourceLinks: ResourceLink[] = [
-    { label: 'License', Icon: FileText, action: () => openLink('License') },
+    {
+      label: 'License',
+      Icon: FileText,
+      action: () => openLink('https://github.com/xeintdm/pulsar/blob/main/LICENSE')
+    },
     {
       label: 'Security Whitepaper',
       Icon: ShieldQuestionMark,
-      action: () => openLink('Whitepaper')
+      action: () => openLink('https://pulsar.app/security')
     },
-    { label: 'Contact Support', Icon: LifeBuoy, action: () => openLink('Support') },
-    { label: 'Source Code', Icon: CodeXml, action: () => openLink('Source Code') }
+    {
+      label: 'Contact Support',
+      Icon: LifeBuoy,
+      action: () => openLink('https://pulsar.app/support')
+    },
+    {
+      label: 'Source Code',
+      Icon: CodeXml,
+      action: () => openLink('https://github.com/xeintdm/pulsar')
+    }
   ];
 
   function checkForUpdates() {
     if (updateStatus !== 'idle') return;
     updateStatus = 'checking';
 
+    // Mock update check since updater plugin is not configured
     setTimeout(() => {
       updateStatus = 'uptoDate';
       setTimeout(() => {
@@ -62,8 +92,31 @@
     }, 1500);
   }
 
-  function openLink(linkName: string) {
-    alert(`Opening ${linkName}...`);
+  async function openLink(url: string) {
+    try {
+      await openUrl(url);
+    } catch (err) {
+      console.error(`Failed to open link ${url}:`, err);
+      toast.error(t('Failed to open link'));
+    }
+  }
+
+  async function openLogsFolder() {
+    try {
+      const logDir = await appLogDir();
+      await openPath(logDir);
+    } catch (err) {
+      console.error('Failed to open logs folder:', err);
+      toast.error(t('Failed to open logs folder'));
+    }
+  }
+
+  async function handleDiagnosticUpload() {
+    if (!uploadDiagnostics) return;
+    toast.info(t('Diagnostics upload is not yet implemented'));
+    setTimeout(() => {
+      uploadDiagnostics = false;
+    }, 1000);
   }
 </script>
 
@@ -190,12 +243,7 @@
             {t('Access application log files')}
           </p>
         </div>
-        <Button
-          type="button"
-          variant="outline"
-          class="gap-2"
-          onclick={() => openLink('Logs Folder')}
-        >
+        <Button type="button" variant="outline" class="gap-2" onclick={openLogsFolder}>
           <FolderOpen class="h-4 w-4" aria-hidden="true" />
           {t('Open')}
         </Button>
@@ -214,7 +262,11 @@
         </div>
         <div class="flex items-center gap-3">
           <CloudUpload class="text-muted-foreground h-4 w-4" aria-hidden="true" />
-          <Switch bind:checked={uploadDiagnostics} aria-label="Toggle upload diagnostics" />
+          <Switch
+            bind:checked={uploadDiagnostics}
+            onCheckedChange={handleDiagnosticUpload}
+            aria-label="Toggle upload diagnostics"
+          />
         </div>
       </div>
     </CardContent>

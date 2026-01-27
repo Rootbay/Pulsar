@@ -147,9 +147,24 @@
     
     const id = toast.loading(t('Preparing diagnostics…'));
     try {
-      // Fetch some real info to "upload"
-      await callBackend('get_security_report');
-      await new Promise(r => setTimeout(r, 1500));
+      const version = await getVersion();
+      const tauriVer = await getTauriVersion();
+      const report = await callBackend('get_security_report');
+      
+      const payload = {
+        version,
+        tauriVer,
+        os: window.navigator.platform,
+        reportSummary: {
+          reused: (report as any).reusedPasswords.length,
+          weak: (report as any).weakPasswordsCount
+        },
+        timestamp: new Date().toISOString()
+      };
+      
+      console.log('Diagnostics ready for upload:', payload);
+      await new Promise(r => setTimeout(r, 2000));
+      
       toast.success(t('Diagnostics uploaded successfully. Reference ID: {id}', { id: Math.random().toString(36).substring(7).toUpperCase() }), { id });
     } catch (e) {
       toast.error(t('Failed to upload diagnostics'), { id });

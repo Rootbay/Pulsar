@@ -443,6 +443,17 @@
             >
               Recently
             </Button>
+            <Button
+              type="button"
+              class="segBtn"
+              role="tab"
+              variant="ghost"
+              size="sm"
+              aria-selected={appState.filterCategory === 'favorites'}
+              onclick={() => (appState.filterCategory = 'favorites')}
+            >
+              Favorites
+            </Button>
           </div>
         </div>
 

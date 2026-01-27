@@ -12,6 +12,7 @@ import {
   defaultPasswordPresets,
   defaultSiteRules
 } from '../config/settings';
+import { defaultKeybinds } from '../config/keybinds';
 import type { AllSettings } from '../config/settings';
 
 const defaultAllSettings: AllSettings = {
@@ -22,7 +23,7 @@ const defaultAllSettings: AllSettings = {
   clipboard: defaultClipboardSettings,
   general: defaultGeneralSettings,
   generator: defaultGeneratorSettings,
-  keybinds: [],
+  keybinds: defaultKeybinds,
   passwordPresets: defaultPasswordPresets,
   recentDatabases: [],
   siteRules: defaultSiteRules,
@@ -80,17 +81,33 @@ class SettingsStore {
     const merged = { ...defaultAllSettings };
 
     for (const key of Object.keys(defaultAllSettings) as (keyof AllSettings)[]) {
-      if (loaded[key]) {
+      if (loaded[key] !== undefined && loaded[key] !== null) {
         if (
           typeof defaultAllSettings[key] === 'object' &&
-          !Array.isArray(defaultAllSettings[key]) &&
-          loaded[key]
+          !Array.isArray(defaultAllSettings[key])
         ) {
           // @ts-ignore
           merged[key] = { ...defaultAllSettings[key], ...loaded[key] };
         } else {
-          // @ts-ignore
-          merged[key] = loaded[key];
+          // If it's an array and empty, but default is not empty, we might want default?
+          // For keybinds specifically, if user wiped them all, they might want defaults back.
+          // But usually we respect user's empty array. 
+          // However, if it's the first time and they have no keybinds saved, we should use defaults.
+          if (Array.isArray(loaded[key]) && (loaded[key] as any[]).length === 0 && Array.isArray(defaultAllSettings[key]) && (defaultAllSettings[key] as any[]).length > 0) {
+             if (key === 'keybinds' || key === 'passwordPresets' || key === 'siteRules') {
+                // Keep default if loaded is empty for these critical arrays
+                // merged[key] = defaultAllSettings[key]; 
+                // Actually, let's just assign loaded[key] and let the user decide.
+                // @ts-ignore
+                merged[key] = loaded[key];
+             } else {
+                // @ts-ignore
+                merged[key] = loaded[key];
+             }
+          } else {
+            // @ts-ignore
+            merged[key] = loaded[key];
+          }
         }
       }
     }

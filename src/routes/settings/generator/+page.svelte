@@ -1,8 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { settings } from '$lib/stores/appSettings.svelte';
-  import type { GeneratorSettings, PasswordPreset, SiteRule } from '$lib/config/settings';
-  import EditModal from '$lib/components/ui/EditModal.svelte';
+  import type { GeneratorSettings, PasswordPreset } from '$lib/config/settings';
   import { Button } from '$lib/components/ui/button';
   import {
     Card,
@@ -136,9 +135,6 @@
   let copyButtonText = $state('Copy');
   let copyResetTimer: ReturnType<typeof setTimeout> | undefined;
 
-  let showEditModal = $state(false);
-  let itemToEdit = $state<PasswordPreset | SiteRule | null>(null);
-  let editModalType = $state<'preset' | 'rule' | null>(null);
   let selectedPresetName = $state<string | null>(null);
 
   let strengthEntropy = $state(0);
@@ -189,7 +185,7 @@
   }
 
   function saveCurrentSettingsAsPreset() {
-    const name = prompt('Enter a name for this preset:');
+    const name = prompt(t('Enter a name for this preset:'));
     if (!name) return;
 
     const charSets: string[] = [];
@@ -238,72 +234,6 @@
     settings.state.generator.passwordLength = preset.length;
     settings.state.generator.options = { ...preset.settings };
     settings.save();
-  }
-
-  function handleEditPreset(preset: PasswordPreset) {
-    itemToEdit = JSON.parse(JSON.stringify(preset));
-    editModalType = 'preset';
-    showEditModal = true;
-  }
-
-  function removePreset(name: string) {
-    if (confirm(`Are you sure you want to delete preset "${name}"?`)) {
-      settings.state.passwordPresets = settings.state.passwordPresets.filter(
-        (p) => p.name !== name
-      );
-      settings.save();
-    }
-  }
-
-  function handleEditRule(rule: SiteRule) {
-    itemToEdit = JSON.parse(JSON.stringify(rule));
-    editModalType = 'rule';
-    showEditModal = true;
-  }
-
-  function removeRule(url: string) {
-    if (confirm(`Are you sure you want to delete rule for "${url}"?`)) {
-      settings.state.siteRules = settings.state.siteRules.filter((r) => r.url !== url);
-      settings.save();
-    }
-  }
-
-  function closeModal() {
-    showEditModal = false;
-    itemToEdit = null;
-    editModalType = null;
-  }
-
-  function isPreset(item: PasswordPreset | SiteRule): item is PasswordPreset {
-    return 'strength' in item && 'charSet' in item;
-  }
-
-  function isRule(item: PasswordPreset | SiteRule): item is SiteRule {
-    return 'url' in item;
-  }
-
-  function handleSaveEdit(updatedItem: PasswordPreset | SiteRule) {
-    if (editModalType === 'preset' && itemToEdit && isPreset(itemToEdit) && isPreset(updatedItem)) {
-      const originalName = itemToEdit.name;
-      const index = settings.state.passwordPresets.findIndex((p) => p.name === originalName);
-      if (index !== -1) {
-        settings.state.passwordPresets[index] = updatedItem;
-        settings.save();
-      }
-    } else if (
-      editModalType === 'rule' &&
-      itemToEdit &&
-      isRule(itemToEdit) &&
-      isRule(updatedItem)
-    ) {
-      const originalUrl = itemToEdit.url;
-      const index = settings.state.siteRules.findIndex((r) => r.url === originalUrl);
-      if (index !== -1) {
-        settings.state.siteRules[index] = updatedItem;
-        settings.save();
-      }
-    }
-    closeModal();
   }
 
   $effect(() => {
@@ -559,162 +489,4 @@
       </div>
     </CardContent>
   </Card>
-
-  <Card class="border-border/60 bg-card/80 supports-backdrop-filter:bg-card/70 backdrop-blur">
-    <CardHeader class="flex items-start gap-3">
-      <div
-        class="bg-primary/10 text-primary flex h-10 w-10 items-center justify-center rounded-full"
-      >
-        <ListChecks class="size-5" aria-hidden="true" />
-      </div>
-      <div>
-        <CardTitle>
-          {t('Saved presets')}
-        </CardTitle>
-        <CardDescription>
-          {t('Manage and reuse your favourite password configurations.')}
-        </CardDescription>
-      </div>
-    </CardHeader>
-    <CardContent>
-      {#if presets.length}
-        <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {#each presets as preset (preset.name)}
-            <div
-              class="border-border/60 bg-background/70 flex flex-col gap-3 rounded-xl border p-4"
-            >
-              <div class="flex items-start justify-between gap-2">
-                <div>
-                  <p class="text-foreground text-sm font-semibold">{preset.name}</p>
-                  <p class="text-muted-foreground text-xs">
-                    {t('Length')}
-                    {preset.length} · {preset.charSet}
-                  </p>
-                </div>
-                <div class="flex items-center gap-1">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    class="text-muted-foreground hover:text-foreground size-8"
-                    aria-label={`Edit preset ${preset.name}`}
-                    onclick={() => handleEditPreset(preset)}
-                  >
-                    <Pencil class="size-4" aria-hidden="true" />
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    class="text-muted-foreground hover:text-destructive size-8"
-                    aria-label={`Delete preset ${preset.name}`}
-                    onclick={() => removePreset(preset.name)}
-                  >
-                    <Trash2 class="size-4" aria-hidden="true" />
-                  </Button>
-                </div>
-              </div>
-
-              <Progress
-                value={Math.min(100, Math.round((preset.strength / MAX_ENTROPY_BITS) * 100))}
-                class="bg-muted/40 **:data-[slot=progress-indicator]:bg-primary"
-              />
-
-              <Button
-                type="button"
-                variant="secondary"
-                class="mt-1 w-full"
-                onclick={() => applyPreset(preset)}
-              >
-                {t('Use preset')}
-              </Button>
-            </div>
-          {/each}
-        </div>
-      {:else}
-        <p class="text-muted-foreground text-sm">
-          {t('No saved presets yet. Configure the generator and save your first preset.')}
-        </p>
-      {/if}
-    </CardContent>
-  </Card>
-
-  <Card class="border-border/60 bg-card/80 supports-backdrop-filter:bg-card/70 backdrop-blur">
-    <CardHeader class="flex items-start gap-3">
-      <div
-        class="bg-primary/10 text-primary flex h-10 w-10 items-center justify-center rounded-full"
-      >
-        <FileText class="size-5" aria-hidden="true" />
-      </div>
-      <div>
-        <CardTitle>
-          {t('Site rule templates')}
-        </CardTitle>
-        <CardDescription>
-          {t('Maintain site-specific password requirements.')}
-        </CardDescription>
-      </div>
-    </CardHeader>
-    <CardContent class="space-y-3">
-      {#if rules.length}
-        <div class="space-y-3">
-          {#each rules as rule (rule.url)}
-            <div
-              class="border-border/60 bg-background/70 flex flex-col gap-3 rounded-xl border p-4"
-            >
-              <div class="flex flex-wrap items-start justify-between gap-2">
-                <div>
-                  <p class="text-foreground text-sm font-semibold">{rule.url}</p>
-                  <p class="text-muted-foreground text-xs">{rule.desc}</p>
-                </div>
-                <div class="flex items-center gap-1">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    class="text-muted-foreground hover:text-foreground size-8"
-                    aria-label={`Edit rule for ${rule.url}`}
-                    onclick={() => handleEditRule(rule)}
-                  >
-                    <Pencil class="size-4" aria-hidden="true" />
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    class="text-muted-foreground hover:text-destructive size-8"
-                    aria-label={`Delete rule for ${rule.url}`}
-                    onclick={() => removeRule(rule.url)}
-                  >
-                    <Trash2 class="size-4" aria-hidden="true" />
-                  </Button>
-                </div>
-              </div>
-              <div class="text-muted-foreground flex flex-wrap gap-2 text-xs">
-                <Badge variant="secondary">
-                  {t('Length')}
-                  {rule.length}
-                </Badge>
-                <Badge variant="outline">{rule.type}</Badge>
-              </div>
-            </div>
-          {/each}
-        </div>
-      {:else}
-        <p class="text-muted-foreground text-sm">
-          {t('No site rule templates configured yet.')}
-        </p>
-      {/if}
-    </CardContent>
-  </Card>
 </div>
-
-{#if showEditModal && itemToEdit && editModalType}
-  <EditModal
-    show={showEditModal}
-    item={itemToEdit}
-    type={editModalType}
-    onclose={closeModal}
-    onsave={handleSaveEdit}
-  />
-{/if}

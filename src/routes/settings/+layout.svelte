@@ -17,7 +17,10 @@
     SlidersHorizontal,
     WandSparkles,
     Globe,
-    ArrowLeft
+    ArrowLeft,
+    Archive,
+    ListChecks,
+    FileText
   } from '@lucide/svelte';
   import { i18n, t as translate } from '$lib/i18n.svelte';
   import type { I18nKey } from '$lib/i18n.svelte';
@@ -36,8 +39,11 @@
     { href: '/settings/clipboard', labelKey: 'Clipboard', Icon: Clipboard },
     { href: '/settings/autofill', labelKey: 'Autofill', Icon: Globe },
     { href: '/settings/generator', labelKey: 'Generator', Icon: WandSparkles },
+    { href: '/settings/presets', labelKey: 'Presets', Icon: ListChecks },
+    { href: '/settings/site-rules', labelKey: 'Site Rules', Icon: FileText },
+    { href: '/settings/sessions', labelKey: 'Sessions', Icon: MonitorSmartphone },
     { href: '/settings/vault', labelKey: 'Vault', Icon: Database },
-    { href: '/settings/backup', labelKey: 'Backup', Icon: Database },
+    { href: '/settings/backup', labelKey: 'Backup', Icon: Archive },
     { href: '/settings/advanced', labelKey: 'Advanced', Icon: SlidersHorizontal },
     { href: '/settings/about', labelKey: 'About', Icon: Info }
   ];
@@ -70,7 +76,7 @@
         {t('More')}
       </p>
       <a
-        href="/settings/security"
+        href="/settings/sessions"
         class="text-muted-foreground hover:bg-muted/60 mt-2 flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm"
       >
         <ShieldCheck class="size-4" />

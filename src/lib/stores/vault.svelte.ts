@@ -57,6 +57,7 @@ class VaultStore {
     const RECENT_DAY_WINDOW = 7;
     const DAY_IN_MS = 24 * 60 * 60 * 1000;
     const PIN_TAG_NAMES = ['pinned', 'pin'];
+    const FAVORITE_TAG_NAMES = ['favorite', 'fav', 'star'];
 
     return this.#items.filter((item) => {
       if (tag !== null) {
@@ -73,6 +74,12 @@ class VaultStore {
           const now = Date.now();
           if (now - updatedAt > RECENT_DAY_WINDOW * DAY_IN_MS) return false;
         }
+      }
+
+      if (category === 'favorites') {
+        const itemTags = item.tags?.split(',').map((t) => t.trim().toLowerCase()) ?? [];
+        const isFav = itemTags.some((t) => FAVORITE_TAG_NAMES.includes(t));
+        if (!isFav) return false;
       }
 
       if (normalizedSearch) {

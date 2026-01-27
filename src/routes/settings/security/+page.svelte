@@ -44,7 +44,6 @@
     Check,
     QrCode,
     Link2,
-    MonitorSmartphone,
     HardDrive
   } from '@lucide/svelte';
   import { i18n, t as translate } from '$lib/i18n.svelte';
@@ -117,11 +116,6 @@
     parallelism: 4
   });
   let argon2Loading = $state(false);
-
-  let devices = $state<DeviceRecord[]>([]);
-  let devicesLoading = $state(false);
-  let deviceActionPending = $state<Record<string, boolean>>({});
-  let isRevokingDevices = $state(false);
 
   let securityActionPending = $state<Record<SecurityActionId, boolean>>({
     rekey: false,
@@ -463,7 +457,6 @@
 
   onMount(() => {
     loadArgon2Params();
-    loadDevices();
     loadBiometricsStatus();
     loadSecurityReport();
     refreshTotpStatus();
@@ -1552,101 +1545,6 @@
           onclick={() => toggleSetting('sessionPersistence')}
         />
       </div>
-    </CardContent>
-  </Card>
-
-  <Card class="border-border/60 bg-card/80 supports-backdrop-filter:bg-card/70 backdrop-blur">
-    <CardHeader class="border-border/40 flex flex-row items-start gap-3 border-b pb-4">
-      <div
-        class="bg-primary/10 text-primary flex h-10 w-10 items-center justify-center rounded-full"
-      >
-        <MonitorSmartphone class="h-5 w-5" aria-hidden="true" />
-      </div>
-      <div class="flex w-full flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <CardTitle>
-            {t('Paired Devices')}
-          </CardTitle>
-          <CardDescription>
-            {t('Review devices authorised for biometric or key-based unlock.')}
-          </CardDescription>
-        </div>
-        <Button variant="outline" size="sm" onclick={handlePairDevice} disabled={devicesLoading}>
-          {t('Pair New Device')}
-        </Button>
-      </div>
-    </CardHeader>
-    <CardContent class="flex flex-col gap-4 pt-4">
-      {#if devicesLoading}
-        <div class="text-muted-foreground flex items-center gap-2 text-sm">
-          <Spinner class="h-4 w-4" aria-hidden="true" />
-          <span>{t('Loading devices…')}</span>
-        </div>
-      {:else if devices.length === 0}
-        <p class="text-muted-foreground text-sm">
-          {t('No devices have been paired yet.')}
-        </p>
-      {:else}
-        {#each devices as device (device.id)}
-          {@const DeviceIcon = getDeviceIcon(device.kind)}
-          <div
-            class={cn(
-              'border-border/60 bg-muted/20 flex items-start justify-between gap-4 rounded-lg border px-4 py-4 sm:items-center',
-              device.isCurrent ? 'border-primary/60 bg-primary/10' : ''
-            )}
-          >
-            <div class="flex items-start gap-3">
-              <div
-                class="bg-primary/10 text-primary flex h-10 w-10 items-center justify-center rounded-full"
-              >
-                <DeviceIcon class="h-5 w-5" aria-hidden="true" />
-              </div>
-              <div>
-                <p class="text-foreground text-sm font-semibold">{device.name}</p>
-                <p class="text-muted-foreground text-xs">
-                  {device.lastSeen ??
-                    (locale === 'sv' ? 'Ingen senaste aktivitet' : 'No recent activity')}
-                  {device.isCurrent
-                    ? locale === 'sv'
-                      ? ' • Aktuell enhet'
-                      : ' • Current device'
-                    : ''}
-                </p>
-              </div>
-            </div>
-            <div class="flex items-center gap-3">
-              <Badge variant="secondary">{getDeviceTypeLabel(device.kind)}</Badge>
-              <Button
-                variant="ghost"
-                size="icon"
-                onclick={() => removeDevice(device)}
-                disabled={!!deviceActionPending[device.id]}
-                aria-label={`Remove ${device.name}`}
-              >
-                {#if deviceActionPending[device.id]}
-                  <Spinner class="h-4 w-4" aria-hidden="true" />
-                {:else}
-                  <Trash2 class="h-4 w-4" aria-hidden="true" />
-                {/if}
-              </Button>
-            </div>
-          </div>
-        {/each}
-
-        <div class="flex justify-end">
-          <Button
-            variant="destructive"
-            size="sm"
-            onclick={revokeAllDevices}
-            disabled={isRevokingDevices || devices.length === 0}
-          >
-            {#if isRevokingDevices}
-              <Spinner class="mr-2 h-4 w-4" aria-hidden="true" />
-            {/if}
-            {t('Revoke All Devices')}
-          </Button>
-        </div>
-      {/if}
     </CardContent>
   </Card>
 

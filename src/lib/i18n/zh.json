@@ -447,5 +447,21 @@
   "settingsGeneralKeyboardTitle": "键盘快捷键",
   "settingsGeneralKeyboardDesc": "自定义常用操作的快捷键。",
   "settingsGeneralKeyboardCta": "配置快捷键",
-  "settingsGeneralKeyboardBody": "自定义按键组合以匹配你的工作流程并加速导航。"
+  "settingsGeneralKeyboardBody": "自定义按键组合以匹配你的工作流程并加速导航。",
+  "Version": "Version",
+  "Build": "Build",
+  "Runtime": "Runtime",
+  "UI": "UI",
+  "Status": "Status",
+  "Update Available": "Update Available",
+  "Checking for updates...": "Checking for updates...",
+  "A new update is available: v{{version}}": "A new update is available: v{{version}}",
+  "Install": "Install",
+  "Update installed successfully. Please restart the app.": "Update installed successfully. Please restart the app.",
+  "Failed to install update": "Failed to install update",
+  "Pulsar is up to date": "Pulsar is up to date",
+  "Failed to check for updates": "Failed to check for updates",
+  "Failed to open link": "Failed to open link",
+  "Failed to open logs folder": "Failed to open logs folder",
+  "Diagnostics upload is not yet implemented": "Diagnostics upload is not yet implemented"
 }

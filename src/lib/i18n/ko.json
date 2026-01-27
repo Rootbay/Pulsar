@@ -447,5 +447,21 @@
   "settingsGeneralKeyboardTitle": "키보드 단축키",
   "settingsGeneralKeyboardDesc": "자주 사용하는 작업에 대한 단축키를 맞춤 설정합니다.",
   "settingsGeneralKeyboardCta": "단축키 설정",
-  "settingsGeneralKeyboardBody": "작업 흐름에 맞게 키 조합을 개인화하고 탐색 속도를 높이세요."
+  "settingsGeneralKeyboardBody": "작업 흐름에 맞게 키 조합을 개인화하고 탐색 속도를 높이세요.",
+  "Version": "Version",
+  "Build": "Build",
+  "Runtime": "Runtime",
+  "UI": "UI",
+  "Status": "Status",
+  "Update Available": "Update Available",
+  "Checking for updates...": "Checking for updates...",
+  "A new update is available: v{{version}}": "A new update is available: v{{version}}",
+  "Install": "Install",
+  "Update installed successfully. Please restart the app.": "Update installed successfully. Please restart the app.",
+  "Failed to install update": "Failed to install update",
+  "Pulsar is up to date": "Pulsar is up to date",
+  "Failed to check for updates": "Failed to check for updates",
+  "Failed to open link": "Failed to open link",
+  "Failed to open logs folder": "Failed to open logs folder",
+  "Diagnostics upload is not yet implemented": "Diagnostics upload is not yet implemented"
 }

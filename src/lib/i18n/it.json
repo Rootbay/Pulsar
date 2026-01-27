@@ -447,5 +447,21 @@
   "settingsGeneralKeyboardTitle": "Scorciatoie da tastiera",
   "settingsGeneralKeyboardDesc": "Personalizza le scorciatoie per le azioni più frequenti.",
   "settingsGeneralKeyboardCta": "Configura scorciatoie",
-  "settingsGeneralKeyboardBody": "Personalizza le combinazioni di tasti per adattarle al tuo flusso di lavoro e velocizzare la navigazione."
+  "settingsGeneralKeyboardBody": "Personalizza le combinazioni di tasti per adattarle al tuo flusso di lavoro e velocizzare la navigazione.",
+  "Version": "Version",
+  "Build": "Build",
+  "Runtime": "Runtime",
+  "UI": "UI",
+  "Status": "Status",
+  "Update Available": "Update Available",
+  "Checking for updates...": "Checking for updates...",
+  "A new update is available: v{{version}}": "A new update is available: v{{version}}",
+  "Install": "Install",
+  "Update installed successfully. Please restart the app.": "Update installed successfully. Please restart the app.",
+  "Failed to install update": "Failed to install update",
+  "Pulsar is up to date": "Pulsar is up to date",
+  "Failed to check for updates": "Failed to check for updates",
+  "Failed to open link": "Failed to open link",
+  "Failed to open logs folder": "Failed to open logs folder",
+  "Diagnostics upload is not yet implemented": "Diagnostics upload is not yet implemented"
 }

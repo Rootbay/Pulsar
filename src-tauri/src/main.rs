@@ -149,6 +149,7 @@ fn main() {
             db::save_password_item,
             db::get_password_items,
             db::get_password_overviews,
+            db::get_password_item_by_id,
             db::update_password_item,
             db::update_password_item_tags,
             db::update_password_item_totp_secret,

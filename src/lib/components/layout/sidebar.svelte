@@ -141,7 +141,7 @@
     </SidebarGroup>
   </SidebarContent>
 
-  <SidebarFooter class="border-border/40 mt-auto w-full border-t pt-4">
+  <SidebarFooter class="border-border/40 mt-auto w-full border-t px-6">
     <SidebarMenu class="items-center">
       <SidebarMenuItem class="cursor-pointer">
         <SidebarMenuButton

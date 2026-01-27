@@ -46,7 +46,7 @@
     onfinalize
   }: Props = $props();
 
-  let breachCheckTimeout = $state<ReturnType<typeof setTimeout> | null>(null);
+  let breachCheckTimeout: ReturnType<typeof setTimeout> | null = null;
 
   $effect(() => {
     const item = passwordItem;

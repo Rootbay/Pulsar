@@ -6,7 +6,7 @@
   import { page } from '$app/stores';
   import { appState } from '$lib/stores';
   import { settings } from '$lib/stores/appSettings.svelte';
-  import { initClipboardService } from '$lib/utils/clipboardService';
+  import { initClipboardService } from '$lib/utils/clipboardService.svelte';
   import SecurityManager from '$lib/components/SecurityManager.svelte';
   import { Toaster } from '$lib/components/ui/sonner';
 
@@ -14,10 +14,22 @@
 
   const AUTH_ROUTES = new Set(['/select-vault', '/setup', '/login', '/totp']);
 
+  let prefersDark = $state(false);
+
   onMount(() => {
     initClipboardService().catch((error) => {
       console.error('Failed to initialize clipboard policies', error);
     });
+
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    prefersDark = mediaQuery.matches;
+
+    const handler = (e: MediaQueryListEvent) => {
+      prefersDark = e.matches;
+    };
+
+    mediaQuery.addEventListener('change', handler);
+    return () => mediaQuery.removeEventListener('change', handler);
   });
 
   $effect(() => {
@@ -25,13 +37,12 @@
       const htmlElement = document.documentElement;
       const currentTheme = settings.state.appearance.theme;
 
-      htmlElement.classList.remove('theme-light', 'theme-dark', 'theme-system');
+      htmlElement.classList.remove('light', 'dark');
 
       if (currentTheme === 'system') {
-        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-        htmlElement.classList.add(prefersDark ? 'theme-dark' : 'theme-light');
+        htmlElement.classList.add(prefersDark ? 'dark' : 'light');
       } else {
-        htmlElement.classList.add(`theme-${currentTheme}`);
+        htmlElement.classList.add(currentTheme);
       }
     }
   });

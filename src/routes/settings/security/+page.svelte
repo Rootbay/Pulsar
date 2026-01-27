@@ -2,9 +2,8 @@
   import { onMount, onDestroy } from 'svelte';
   import { appState } from '$lib/stores';
   import { settings } from '$lib/stores/appSettings.svelte';
-  import { loginTotpSecret, loginTotpConfigured } from '$lib/stores/totp';
+  import { loginTotpStore } from '$lib/stores/totp.svelte';
   import { callBackend } from '$lib/utils/backend';
-  import { invoke } from '@tauri-apps/api/core';
   import { Button } from '$lib/components/ui/button';
   import {
     Card,
@@ -53,7 +52,7 @@
   import { cn } from '$lib/utils';
   import { toast } from '$lib/components/ui/sonner';
   import { copyText } from '$lib/utils/copyHelper';
-  import { updateClipboardSettings } from '$lib/utils/clipboardService';
+  import { clipboardService } from '$lib/utils/clipboardService.svelte';
 
   interface Argon2Params {
     memoryKib: number;
@@ -89,10 +88,10 @@
   let currentClipboardSettings = $derived(settings.state.clipboard);
 
   const currentProvisioningUri = $derived(
-    $loginTotpSecret ? buildProvisioningUri($loginTotpSecret) : null
+    loginTotpStore.secret ? buildProvisioningUri(loginTotpStore.secret) : null
   );
   const generateButtonLabel = $derived(
-    $loginTotpSecret ? t('Regenerate Secret') : t('Generate Secret')
+    loginTotpStore.secret ? t('Regenerate Secret') : t('Generate Secret')
   );
 
   let passwordModalOpen = $state(false);
@@ -186,7 +185,7 @@
 
   async function loadBiometricsStatus() {
     try {
-      isBiometricsEnabled = await invoke<boolean>('is_biometrics_enabled');
+      isBiometricsEnabled = await callBackend<boolean>('is_biometrics_enabled');
     } catch (error) {
       console.error('Failed to check biometric status:', error);
     }
@@ -328,10 +327,10 @@
     totpStatusError = null;
 
     try {
-      const configured = await invoke<boolean>('is_login_totp_configured');
-      loginTotpConfigured.set(configured);
+      const configured = await callBackend<boolean>('is_login_totp_configured');
+      loginTotpStore.configured = configured;
       if (!configured) {
-        loginTotpSecret.set(null);
+        loginTotpStore.secret = null;
       }
     } catch (error) {
       totpStatusError = toErrorMessage(error);
@@ -351,7 +350,7 @@
     isGeneratingTotpSecret = true;
 
     try {
-      const secret = await invoke<string>('generate_totp_secret');
+      const secret = await callBackend<string>('generate_totp_secret');
       pendingTotpSecret = secret;
       pendingProvisioningUri = buildProvisioningUri(secret);
       totpVerificationCode = '';
@@ -406,7 +405,7 @@
     totpVerificationError = null;
 
     try {
-      const isValid = await invoke<boolean>('verify_totp_secret', {
+      const isValid = await callBackend<boolean>('verify_totp_secret', {
         secret_b32: pendingTotpSecret,
         token: totpVerificationCode
       });
@@ -417,8 +416,8 @@
       }
 
       await callBackend('configure_login_totp', { secret_b32: pendingTotpSecret });
-      loginTotpSecret.set(pendingTotpSecret);
-      loginTotpConfigured.set(true);
+      loginTotpStore.secret = pendingTotpSecret;
+      loginTotpStore.configured = true;
       totpSetupSuccess =
         'Login TOTP is now enabled. The new secret has been stored on this device.';
       totpDisableSuccess = null;
@@ -446,8 +445,8 @@
 
     try {
       await callBackend('disable_login_totp');
-      loginTotpConfigured.set(false);
-      loginTotpSecret.set(null);
+      loginTotpStore.configured = false;
+      loginTotpStore.secret = null;
       pendingTotpSecret = null;
       pendingProvisioningUri = null;
       totpVerificationCode = '';
@@ -501,7 +500,7 @@
   function updateClipboardClear(value: string) {
     const seconds = parseInt(value);
     if (!isNaN(seconds)) {
-      updateClipboardSettings({ clearAfterDuration: seconds });
+      clipboardService.updateSettings({ clearAfterDuration: seconds });
     }
   }
 
@@ -623,7 +622,7 @@
   async function loadDevices() {
     devicesLoading = true;
     try {
-      const result = await invoke<DeviceRecord[]>('list_devices');
+      const result = await callBackend<DeviceRecord[]>('list_devices');
       devices = result.map((device) => ({
         ...device,
         kind: device.kind ?? 'unknown',
@@ -720,7 +719,7 @@
   async function runIntegrityCheck() {
     securityActionPending = { ...securityActionPending, 'integrity-check': true };
     try {
-      const result = await invoke<string>('run_integrity_check');
+      const result = await callBackend<string>('run_integrity_check');
       if (result.trim().toLowerCase() === 'ok') {
         toast.success('Vault integrity check completed successfully.');
       } else {
@@ -1022,7 +1021,7 @@
               {t('Current status')}
             </p>
             <p class="text-muted-foreground text-sm">
-              {$loginTotpConfigured
+              {loginTotpStore.configured
                 ? t(
                     'Unlocking requires both your master password and an authenticator token.'
                   )
@@ -1034,12 +1033,12 @@
           <Badge
             class={cn(
               'px-3 py-1 text-xs font-medium',
-              $loginTotpConfigured
+              loginTotpStore.configured
                 ? 'bg-emerald-500/15 text-emerald-500'
                 : 'bg-muted text-muted-foreground'
             )}
           >
-            {$loginTotpConfigured ? 'Enabled' : 'Disabled'}
+            {loginTotpStore.configured ? 'Enabled' : 'Disabled'}
           </Badge>
         </div>
 
@@ -1058,7 +1057,7 @@
             {generateButtonLabel}
           </Button>
 
-          {#if $loginTotpConfigured}
+          {#if loginTotpStore.configured}
             <Button
               type="button"
               variant="outline"
@@ -1229,8 +1228,8 @@
         </div>
       {/if}
 
-      {#if $loginTotpConfigured && !pendingTotpSecret}
-        {@const storedSecret = $loginTotpSecret}
+      {#if loginTotpStore.configured && !pendingTotpSecret}
+        {@const storedSecret = loginTotpStore.secret}
         <div class="border-border/60 bg-muted/10 space-y-3 rounded-lg border p-4">
           <div class="flex items-center gap-2">
             <ShieldCheck class="text-primary h-5 w-5" aria-hidden="true" />

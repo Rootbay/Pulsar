@@ -1,4 +1,4 @@
-import { invoke } from '@tauri-apps/api/core';
+import { callBackend } from './backend';
 import type { PasswordItem } from '$lib/types/password';
 
 export interface VaultBackupButton {
@@ -45,7 +45,7 @@ export async function exportVaultBackup(
   passphrase: string,
   options: { plaintext?: boolean; masterPassword?: string } = {}
 ): Promise<string> {
-  return invoke<string>('export_vault_backend', {
+  return callBackend<string>('export_vault_backend', {
     passphrase,
     isPlaintext: options.plaintext ?? false,
     reauthPassword: options.masterPassword ?? ''
@@ -59,7 +59,7 @@ export async function importVaultBackup(
   const { sourcePath = null, onProgress, masterPassword = '' } = options;
 
   onProgress?.('decrypting');
-  const snapshot = await invoke<VaultBackupSnapshot>('restore_vault_backend', {
+  const snapshot = await callBackend<VaultBackupSnapshot>('restore_vault_backend', {
     passphrase,
     path: sourcePath,
     reauthPassword: masterPassword

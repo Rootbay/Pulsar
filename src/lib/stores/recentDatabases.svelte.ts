@@ -1,11 +1,11 @@
-import { invoke } from '@tauri-apps/api/core';
+import { callBackend } from '../utils/backend';
 import { settings } from './appSettings.svelte';
 
 async function filterNonExistentDatabases(paths: string[]): Promise<string[]> {
   const existentPaths: string[] = [];
   for (const path of paths) {
     try {
-      const exists = await invoke('check_file_exists', { path });
+      const exists = await callBackend<boolean>('check_file_exists', { path });
       if (exists) {
         existentPaths.push(path);
       } else {
@@ -21,7 +21,7 @@ async function filterNonExistentDatabases(paths: string[]): Promise<string[]> {
 
 export async function addRecentDatabase(path: string) {
     try {
-      void invoke('check_file_exists', { path })
+      void callBackend('check_file_exists', { path })
         .then((exists) => {
           if (!exists) {
             console.warn(`Recent path does not yet exist (will be trimmed later): ${path}`);

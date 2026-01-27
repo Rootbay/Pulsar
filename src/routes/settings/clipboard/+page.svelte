@@ -17,10 +17,8 @@
   import { settings } from '$lib/stores/appSettings.svelte';
   import { i18n, t as translate } from '$lib/i18n.svelte';
   import {
-    clearClipboardNow,
-    clipboardIntegrationState,
-    updateClipboardSettings
-  } from '$lib/utils/clipboardService';
+    clipboardService
+  } from '$lib/utils/clipboardService.svelte';
   import {
     CircleCheck,
     ClipboardCheck,
@@ -58,7 +56,7 @@
 
   const handleSetTimeout = async (seconds: number) => {
     try {
-      await updateClipboardSettings({ clearAfterDuration: seconds });
+      await clipboardService.updateSettings({ clearAfterDuration: seconds });
     } catch (error) {
       const message =
         error instanceof Error ? error.message : 'Failed to update clipboard timeout.';
@@ -75,7 +73,7 @@
       const patch: Partial<ClipboardSettings> = {
         [setting]: nextValue
       } as Partial<ClipboardSettings>;
-      await updateClipboardSettings(patch);
+      await clipboardService.updateSettings(patch);
     } catch (error) {
       const message =
         error instanceof Error ? error.message : 'Failed to update clipboard setting.';
@@ -86,7 +84,7 @@
   const handleRangeChange = async (e: Event & { currentTarget: HTMLInputElement }) => {
     const val = parseInt(e.currentTarget.value);
     try {
-      await updateClipboardSettings({ clearAfterDuration: val });
+      await clipboardService.updateSettings({ clearAfterDuration: val });
     } catch (error) {
       const message =
         error instanceof Error ? error.message : 'Failed to update clipboard timeout.';
@@ -96,7 +94,7 @@
 
   const handleRadioChange = async (level: string) => {
     try {
-      await updateClipboardSettings({ permissionLevel: level });
+      await clipboardService.updateSettings({ permissionLevel: level });
     } catch (error) {
       const message =
         error instanceof Error ? error.message : 'Failed to update clipboard permission.';
@@ -106,7 +104,7 @@
 
   const handleClearClipboard = async () => {
     try {
-      await clearClipboardNow();
+      await clipboardService.clearNow();
       toast.success('Clipboard cleared.');
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to clear clipboard.';
@@ -154,20 +152,20 @@
         <Switch
           checked={clipboardIntegration}
           aria-label="Toggle clipboard integration"
-          disabled={!$clipboardIntegrationState.integrationAvailable ||
-            $clipboardIntegrationState.applying}
+          disabled={!clipboardService.state.integrationAvailable ||
+            clipboardService.state.applying}
           onclick={() => handleSwitchChange('clipboardIntegration')}
         />
       </div>
 
-      {#if !$clipboardIntegrationState.integrationAvailable}
+      {#if !clipboardService.state.integrationAvailable}
         <p class="text-destructive text-sm">
           {t('Clipboard integration is currently unavailable.')}
         </p>
       {/if}
 
-      {#if $clipboardIntegrationState.lastError}
-        <p class="text-destructive text-sm">{$clipboardIntegrationState.lastError}</p>
+      {#if clipboardService.state.lastError}
+        <p class="text-destructive text-sm">{clipboardService.state.lastError}</p>
       {/if}
 
       <div class="border-border/60 bg-muted/10 space-y-4 rounded-lg border p-4">
@@ -188,8 +186,8 @@
                 'h-9 px-3 text-sm',
                 clearAfterDuration === option && 'border-primary bg-primary/20 text-primary'
               )}
-              disabled={!$clipboardIntegrationState.integrationAvailable ||
-                $clipboardIntegrationState.applying}
+              disabled={!clipboardService.state.integrationAvailable ||
+                clipboardService.state.applying}
               onclick={() => handleSetTimeout(option)}
             >
               {option}s
@@ -205,8 +203,8 @@
             step="1"
             value={clearAfterDuration}
             onchange={handleRangeChange}
-            disabled={!$clipboardIntegrationState.integrationAvailable ||
-              $clipboardIntegrationState.applying}
+            disabled={!clipboardService.state.integrationAvailable ||
+              clipboardService.state.applying}
             class="bg-muted h-2 w-full cursor-pointer appearance-none rounded-full accent-[hsl(var(--primary))]"
           />
           <div class="text-muted-foreground flex justify-between text-xs">
@@ -241,10 +239,10 @@
               {t('Block clipboard history')}
             </p>
             <Badge
-              variant={$clipboardIntegrationState.historyBlockingActive ? 'secondary' : 'outline'}
+              variant={clipboardService.state.historyBlockingActive ? 'secondary' : 'outline'}
               class="text-xs"
             >
-              {$clipboardIntegrationState.historyBlockingActive ? 'Active' : 'Inactive'}
+              {clipboardService.state.historyBlockingActive ? 'Active' : 'Inactive'}
             </Badge>
           </div>
           <p class="text-muted-foreground text-sm">
@@ -254,14 +252,14 @@
         <Switch
           checked={blockHistory}
           aria-label="Toggle block clipboard history"
-          disabled={!$clipboardIntegrationState.integrationAvailable ||
-            !$clipboardIntegrationState.historyBlockingSupported ||
-            $clipboardIntegrationState.applying}
+          disabled={!clipboardService.state.integrationAvailable ||
+            !clipboardService.state.historyBlockingSupported ||
+            clipboardService.state.applying}
           onclick={() => handleSwitchChange('blockHistory')}
         />
       </div>
 
-      {#if !$clipboardIntegrationState.historyBlockingSupported}
+      {#if !clipboardService.state.historyBlockingSupported}
         <p class="text-muted-foreground pl-11 text-xs">
           {t('Clipboard history blocking is not supported on this platform.')}
         </p>
@@ -279,8 +277,8 @@
         <Switch
           checked={onlyUnlocked}
           aria-label="Toggle only allow on unlocked session"
-          disabled={!$clipboardIntegrationState.integrationAvailable ||
-            $clipboardIntegrationState.applying}
+          disabled={!clipboardService.state.integrationAvailable ||
+            clipboardService.state.applying}
           onclick={() => handleSwitchChange('onlyUnlocked')}
         />
       </div>
@@ -345,8 +343,8 @@
           type="button"
           variant="destructive"
           class="flex items-center gap-2"
-          disabled={!$clipboardIntegrationState.integrationAvailable ||
-            $clipboardIntegrationState.applying}
+          disabled={!clipboardService.state.integrationAvailable ||
+            clipboardService.state.applying}
           onclick={handleClearClipboard}
         >
           <Trash2 class="size-4" />

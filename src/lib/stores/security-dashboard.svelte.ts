@@ -2,7 +2,7 @@ import type { PasswordItem } from '$lib/types/password';
 import { SecurityService, type PasswordHealth } from '../utils/security';
 import { appState } from './appState.svelte';
 
-interface SecurityDashboardState {
+export interface SecurityDashboardState {
   items: Record<number, PasswordHealth>;
 }
 
@@ -55,7 +55,7 @@ class SecurityDashboardStore {
   }
 
   async checkBreach(item: PasswordItem) {
-    if (!item.password) return;
+    if (!item.password || !item.id) return;
 
     const count = await SecurityService.checkBreach(item.password);
 
@@ -68,19 +68,15 @@ class SecurityDashboardStore {
       };
     }
   }
-}
 
-const store = new SecurityDashboardStore();
-
-export const securityDashboard = {
   subscribe(fn: (value: SecurityDashboardState) => void) {
+    fn({ items: this.items });
     return $effect.root(() => {
       $effect(() => {
-        fn({ items: store.items });
+        fn({ items: this.items });
       });
     });
-  },
-  reset: () => store.reset(),
-  assessStrength: (item: PasswordItem) => store.assessStrength(item),
-  checkBreach: (item: PasswordItem) => store.checkBreach(item)
-};
+  }
+}
+
+export const securityDashboard = new SecurityDashboardStore();

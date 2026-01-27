@@ -39,7 +39,6 @@
   --sidebar-ring: oklch(0.708 0 0);
   --sidebar-width: 16rem;
   --passwordList-width: 320px;
-
   --passwordlist-base: var(--sidebar);
   --passwordlist-item: color-mix(in oklch, var(--sidebar) 80%, var(--background) 20%);
   --passwordlist-hover-bg: color-mix(in oklch, var(--sidebar) 65%, var(--background) 35%);

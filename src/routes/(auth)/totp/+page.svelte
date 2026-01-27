@@ -17,7 +17,7 @@
   } from '$lib/components/ui/card';
   import { Copy, RefreshCw, ArrowLeft } from '@lucide/svelte';
   import { appState } from '$lib/stores';
-  import { loginTotpSecret } from '$lib/stores/totp';
+  import { loginTotpStore } from '$lib/stores/totp.svelte';
   import { i18n, t as translate, type I18nKey } from '$lib/i18n.svelte';
 
   const locale = $derived(i18n.locale);
@@ -32,7 +32,7 @@
   let verificationError = $state<string | null>(null);
   let isVerifying = $state(false);
 
-  let activeSecret = $state<string | null>(null);
+  const activeSecret = $derived(loginTotpStore.secret);
   let currentToken = $state<string | null>(null);
   let tokenError = $state<string | null>(null);
   let isFetchingToken = $state(false);
@@ -43,7 +43,16 @@
   let copyFeedbackTimeout: ReturnType<typeof setTimeout> | null = null;
 
   let countdownInterval: ReturnType<typeof setInterval> | null = null;
-  let unsubscribeSecret: (() => void) | null = null;
+
+  $effect(() => {
+    if (!activeSecret) {
+      currentToken = null;
+      tokenError = t('totpSecretMissing');
+    } else {
+      tokenError = null;
+      void fetchToken(true);
+    }
+  });
 
   $effect(() => {
     if (
@@ -210,24 +219,12 @@
   };
 
   onMount(() => {
-    unsubscribeSecret = loginTotpSecret.subscribe((value) => {
-      activeSecret = value;
-      if (!value) {
-        currentToken = null;
-        tokenError = t('totpSecretMissing');
-      } else {
-        tokenError = null;
-        void fetchToken(true);
-      }
-    });
-
     if (browser) {
       startCountdown();
     }
   });
 
   onDestroy(() => {
-    unsubscribeSecret?.();
     stopCountdown();
     if (copyFeedbackTimeout) {
       clearTimeout(copyFeedbackTimeout);

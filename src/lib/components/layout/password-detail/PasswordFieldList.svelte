@@ -12,7 +12,7 @@
   import { Skeleton } from '$lib/components/ui/skeleton';
   import type { DisplayField } from '$lib/types/password-fields';
   import type { PasswordItem } from '$lib/types/password';
-  import { securityDashboard } from '$lib/stores/security-dashboard.svelte';
+  import { securityDashboard } from '$lib/stores';
   import { copyPassword, copyText, copyUrl, copyUsername } from '$lib/utils/copyHelper';
   import { toast } from '$lib/components/ui/sonner';
   import { GeneratorService } from '$lib/utils/generator';
@@ -60,7 +60,7 @@
   $effect(() => {
     const item = passwordItem;
     if (item && item.id && item.password) {
-      const health = untrack(() => $securityDashboard.items[item.id!]);
+      const health = untrack(() => securityDashboard.items[item.id!]);
       if (!health || health.isBreached === null) {
         if (breachCheckTimeout) clearTimeout(breachCheckTimeout);
         breachCheckTimeout = setTimeout(() => {
@@ -264,7 +264,7 @@
 
             <div class="flex items-center gap-2">
               {#if field.id === 'password' && passwordItem}
-                {@const health = $securityDashboard.items[passwordItem.id]}
+                {@const health = securityDashboard.items[passwordItem.id]}
                 {#if health}
                   <Badge
                     variant="outline"
@@ -377,7 +377,7 @@
                   {/if}
 
                   {#if field.id === 'password' && passwordItem}
-                    {@const health = $securityDashboard.items[passwordItem.id]}
+                    {@const health = securityDashboard.items[passwordItem.id]}
                     {#if health}
                       <Badge
                         variant="outline"

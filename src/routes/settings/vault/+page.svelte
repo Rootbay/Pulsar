@@ -1,7 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { derived, get, writable, type Readable } from 'svelte/store';
-  import { invoke } from '@tauri-apps/api/core';
   import { toast } from '$lib/components/ui/sonner';
   import { vaultStore } from '$lib/stores/vault.svelte';
   import { addRecentDatabase, removeRecentDatabase } from '$lib/stores/recentDatabases.svelte';
@@ -31,6 +30,7 @@
   } from '@lucide/svelte';
   import { exportVaultBackup, importVaultBackup, notifyVaultRefresh } from '$lib/utils/backup';
   import { i18n, t as translate, type Locale } from '$lib/i18n.svelte';
+  import { callBackend } from '$lib/utils/backend';
 
   const locale = $derived(i18n.locale);
   const t = (key: string, vars = {}) => translate(locale, key as any, vars);
@@ -168,7 +168,7 @@
     loadingVaults = true;
 
     try {
-      const response = await invoke<BackendVault[]>('list_vaults');
+      const response = await callBackend<BackendVault[]>('list_vaults');
       const mapped = response.map((vault) => ({
         id: vault.id,
         path: vault.path,
@@ -266,7 +266,7 @@
     busyAction = 'import';
 
     try {
-      const sourcePath = await invoke<string>('pick_open_file');
+      const sourcePath = await callBackend<string>('pick_open_file');
       const passphrase = window.prompt(t('settingsVaultImportPassphrasePrompt'));
 
       if (!passphrase?.trim()) {
@@ -297,7 +297,7 @@
     busyAction = 'create';
 
     try {
-      const picked = await invoke<string>('pick_save_file');
+      const picked = await callBackend<string>('pick_save_file');
       const withExt: string = picked.endsWith('.psec') ? picked : `${picked}.psec`;
       const sep = withExt.includes('\\') ? '\\' : '/';
       const lastSep = withExt.lastIndexOf(sep);
@@ -307,7 +307,7 @@
       const folder = baseDir ? `${baseDir}${sep}${stem}` : stem;
       const finalPath = `${folder}${sep}${stem}.psec`;
 
-      await invoke('switch_database', { dbPath: finalPath });
+      await callBackend('switch_database', { dbPath: finalPath });
       await addRecentDatabase(finalPath);
 
       toast.success(t('settingsVaultCreateSuccess'));
@@ -358,7 +358,7 @@
     busyAction = 'restore';
 
     try {
-      const sourcePath = await invoke<string>('pick_open_file');
+      const sourcePath = await callBackend<string>('pick_open_file');
       const passphrase = window.prompt(t('settingsVaultRestorePassphrasePrompt'));
 
       if (!passphrase?.trim()) {

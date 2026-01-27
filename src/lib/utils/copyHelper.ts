@@ -1,19 +1,17 @@
 import type { PasswordItem } from '$lib/types/password';
 import { clear, readText, writeText } from '@tauri-apps/plugin-clipboard-manager';
-import { get } from 'svelte/store';
 
 import { appState } from '$lib/stores';
 import { settings } from '$lib/stores/appSettings.svelte';
-import { clipboardIntegrationState, clipboardServiceReady } from '$lib/utils/clipboardService';
+import { clipboardService } from '$lib/utils/clipboardService.svelte';
 
 let clearTimer: ReturnType<typeof setTimeout> | null = null;
 
 async function copyToClipboard(text: string) {
   const clipSettings = settings.state.clipboard;
-  const integrationStatus = get(clipboardIntegrationState);
-  const serviceReady = get(clipboardServiceReady);
+  const integrationStatus = clipboardService.state;
+  const serviceReady = clipboardService.ready;
   const locked = appState.isLocked;
-
   if (!clipSettings.clipboardIntegration || !integrationStatus.integrationAvailable) {
     throw new Error('Clipboard integration is disabled.');
   }

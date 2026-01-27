@@ -1,4 +1,4 @@
-import { invoke } from '@tauri-apps/api/core';
+import { callBackend } from '../utils/backend';
 
 export interface ProfileSettings {
   name: string;
@@ -23,7 +23,7 @@ class ProfileStore {
 
   async load() {
     try {
-      const data = await invoke<string | null>('get_profile_settings');
+      const data = await callBackend<string | null>('get_profile_settings');
       if (data) {
         this.state = JSON.parse(data);
       }
@@ -34,7 +34,7 @@ class ProfileStore {
 
   async save() {
     try {
-      await invoke('save_profile_settings', { settingsJson: JSON.stringify(this.state) });
+      await callBackend('save_profile_settings', { settingsJson: JSON.stringify(this.state) });
     } catch (e) {
       console.error('Failed to save profile settings:', e);
     }

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { browser } from '$app/environment';
   import { goto } from '$app/navigation';
-  import { invoke } from '@tauri-apps/api/core';
+  import { callBackend } from '$lib/utils/backend';
   import { Button } from '$lib/components/ui/button';
   import {
     Card,
@@ -91,7 +91,7 @@
     loginError = null;
     isSetting = true;
     try {
-      await invoke('set_master_password', { password: newMasterPassword });
+      await callBackend('set_master_password', { password: newMasterPassword });
       appState.needsPasswordSetup = false;
       appState.isLocked = false;
       appState.totpVerified = false;
@@ -111,7 +111,7 @@
 
   async function goBack() {
     try {
-      await invoke('lock');
+      await callBackend('lock');
     } catch (error) {
       console.error('Failed to lock while leaving setup:', error);
     }

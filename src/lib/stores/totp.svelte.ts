@@ -1,6 +1,3 @@
-import { browser } from '$app/environment';
-import { appState } from './appState.svelte';
-
 class LoginTotpStore {
   #secret = $state<string | null>(null);
   #configured = $state<boolean>(false);

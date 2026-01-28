@@ -1,5 +1,4 @@
 import { callBackend } from '../utils/backend';
-import { appState } from './appState.svelte';
 
 export interface ProfileSettings {
   name: string;

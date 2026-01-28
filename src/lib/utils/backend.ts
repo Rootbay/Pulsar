@@ -12,7 +12,7 @@ export async function callBackend<T>(
     } catch (error: unknown) {
       lastError = error;
 
-      const errorMessage = typeof error === 'string' ? error : (error as any)?.message || '';
+      const errorMessage = typeof error === 'string' ? error : String((error as { message?: unknown })?.message || '');
       const isTransient =
         errorMessage.toLowerCase().includes('busy') ||
         errorMessage.toLowerCase().includes('timeout') ||

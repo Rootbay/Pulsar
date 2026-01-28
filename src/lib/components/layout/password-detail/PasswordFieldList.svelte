@@ -24,6 +24,7 @@
   import { SecurityService } from '$lib/utils/security';
   import { copyPassword, copyText, copyUrl, copyUsername } from '$lib/utils/copyHelper';
   import { toast } from '$lib/components/ui/sonner';
+  import { securityDashboard } from '$lib/stores/security-dashboard.svelte';
   import PasswordStrength from '$lib/components/password/PasswordStrength.svelte';
   import PasswordGeneratorPopup from '$lib/components/password/PasswordGeneratorPopup.svelte';
 
@@ -436,7 +437,7 @@
                 </div>
               {/if}
             {/snippet}
-          {/Input}
+          </Input>
           {#if isEditing && field.id === 'password'}
             <div class="mt-2 px-3 pb-2">
               <PasswordStrength password={field.value ?? ''} showDetails={true} />

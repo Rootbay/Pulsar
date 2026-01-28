@@ -47,7 +47,6 @@
   } from '@lucide/svelte';
   import { i18n, t as translate, type I18nKey } from '$lib/i18n.svelte';
   import { parseError } from '$lib/utils/error';
-  import { SecurityService } from '$lib/utils/security';
   import type { SecuritySettings } from '$lib/config/settings';
   import { cn } from '$lib/utils';
   import { toast } from '$lib/components/ui/sonner';
@@ -149,8 +148,6 @@
 
   const memoryFormatter = new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 });
   const gigabyteFormatter = new Intl.NumberFormat(undefined, { maximumFractionDigits: 1 });
-
-  const toErrorMessage = parseError;
 
   const formatSecret = (secret: string) => secret.replace(/(.{4})/g, '$1 ').trim();
 

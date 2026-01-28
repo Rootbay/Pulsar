@@ -1,4 +1,3 @@
-import { settings } from './appSettings.svelte';
 import { callBackend } from '../utils/backend';
 import { loginTotpStore } from './totp.svelte';
 import { profileSettings, defaultProfileSettings } from './profile.svelte';

@@ -373,7 +373,7 @@
   });
 
   let observer: IntersectionObserver | null = null;
-  let sentinelRef: HTMLElement | null = null;
+  let sentinelRef = $state<HTMLElement | null>(null);
 
   $effect(() => {
     if (!sentinelRef) return;

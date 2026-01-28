@@ -36,7 +36,7 @@ pub fn encrypt(plaintext: &str, key: &[u8]) -> Result<String> {
 }
 
 pub fn decrypt(encrypted_payload: &str, key: &[u8]) -> Result<String> {
-    Ok(decrypt_zeroized(encrypted_payload, key)?.into_inner())
+    Ok((*decrypt_zeroized(encrypted_payload, key)?).clone())
 }
 
 pub fn decrypt_zeroized(encrypted_payload: &str, key: &[u8]) -> Result<Zeroizing<String>> {
@@ -144,7 +144,7 @@ impl CipherSession {
     }
 
     pub fn decrypt(&self, encrypted_payload: &str) -> Result<String> {
-        Ok(self.decrypt_zeroized(encrypted_payload)?.into_inner())
+        Ok((*self.decrypt_zeroized(encrypted_payload)?).clone())
     }
 
     pub fn decrypt_zeroized(&self, encrypted_payload: &str) -> Result<Zeroizing<String>> {

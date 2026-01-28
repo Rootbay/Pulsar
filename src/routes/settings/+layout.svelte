@@ -3,7 +3,6 @@
   import { Avatar, AvatarFallback, AvatarImage } from '$lib/components/ui/avatar';
   import { Input } from '$lib/components/ui/input';
   import { Button } from '$lib/components/ui/button';
-  import { settings } from '$lib/stores/appSettings.svelte';
   import {
     Bell,
     Menu,
@@ -20,16 +19,16 @@
     ArrowLeft,
     Archive,
     ListChecks,
-    FileText
+    FileText,
+    Clock
   } from '@lucide/svelte';
-  import { i18n, t as translate } from '$lib/i18n.svelte';
-  import type { I18nKey } from '$lib/i18n.svelte';
+  import { i18n, t as translate, type I18nKey } from '$lib/i18n.svelte';
   import { goto } from '$app/navigation';
 
   let { children } = $props();
 
   const locale = $derived(i18n.locale);
-  const t = (key: string, vars = {}) => translate(locale, key as any, vars);
+  const t = (key: string, vars = {}) => translate(locale, key as I18nKey, vars);
 
   type NavItem = { href: string; labelKey: I18nKey; Icon: typeof Settings };
   const navItems: NavItem[] = [
@@ -41,7 +40,7 @@
     { href: '/settings/generator', labelKey: 'Generator', Icon: WandSparkles },
     { href: '/settings/presets', labelKey: 'Presets', Icon: ListChecks },
     { href: '/settings/site-rules', labelKey: 'Site Rules', Icon: FileText },
-    { href: '/settings/sessions', labelKey: 'Sessions', Icon: MonitorSmartphone },
+    { href: '/settings/sessions', labelKey: 'Activity Log', Icon: Clock },
     { href: '/settings/vault', labelKey: 'Vault', Icon: Database },
     { href: '/settings/backup', labelKey: 'Backup', Icon: Archive },
     { href: '/settings/advanced', labelKey: 'Advanced', Icon: SlidersHorizontal },
@@ -79,8 +78,8 @@
         href="/settings/sessions"
         class="text-muted-foreground hover:bg-muted/60 mt-2 flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm"
       >
-        <ShieldCheck class="size-4" />
-        <span>{t('Sessions')}</span>
+        <Clock class="size-4" />
+        <span>{t('Activity Log')}</span>
       </a>
     </div>
   </aside>

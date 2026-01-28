@@ -12,11 +12,11 @@
   } from '$lib/components/ui/card';
   import { Badge } from '$lib/components/ui/badge';
   import { FileText, Pencil, Trash2, Plus } from '@lucide/svelte';
-  import { i18n, t as translate } from '$lib/i18n.svelte';
+  import { i18n, t as translate, type I18nKey } from '$lib/i18n.svelte';
   import InputDialog from '$lib/components/ui/InputDialog.svelte';
 
   const locale = $derived(i18n.locale);
-  const t = (key: string, vars = {}) => translate(locale, key as any, vars);
+  const t = (key: string, vars = {}) => translate(locale, key as I18nKey, vars);
 
   let rules = $derived(settings.state.siteRules);
 
@@ -66,7 +66,10 @@
         symbols: true,
         ambiguous: false,
         similar: false,
-        pronounceable: false
+        pronounceable: false,
+        mode: 'password',
+        wordCount: 4,
+        separator: '-'
       }
     };
 
@@ -108,7 +111,7 @@
               <div class="flex flex-wrap items-start justify-between gap-2">
                 <div class="flex-1">
                   <p class="text-foreground text-sm font-semibold break-all">{rule.url}</p>
-                  <p class="text-muted-foreground text-xs line-clamp-2">{rule.desc}</p>
+                  <p class="text-muted-foreground line-clamp-2 text-xs">{rule.desc}</p>
                 </div>
                 <div class="flex items-center gap-1">
                   <Button

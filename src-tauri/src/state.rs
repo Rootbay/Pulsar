@@ -10,7 +10,7 @@ pub struct ClipboardPolicyState {
     pub integration_enabled: bool,
     pub block_history: bool,
     pub only_unlocked: bool,
-    pub clear_after_duration: u64, // seconds
+    pub clear_after_duration: u64,
     pub prior_history_setting: Option<u32>,
     pub clear_task_handle: Option<tokio::task::JoinHandle<()>>,
 }
@@ -21,7 +21,7 @@ impl Default for ClipboardPolicyState {
             integration_enabled: true,
             block_history: false,
             only_unlocked: true,
-            clear_after_duration: 30, // Default 30s
+            clear_after_duration: 30,
             prior_history_setting: None,
             clear_task_handle: None,
         }

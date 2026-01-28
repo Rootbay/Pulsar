@@ -6,25 +6,26 @@
   "build": {
     "beforeDevCommand": "bun dev",
     "devUrl": "http://localhost:1420",
-    "beforeBuildCommand": "bun build",
+    "beforeBuildCommand": "bun run build",
     "frontendDist": "../build"
   },
   "app": {
     "windows": [
       {
+        "label": "main",
         "title": "Pulsar",
         "width": 1150,
         "height": 650
       }
     ],
-    "plugins": {
-      "updater": {
-        "endpoints": ["https://github.com/xeintdm/pulsar/releases/latest/download/latest.json"],
-        "pubkey": "RWSvz7FCGHfoSFYKYNVLIH7vD5fHayDBth9GtjlApOE//1P7fDHm7Ejv"
-      }
-    },
     "security": {
       "csp": "default-src 'self' asset:; img-src 'self' data: asset: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' ipc: http://localhost:1420 ws://localhost:1420; font-src 'self' data:; media-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'none'; frame-ancestors 'none'"
+    }
+  },
+  "plugins": {
+    "updater": {
+      "endpoints": ["https://github.com/xeintdm/pulsar/releases/latest/download/latest.json"],
+      "pubkey": "RWSvz7FCGHfoSFYKYNVLIH7vD5fHayDBth9GtjlApOE//1P7fDHm7Ejv"
     }
   },
   "bundle": {

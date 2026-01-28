@@ -35,10 +35,10 @@
   import { quintOut } from 'svelte/easing';
   import { exportVaultBackup, importVaultBackup, notifyVaultRefresh } from '$lib/utils/backup';
   import type { ImportVaultProgressStage } from '$lib/utils/backup';
-  import { i18n, t as translate, type Locale } from '$lib/i18n.svelte';
+  import { i18n, t as translate, type I18nKey, type Locale } from '$lib/i18n.svelte';
 
   const locale = $derived(i18n.locale);
-  const t = (key: string, vars = {}) => translate(locale, key as any, vars);
+  const t = (key: string, vars = {}) => translate(locale, key as I18nKey, vars);
   const isDev = import.meta.env.DEV;
 
   let backupSettings = $derived(settings.state.backup);
@@ -49,7 +49,7 @@
     { value: 'custom', label: 'Custom interval' }
   ];
 
-  function getFrequencyLabel(value: string, locale: Locale): string {
+  function getFrequencyLabel(value: string, _locale: Locale): string {
     if (value === 'daily') return t('Daily (Default)');
     if (value === 'weekly') return t('Weekly');
     if (value === 'custom') return t('Custom interval');

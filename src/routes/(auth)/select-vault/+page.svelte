@@ -9,7 +9,7 @@
   import { addRecentDatabase, removeRecentDatabase } from '$lib/stores/recentDatabases.svelte';
   import { importVaultBackup, notifyVaultRefresh } from '$lib/utils/backup';
   import type { ImportVaultProgressStage } from '$lib/utils/backup';
-  import { i18n, t as translate } from '$lib/i18n.svelte';
+  import { i18n, t as translate, type I18nKey } from '$lib/i18n.svelte';
   import { Spinner } from '$lib/components/ui/spinner/index.js';
   import { Button } from '$lib/components/ui/button';
 
@@ -24,7 +24,7 @@
   } from '@lucide/svelte';
 
   let locale = $derived(i18n.locale);
-  const t = (key: string, vars = {}) => translate(locale, key as any, vars);
+  const t = (key: string, vars = {}) => translate(locale, key as I18nKey, vars);
 
   let error = $state<string | null>(null);
   let importMessage = $state<string | null>(null);
@@ -130,7 +130,7 @@
       });
 
       if (picked) {
-        const path = typeof picked === 'string' ? picked : (picked as any).path;
+        const path = typeof picked === 'string' ? picked : (picked as Record<string, unknown>).path;
         if (typeof path === 'string') {
           await loadAndCheckDatabase(path);
         } else {

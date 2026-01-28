@@ -1,6 +1,7 @@
 <script lang="ts">
   import { settings } from '$lib/stores/appSettings.svelte';
   import type { AutofillSettings } from '$lib/config/settings';
+  import { callBackend } from '$lib/utils/backend';
   import { Button } from '$lib/components/ui/button';
   import {
     Card,
@@ -11,11 +12,11 @@
   } from '$lib/components/ui/card';
   import { Switch } from '$lib/components/ui/switch';
   import { TriangleAlert, CircleCheck, Play, CircleX } from '@lucide/svelte';
-  import { i18n, t as translate, type Locale } from '$lib/i18n.svelte';
+  import { i18n, t as translate, type I18nKey, type Locale } from '$lib/i18n.svelte';
   import { toast } from '$lib/components/ui/sonner';
 
   const locale = $derived(i18n.locale);
-  const t = (key: string, vars = {}) => translate(locale, key as any, vars);
+  const t = (key: string, vars = {}) => translate(locale, key as I18nKey, vars);
 
   let currentSettings = $derived(settings.state.autofill);
   let browserAutofill = $derived(currentSettings.browserAutofill);
@@ -34,20 +35,16 @@
     toast.info(t('Auto-type simulation started.'), {
       description: t('Please focus a text field. Simulation will start in 2 seconds.')
     });
-    
+
     testResults = [];
-    
+
     try {
       await callBackend('simulate_autotype');
       toast.success(t('Auto-type simulation completed.'));
-      testResults = [
-        { message: 'Keystroke simulation: Success', status: 'success' }
-      ];
-    } catch (error) {
+      testResults = [{ message: 'Keystroke simulation: Success', status: 'success' }];
+    } catch (_error) {
       toast.error(t('Auto-type simulation failed.'));
-      testResults = [
-        { message: 'Keystroke simulation: Failed', status: 'failure' }
-      ];
+      testResults = [{ message: 'Keystroke simulation: Failed', status: 'failure' }];
     }
   }
 

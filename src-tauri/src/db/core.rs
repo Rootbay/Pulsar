@@ -1,7 +1,6 @@
-use sqlx::SqlitePool;
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
+use sqlx::SqlitePool;
 use std::path::{Path, PathBuf};
-use tokio::fs;
 use std::env;
 use zeroize::Zeroize;
 

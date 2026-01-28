@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
   import { settings } from '$lib/stores/appSettings.svelte';
   import type { GeneratorSettings, PasswordPreset } from '$lib/config/settings';
   import { Button } from '$lib/components/ui/button';
@@ -15,19 +14,8 @@
   import { Progress } from '$lib/components/ui/progress';
   import { Select, SelectContent, SelectItem, SelectTrigger } from '$lib/components/ui/select';
   import { cn } from '$lib/utils';
-  import {
-    Copy,
-    FileText,
-    Key,
-    ListChecks,
-    Pencil,
-    RefreshCcw,
-    RotateCcw,
-    Save,
-    Sparkles,
-    Trash2
-  } from '@lucide/svelte';
-  import { i18n, t as translate } from '$lib/i18n.svelte';
+  import { Copy, Key, RefreshCcw, RotateCcw, Save, Sparkles } from '@lucide/svelte';
+  import { i18n, t as translate, type I18nKey } from '$lib/i18n.svelte';
   import { copyText } from '$lib/utils/copyHelper';
   import InputDialog from '$lib/components/ui/InputDialog.svelte';
 
@@ -50,13 +38,16 @@
     symbols: true,
     ambiguous: false,
     similar: false,
-    pronounceable: false
+    pronounceable: false,
+    mode: 'password',
+    wordCount: 4,
+    separator: '-'
   };
 
   type StrengthLevel = 'weak' | 'medium' | 'strong';
 
   const locale = $derived(i18n.locale);
-  const t = (key: string, vars = {}) => translate(locale, key as any, vars);
+  const t = (key: string, vars = {}) => translate(locale, key as I18nKey, vars);
 
   const STRENGTH_META: Record<
     StrengthLevel,
@@ -127,7 +118,6 @@
   ];
 
   let presets = $derived(settings.state.passwordPresets);
-  let rules = $derived(settings.state.siteRules);
   let passwordLength = $derived(settings.state.generator.passwordLength);
   let options = $derived(settings.state.generator.options);
 
@@ -142,7 +132,15 @@
   let strengthEntropy = $state(0);
   let strengthLevel = $state<StrengthLevel>('weak');
 
+  const mode = $derived(settings.state.generator.options.mode || 'password');
+  const wordCount = $derived(settings.state.generator.options.wordCount || 4);
+  const separator = $derived(settings.state.generator.options.separator || '-');
+
   function refreshPassword() {
+    if (mode === 'passphrase') {
+      handleGenerate();
+      return;
+    }
     const poolSize = GeneratorService.getPoolSize(options);
     hasCharacterPool = poolSize > 0;
 
@@ -161,7 +159,11 @@
 
     generatedPassword = password;
     const poolSize = GeneratorService.getPoolSize(options);
-    strengthEntropy = GeneratorService.calculateEntropy(passwordLength, poolSize);
+    strengthEntropy = GeneratorService.calculateEntropy(
+      mode === 'passphrase' ? wordCount : passwordLength,
+      poolSize,
+      mode
+    );
 
     if (strengthEntropy < ENTROPY_WEAK_THRESHOLD) {
       strengthLevel = 'weak';
@@ -188,14 +190,18 @@
 
   function handleSavePreset(name: string) {
     const charSets: string[] = [];
-    if (options.uppercase) charSets.push('A-Z');
-    if (options.lowercase) charSets.push('a-z');
-    if (options.digits) charSets.push('0-9');
-    if (options.symbols) charSets.push('!@#$');
+    if (mode === 'passphrase') {
+      charSets.push(`${wordCount} words`);
+    } else {
+      if (options.uppercase) charSets.push('A-Z');
+      if (options.lowercase) charSets.push('a-z');
+      if (options.digits) charSets.push('0-9');
+      if (options.symbols) charSets.push('!@#$');
+    }
 
     const newPreset: PasswordPreset = {
       name,
-      length: passwordLength,
+      length: mode === 'passphrase' ? wordCount : passwordLength,
       charSet: charSets.join(', '),
       strength: strengthEntropy,
       settings: JSON.parse(JSON.stringify(options))
@@ -216,6 +222,21 @@
     settings.save();
   }
 
+  function updateWordCount(val: number) {
+    settings.state.generator.options.wordCount = val;
+    settings.save();
+  }
+
+  function updateSeparator(val: string) {
+    settings.state.generator.options.separator = val;
+    settings.save();
+  }
+
+  function handleModeChange(newMode: string) {
+    settings.state.generator.options.mode = newMode as 'password' | 'passphrase';
+    settings.save();
+  }
+
   function handlePresetSelect(name: string) {
     const preset = presets.find((p) => p.name === name);
     if (preset) {
@@ -225,23 +246,27 @@
   }
 
   function toggleOption(key: GeneratorOptionKey) {
-    settings.state.generator.options[key] = !settings.state.generator.options[key];
-    settings.save();
+    const val = settings.state.generator.options[key];
+    if (typeof val === 'boolean') {
+      (settings.state.generator.options as unknown as Record<GeneratorOptionKey, boolean>)[key] =
+        !val;
+      settings.save();
+    }
   }
 
   function applyPreset(preset: PasswordPreset) {
-    settings.state.generator.passwordLength = preset.length;
-    settings.state.generator.options = { ...preset.settings };
+    if (preset.settings.mode === 'passphrase') {
+      // Passphrase presets use wordCount from preset.length, handled by default merge
+    } else {
+      settings.state.generator.passwordLength = preset.length;
+    }
+    settings.state.generator.options = { ...DEFAULT_OPTIONS, ...preset.settings };
     settings.save();
   }
 
   $effect(() => {
     void passwordLength;
     void options;
-    refreshPassword();
-  });
-
-  onMount(() => {
     refreshPassword();
   });
 
@@ -261,7 +286,7 @@
 
 <div class="min-h-0 flex-1 space-y-6 px-6 py-8">
   <Card class="border-border/60 bg-card/80 supports-backdrop-filter:bg-card/70 backdrop-blur">
-    <CardHeader class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+    <CardHeader class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
       <div class="flex items-center gap-3">
         <div
           class="bg-primary/10 text-primary flex h-10 w-10 items-center justify-center rounded-full"
@@ -273,20 +298,35 @@
             {t('Password Generator')}
           </CardTitle>
           <CardDescription>
-            {t('Generate strong and secure passwords on demand.')}
+            {t('Generate strong and secure passwords or passphrases.')}
           </CardDescription>
         </div>
       </div>
-      <Badge variant="secondary" class="mt-2 w-fit sm:mt-0">
-        {t('Length')}&nbsp;{passwordLength}
-      </Badge>
+      <div class="flex flex-col gap-2 sm:items-end">
+        <Select type="single" value={mode} onValueChange={handleModeChange}>
+          <SelectTrigger class="w-40">
+            <span data-slot="select-value" class="truncate text-sm font-medium">
+              {mode === 'password' ? t('Password') : t('Passphrase')}
+            </span>
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="password">{t('Password')}</SelectItem>
+            <SelectItem value="passphrase">{t('Passphrase')}</SelectItem>
+          </SelectContent>
+        </Select>
+        <Badge variant="secondary" class="w-fit">
+          {mode === 'password' ? t('Length') : t('Words')}&nbsp;{mode === 'password'
+            ? passwordLength
+            : wordCount}
+        </Badge>
+      </div>
     </CardHeader>
 
     <CardContent class="space-y-6">
       <div class="border-border/60 bg-muted/10 space-y-3 rounded-xl border p-4">
         <div class="flex flex-wrap items-center justify-between gap-2">
           <p class="text-muted-foreground text-sm font-medium">
-            {t('Generated password')}
+            {mode === 'password' ? t('Generated password') : t('Generated passphrase')}
           </p>
           <Button
             type="button"
@@ -294,7 +334,7 @@
             size="sm"
             class="gap-2"
             onclick={handleGenerate}
-            disabled={!hasCharacterPool}
+            disabled={mode === 'password' && !hasCharacterPool}
           >
             <RefreshCcw class="size-4" aria-hidden="true" />
             {t('Generate new')}
@@ -362,23 +402,70 @@
 
       <div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
         <div class="space-y-4">
-          <div class="space-y-2">
-            <p class="text-foreground text-sm font-medium">
-              {t('Password length')}
-            </p>
-            <input
-              type="range"
-              min={LENGTH_MIN}
-              max={LENGTH_MAX}
-              value={passwordLength}
-              class="bg-muted accent-primary h-2 w-full cursor-pointer appearance-none rounded-full"
-              oninput={(event) => updateLength(Number((event.target as HTMLInputElement).value))}
-            />
-            <div class="text-muted-foreground flex justify-between text-xs">
-              <span>{LENGTH_MIN}</span>
-              <span>{LENGTH_MAX}</span>
+          {#if mode === 'password'}
+            <div class="space-y-2">
+              <p class="text-foreground text-sm font-medium">
+                {t('Password length')}
+              </p>
+              <input
+                type="range"
+                min={LENGTH_MIN}
+                max={LENGTH_MAX}
+                value={passwordLength}
+                class="bg-muted accent-primary h-2 w-full cursor-pointer appearance-none rounded-full"
+                oninput={(event) => updateLength(Number((event.target as HTMLInputElement).value))}
+              />
+              <div class="text-muted-foreground flex justify-between text-xs">
+                <span>{LENGTH_MIN}</span>
+                <span>{LENGTH_MAX}</span>
+              </div>
             </div>
-          </div>
+          {:else}
+            <div class="space-y-4">
+              <div class="space-y-2">
+                <p class="text-foreground text-sm font-medium">
+                  {t('Word count')}
+                </p>
+                <input
+                  type="range"
+                  min="3"
+                  max="12"
+                  value={wordCount}
+                  class="bg-muted accent-primary h-2 w-full cursor-pointer appearance-none rounded-full"
+                  oninput={(event) =>
+                    updateWordCount(Number((event.target as HTMLInputElement).value))}
+                />
+                <div class="text-muted-foreground flex justify-between text-xs">
+                  <span>3</span>
+                  <span>12</span>
+                </div>
+              </div>
+              <div class="space-y-2">
+                <p class="text-foreground text-sm font-medium">
+                  {t('Separator')}
+                </p>
+                <Select type="single" value={separator} onValueChange={updateSeparator}>
+                  <SelectTrigger class="w-full">
+                    <span data-slot="select-value" class="truncate text-sm">
+                      {separator === '-'
+                        ? t('Hyphen (-)')
+                        : separator === '.'
+                          ? t('Dot (.)')
+                          : separator === '_'
+                            ? t('Underscore (_)')
+                            : t('Space ( )')}
+                    </span>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="-">{t('Hyphen (-)')}</SelectItem>
+                    <SelectItem value=".">{t('Dot (.)')}</SelectItem>
+                    <SelectItem value="_">{t('Underscore (_)')}</SelectItem>
+                    <SelectItem value=" ">{t('Space ( )')}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          {/if}
 
           <div class="space-y-2">
             <p class="text-foreground text-sm font-medium">
@@ -409,37 +496,86 @@
           </div>
         </div>
 
+        {#if mode === 'password'}
+          <div class="space-y-4">
+            <p class="text-foreground text-sm font-semibold">
+              {t('Character options')}
+            </p>
+            <div class="space-y-3">
+              {#each CHARACTER_TOGGLES as option (option.key)}
+                <div
+                  class="border-border/60 bg-background/60 flex items-start justify-between gap-4 rounded-lg border px-4 py-3"
+                >
+                  <div>
+                    <p class="text-foreground text-sm font-medium">
+                      {option.key === 'uppercase'
+                        ? t('Include uppercase (A-Z)')
+                        : option.key === 'lowercase'
+                          ? t('Include lowercase (a-z)')
+                          : option.key === 'digits'
+                            ? t('Include digits (0-9)')
+                            : t('Include symbols (!@#$)')}
+                    </p>
+                    <p class="text-muted-foreground text-xs">
+                      {option.key === 'uppercase'
+                        ? t('Adds capital letters to the character pool.')
+                        : option.key === 'lowercase'
+                          ? t('Adds lowercase letters to the character pool.')
+                          : option.key === 'digits'
+                            ? t('Adds numeric characters to the password.')
+                            : t('Adds punctuation and symbol characters.')}
+                    </p>
+                  </div>
+                  <Switch
+                    checked={!!options[option.key]}
+                    aria-label={option.label}
+                    onCheckedChange={() => toggleOption(option.key)}
+                  />
+                </div>
+              {/each}
+            </div>
+          </div>
+        {:else}
+          <div class="flex h-full flex-col items-center justify-center p-6 text-center">
+            <Sparkles class="text-primary/20 mb-4 h-16 w-16" />
+            <p class="text-muted-foreground max-w-60 text-sm">
+              {t('Passphrases use random words to create secure but memorable secrets.')}
+            </p>
+          </div>
+        {/if}
+      </div>
+
+      {#if mode === 'password'}
         <div class="space-y-4">
-          <p class="text-foreground text-sm font-semibold">
-            {t('Character options')}
-          </p>
-          <div class="space-y-3">
-            {#each CHARACTER_TOGGLES as option (option.key)}
+          <div class="flex items-center gap-2">
+            <Sparkles class="text-muted-foreground size-4" aria-hidden="true" />
+            <p class="text-foreground text-sm font-semibold">
+              {t('Advanced options')}
+            </p>
+          </div>
+          <div class="grid gap-3 md:grid-cols-2">
+            {#each ADVANCED_TOGGLES as option (option.key)}
               <div
                 class="border-border/60 bg-background/60 flex items-start justify-between gap-4 rounded-lg border px-4 py-3"
               >
                 <div>
                   <p class="text-foreground text-sm font-medium">
-                    {option.key === 'uppercase'
-                      ? t('Include uppercase (A-Z)')
-                      : option.key === 'lowercase'
-                        ? t('Include lowercase (a-z)')
-                        : option.key === 'digits'
-                          ? t('Include digits (0-9)')
-                          : t('Include symbols (!@#$)')}
+                    {option.key === 'ambiguous'
+                      ? t('Avoid ambiguous characters')
+                      : option.key === 'similar'
+                        ? t('Exclude visually similar characters')
+                        : t('Pronounceable mode')}
                   </p>
                   <p class="text-muted-foreground text-xs">
-                    {option.key === 'uppercase'
-                      ? t('Adds capital letters to the character pool.')
-                      : option.key === 'lowercase'
-                        ? t('Adds lowercase letters to the character pool.')
-                        : option.key === 'digits'
-                          ? t('Adds numeric characters to the password.')
-                          : t('Adds punctuation and symbol characters.')}
+                    {option.key === 'ambiguous'
+                      ? t('Exclude characters like i, l, O, and 0.')
+                      : option.key === 'similar'
+                        ? t('Avoid characters that look alike in some fonts.')
+                        : t('Alternate vowels and consonants for readability.')}
                   </p>
                 </div>
                 <Switch
-                  checked={options[option.key]}
+                  checked={!!options[option.key]}
                   aria-label={option.label}
                   onCheckedChange={() => toggleOption(option.key)}
                 />
@@ -447,45 +583,7 @@
             {/each}
           </div>
         </div>
-      </div>
-
-      <div class="space-y-4">
-        <div class="flex items-center gap-2">
-          <Sparkles class="text-muted-foreground size-4" aria-hidden="true" />
-          <p class="text-foreground text-sm font-semibold">
-            {t('Advanced options')}
-          </p>
-        </div>
-        <div class="grid gap-3 md:grid-cols-2">
-          {#each ADVANCED_TOGGLES as option (option.key)}
-            <div
-              class="border-border/60 bg-background/60 flex items-start justify-between gap-4 rounded-lg border px-4 py-3"
-            >
-              <div>
-                <p class="text-foreground text-sm font-medium">
-                  {option.key === 'ambiguous'
-                    ? t('Avoid ambiguous characters')
-                    : option.key === 'similar'
-                      ? t('Exclude visually similar characters')
-                      : t('Pronounceable mode')}
-                </p>
-                <p class="text-muted-foreground text-xs">
-                  {option.key === 'ambiguous'
-                    ? t('Exclude characters like i, l, O, and 0.')
-                    : option.key === 'similar'
-                      ? t('Avoid characters that look alike in some fonts.')
-                      : t('Alternate vowels and consonants for readability.')}
-                </p>
-              </div>
-              <Switch
-                checked={options[option.key]}
-                aria-label={option.label}
-                onCheckedChange={() => toggleOption(option.key)}
-              />
-            </div>
-          {/each}
-        </div>
-      </div>
+      {/if}
     </CardContent>
   </Card>
 </div>

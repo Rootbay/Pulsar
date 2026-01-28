@@ -35,6 +35,9 @@ pub enum Error {
 
     #[error("Serialization error: {0}")]
     Serialization(#[from] serde_json::Error),
+
+    #[error("Tauri error: {0}")]
+    Tauri(#[from] tauri::Error),
 }
 
 impl Error {
@@ -51,6 +54,7 @@ impl Error {
             Error::InvalidPassword => "InvalidPassword",
             Error::Totp(_) => "Totp",
             Error::Serialization(_) => "Serialization",
+            Error::Tauri(_) => "Tauri",
         }
     }
 }

@@ -78,7 +78,9 @@ impl CryptoHelper {
     }
 
     pub fn decrypt_secret(&self, text: &str) -> Result<SecretString> {
-        Ok(SecretString::from_zeroized(self.session.decrypt_zeroized(text)?))
+        Ok(SecretString::from_zeroized(
+            self.session.decrypt_zeroized(text)?,
+        ))
     }
 
     pub fn decrypt_secret_opt(&self, text: Option<String>) -> Result<Option<SecretString>> {

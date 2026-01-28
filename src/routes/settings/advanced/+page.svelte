@@ -4,23 +4,23 @@
   import { toast } from '$lib/components/ui/sonner';
   import type { AdvancedSettings } from '$lib/config/settings';
   import { Button } from '$lib/components/ui/button';
-  import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '$lib/components/ui/card';
+  import {
+    Card,
+    CardContent,
+    CardDescription,
+    CardHeader,
+    CardTitle
+  } from '$lib/components/ui/card';
   import { Label } from '$lib/components/ui/label';
   import { Switch } from '$lib/components/ui/switch';
   import { Input } from '$lib/components/ui/input';
-  import { ShieldAlert, Gauge, TriangleAlert, X, ShieldCheck } from '@lucide/svelte';
-  import { i18n, t as translate } from '$lib/i18n.svelte';
+  import { ShieldAlert, Gauge, TriangleAlert, ShieldCheck } from '@lucide/svelte';
+  import { i18n, t as translate, type I18nKey } from '$lib/i18n.svelte';
   import { cn } from '$lib/utils';
-
-  interface Props {
-    onclose?: () => void;
-  }
-
-  let { onclose }: Props = $props();
 
   let currentSettings = $derived(settings.state.advanced);
   const locale = $derived(i18n.locale);
-  const t = (key: string, vars = {}) => translate(locale, key as any, vars);
+  const t = (key: string, vars = {}) => translate(locale, key as I18nKey, vars);
 
   type KdfPreset = AdvancedSettings['kdfPreset'];
 
@@ -102,17 +102,6 @@
           {t('Adjust key-derivation hardness to balance security with unlock speed.')}
         </CardDescription>
       </div>
-      {#if onclose}
-        <Button
-          variant="ghost"
-          size="icon"
-          onclick={onclose}
-          aria-label="Close settings"
-          class="ml-auto"
-        >
-          <X size={20} />
-        </Button>
-      {/if}
     </CardHeader>
     <CardContent class="flex flex-col gap-6 pt-4">
       <div
@@ -249,7 +238,7 @@
           <Switch
             checked={currentSettings[toggle.key as 'lockMemoryPages' | 'secureMemoryAllocation']}
             aria-label={`Toggle ${toggle.title.toLowerCase()}`}
-            onCheckedChange={(v) => updateSetting(toggle.key as any, v)}
+            onCheckedChange={(v) => updateSetting(toggle.key as keyof AdvancedSettings, v)}
           />
         </div>
       {/each}

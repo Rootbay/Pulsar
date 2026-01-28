@@ -14,7 +14,7 @@
   import { Switch } from '$lib/components/ui/switch';
   import { cn } from '$lib/utils';
   import { Palette, Contrast, LayoutDashboard, Waves, Monitor } from '@lucide/svelte';
-  import { i18n, t as translate, type Locale } from '$lib/i18n.svelte';
+  import { i18n, t as translate, type I18nKey, type Locale } from '$lib/i18n.svelte';
 
   type ThemeOption = AppearanceSettings['theme'];
   type DensityOption = AppearanceSettings['pageDensity'];
@@ -23,7 +23,7 @@
   }[keyof AppearanceSettings];
 
   const locale = $derived(i18n.locale);
-  const t = (key: string, vars = {}) => translate(locale, key as any, vars);
+  const t = (key: string, vars = {}) => translate(locale, key as I18nKey, vars);
 
   const themeOptions: ThemeOption[] = ['system', 'light', 'dark'];
 
@@ -117,7 +117,7 @@
     applyChanges({ pageDensity: value });
   }
 
-  function getThemeLabel(value: ThemeOption, locale: Locale) {
+  function getThemeLabel(value: ThemeOption, _locale: Locale) {
     if (value === 'system') return t('System');
     if (value === 'light') return t('Light');
     if (value === 'dark') return t('Dark');

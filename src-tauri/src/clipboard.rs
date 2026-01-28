@@ -42,6 +42,7 @@ pub async fn copy_to_clipboard(
     app: tauri::AppHandle,
     state: tauri::State<'_, AppState>,
     text: String,
+    label: Option<String>,
 ) -> Result<()> {
     let mut policy = state.clipboard_policy.lock().await;
     
@@ -56,10 +57,24 @@ pub async fn copy_to_clipboard(
         }
     }
 
-    // Write to clipboard
+    {
+        let db_guard = state.db.lock().await;
+        let key_guard = state.key.lock().await;
+        if let (Some(pool), Some(key)) = (db_guard.as_ref(), key_guard.as_ref()) {
+            let details = label.as_ref().map(|l| format!("Copied {}", l));
+            let _ = crate::db::activity::log_activity_impl(
+                pool,
+                key.as_slice(),
+                "clipboard_copy",
+                None,
+                None,
+                details.as_deref(),
+            ).await;
+        }
+    }
+
     app.clipboard().write_text(text).map_err(|e| Error::Internal(e.to_string()))?;
 
-    // Cancel existing clear task
     if let Some(handle) = policy.clear_task_handle.take() {
         handle.abort();
     }

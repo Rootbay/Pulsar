@@ -862,7 +862,7 @@ pub async fn rotate_master_password(
         .busy_timeout(Duration::from_secs(30))
         .pragma("key", format!("\"x'{}'\"", hex_old_key));
     
-    let mut last_err: Option<Error> = None;
+    let mut _last_err: Option<Error> = None;
     for _ in 0..10 {
         match connect_with_timeout(&connect_options, Duration::from_secs(15)).await {
             Ok(mut conn) => {
@@ -879,21 +879,26 @@ pub async fn rotate_master_password(
                 
                 write_password_metadata(db_path.as_path(), &metadata, Some(new_key_z.as_slice()))
                     .await?;
-                last_err = None;
+                _last_err = None;
                 break;
             }
             Err(e) => {
-                last_err = Some(Error::Database(e));
+                _last_err = Some(Error::Database(e));
                 tokio::time::sleep(Duration::from_millis(1000)).await;
             }
         }
     }
     
-    if let Some(e) = last_err {
-        return Err(Error::Internal(format!("Failed to connect for master password rotation: {}", e)));
-    }
-
     finalize_unlock(&state, new_key_z.clone()).await?;
+
+    let _ = crate::db::activity::log_activity_impl(
+        &db_pool,
+        new_key_z.as_slice(),
+        "master_password_rotated",
+        None,
+        None,
+        Some("Master password was changed"),
+    ).await;
 
     Ok(())
 }
@@ -1068,6 +1073,15 @@ pub async fn update_argon2_params(
     }
 
     finalize_unlock(&state, new_key_z.clone()).await?;
+
+    let _ = crate::db::activity::log_activity_impl(
+        &db_pool,
+        new_key_z.as_slice(),
+        "argon2_params_updated",
+        None,
+        None,
+        Some("KDF parameters were updated"),
+    ).await;
 
     Ok(())
 }

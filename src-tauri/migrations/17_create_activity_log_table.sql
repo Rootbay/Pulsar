@@ -1,0 +1,1 @@
+﻿CREATE TABLE IF NOT EXISTS activity_log (id INTEGER PRIMARY KEY AUTOINCREMENT, event_type TEXT NOT NULL, item_id INTEGER, item_title TEXT, details TEXT, created_at TEXT DEFAULT (strftime('%Y-%m-%%dT%H:%M:%SZ', 'now')));

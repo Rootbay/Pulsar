@@ -4,7 +4,6 @@ use crate::types::Attachment;
 use crate::error::{Error, Result};
 use crate::db::utils::{get_key, get_db_pool};
 use tauri::State;
-use sqlx::Row;
 use chrono::Utc;
 use std::path::{Path, PathBuf};
 use tokio::fs;
@@ -69,7 +68,6 @@ pub async fn add_attachment(
         .await?
         .last_insert_rowid();
 
-    // Store encrypted data on disk
     let storage_path = attachments_dir.join(id.to_string());
     fs::write(storage_path, encrypted_data).await?;
 

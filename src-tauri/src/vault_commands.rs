@@ -5,10 +5,9 @@ use std::time::UNIX_EPOCH;
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
 use tauri::State;
-use tauri_plugin_store::StoreBuilder;
-
-use crate::state::AppState;
 use crate::error::{Error, Result};
+use crate::state::AppState;
+
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]

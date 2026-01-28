@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
   import { generalSettings } from '$lib/stores/general.svelte';
   import type { AppLanguage, GeneralSettings } from '$lib/config/settings';
   import KeyboardShortcutsPopup from '$lib/components/KeyboardShortcutsPopup.svelte';
@@ -14,14 +13,8 @@
   import { Label } from '$lib/components/ui/label';
   import { Select, SelectContent, SelectItem, SelectTrigger } from '$lib/components/ui/select';
   import { Switch } from '$lib/components/ui/switch';
-  import { Smartphone, Key, Lock, Settings, X } from '@lucide/svelte';
+  import { Smartphone, Key, Lock, Settings } from '@lucide/svelte';
   import { i18n, t as translate, type I18nKey } from '$lib/i18n.svelte';
-
-  interface Props {
-    onclose?: () => void;
-  }
-
-  let { onclose }: Props = $props();
 
   type BooleanSettingKey = {
     [K in keyof GeneralSettings]: GeneralSettings[K] extends boolean ? K : never;
@@ -162,11 +155,6 @@
           </CardDescription>
         </div>
       </div>
-      {#if onclose}
-        <Button variant="ghost" size="icon" onclick={onclose} aria-label="Close settings">
-          <X size={20} />
-        </Button>
-      {/if}
     </CardHeader>
     <CardContent class="flex flex-col gap-8 pt-4">
       <div class="grid gap-6 md:grid-cols-2">

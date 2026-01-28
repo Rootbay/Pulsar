@@ -12,11 +12,11 @@
   } from '$lib/components/ui/card';
   import { Progress } from '$lib/components/ui/progress';
   import { ListChecks, Pencil, Trash2, Plus } from '@lucide/svelte';
-  import { i18n, t as translate } from '$lib/i18n.svelte';
+  import { i18n, t as translate, type I18nKey } from '$lib/i18n.svelte';
 
   const MAX_ENTROPY_BITS = 128;
   const locale = $derived(i18n.locale);
-  const t = (key: string, vars = {}) => translate(locale, key as any, vars);
+  const t = (key: string, vars = {}) => translate(locale, key as I18nKey, vars);
 
   let presets = $derived(settings.state.passwordPresets);
 
@@ -70,7 +70,10 @@
         symbols: true,
         ambiguous: false,
         similar: false,
-        pronounceable: false
+        pronounceable: false,
+        mode: 'password',
+        wordCount: 4,
+        separator: '-'
       }
     };
 

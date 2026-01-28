@@ -31,7 +31,6 @@
     ShieldCheck,
     Lock,
     KeyRound,
-    Smartphone,
     Trash2,
     RefreshCw,
     FingerprintPattern,
@@ -46,25 +45,19 @@
     Link2,
     HardDrive
   } from '@lucide/svelte';
-  import { i18n, t as translate } from '$lib/i18n.svelte';
+  import { i18n, t as translate, type I18nKey } from '$lib/i18n.svelte';
   import type { SecuritySettings } from '$lib/config/settings';
   import { cn } from '$lib/utils';
   import { toast } from '$lib/components/ui/sonner';
   import { copyText } from '$lib/utils/copyHelper';
   import { clipboardService } from '$lib/utils/clipboardService.svelte';
 
+  import { securityDashboard } from '$lib/stores/security-dashboard.svelte';
+
   interface Argon2Params {
     memoryKib: number;
     timeCost: number;
     parallelism: number;
-  }
-
-  interface DeviceRecord {
-    id: string;
-    name: string;
-    kind: string;
-    lastSeen: string | null;
-    isCurrent: boolean;
   }
 
   type SecurityActionId = 'rekey' | 'wipe-memory' | 'integrity-check';
@@ -81,7 +74,7 @@
   const MIN_PASSWORD_LENGTH = 8;
 
   const locale = $derived(i18n.locale);
-  const t = (key: string, vars = {}) => translate(locale, key as any, vars);
+  const t = (key: string, vars = {}) => translate(locale, key as I18nKey, vars);
 
   let currentSettings = $derived(settings.state.security);
   let currentClipboardSettings = $derived(settings.state.clipboard);
@@ -123,10 +116,8 @@
     'integrity-check': false
   });
 
-  let healthReport = $state<{
-    reusedPasswords: { itemIds: number[]; count: number }[];
-    weakPasswordsCount: number;
-  } | null>(null);
+  let healthReport = $derived(securityDashboard.lastReport);
+  let problematicItems = $derived(securityDashboard.problematicItems);
   let healthLoading = $state(false);
   let healthError = $state<string | null>(null);
 
@@ -169,12 +160,21 @@
     healthLoading = true;
     healthError = null;
     try {
-      healthReport = await callBackend('get_security_report');
+      await securityDashboard.runAudit();
     } catch (error) {
       healthError = parseError(error);
     } finally {
       healthLoading = false;
     }
+  }
+
+  function navigateToItem(id: number) {
+    appState.requestedItemId = id;
+    appState.showSettingsPopup = false;
+  }
+
+  function getProblematicItem(id: number) {
+    return problematicItems.find((i) => i.id === id);
   }
 
   async function loadBiometricsStatus() {
@@ -476,7 +476,7 @@
       pendingProvisioningUri = null;
       totpVerificationCode = '';
       healthReport = null;
-      
+
       passwordModalOpen = false;
       kdfModalOpen = false;
       biometricModalOpen = false;
@@ -596,29 +596,6 @@
     showKdfPassword = !showKdfPassword;
   }
 
-  function getDeviceIcon(kind: string): typeof ShieldCheck {
-    switch (kind) {
-      case 'biometric':
-        return FingerprintPattern;
-      case 'device-key':
-      case 'key':
-        return Smartphone;
-      default:
-        return ShieldCheck;
-    }
-  }
-
-  function getDeviceTypeLabel(kind: string): string {
-    if (!kind) {
-      return 'Unknown';
-    }
-    return kind
-      .split(/[-_ ]+/)
-      .filter(Boolean)
-      .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
-      .join(' ');
-  }
-
   async function loadArgon2Params() {
     argon2Loading = true;
     try {
@@ -630,23 +607,6 @@
       toast.error(`Failed to load key derivation settings: ${parseError(error)}`);
     } finally {
       argon2Loading = false;
-    }
-  }
-
-  async function loadDevices() {
-    devicesLoading = true;
-    try {
-      const result = await callBackend<DeviceRecord[]>('list_devices');
-      devices = result.map((device) => ({
-        ...device,
-        kind: device.kind ?? 'unknown',
-        lastSeen: device.lastSeen ?? null
-      }));
-      deviceActionPending = {};
-    } catch (error) {
-      toast.error(`Failed to load devices: ${parseError(error)}`);
-    } finally {
-      devicesLoading = false;
     }
   }
 
@@ -759,39 +719,6 @@
     }
   }
 
-  async function removeDevice(device: DeviceRecord) {
-    deviceActionPending = { ...deviceActionPending, [device.id]: true };
-    try {
-      await callBackend('remove_device', { deviceId: device.id });
-      devices = devices.filter((entry) => entry.id !== device.id);
-      const updated = { ...deviceActionPending };
-      delete updated[device.id];
-      deviceActionPending = updated;
-      toast.success(`Removed ${device.name}.`);
-    } catch (error) {
-      deviceActionPending = { ...deviceActionPending, [device.id]: false };
-      toast.error(`Failed to remove device: ${parseError(error)}`);
-    }
-  }
-
-  async function revokeAllDevices() {
-    isRevokingDevices = true;
-    try {
-      await callBackend('revoke_all_devices');
-      devices = [];
-      deviceActionPending = {};
-      toast.success('All devices revoked.');
-    } catch (error) {
-      toast.error(`Failed to revoke devices: ${parseError(error)}`);
-    } finally {
-      isRevokingDevices = false;
-    }
-  }
-
-  function handlePairDevice() {
-    toast.info('Device pairing is not yet available. Stay tuned!');
-  }
-
   const argon2Summary = $derived(
     `Argon2id • memory ${formatArgonMemory(argon2Params.memoryKib)} • time cost ${argon2Params.timeCost} • parallelism ${argon2Params.parallelism}`
   );
@@ -888,9 +815,10 @@
         </Alert>
       {:else if healthReport}
         {@const reusedCount = healthReport.reusedPasswords.length}
-        {@const weakCount = healthReport.weakPasswordsCount}
+        {@const weakCount = healthReport.weakPasswords.length}
+        {@const breachedCount = healthReport.breachedPasswords.length}
 
-        <div class="grid gap-4 sm:grid-cols-2">
+        <div class="grid gap-4 sm:grid-cols-3">
           <div
             class={cn(
               'rounded-lg border p-4',
@@ -934,13 +862,37 @@
             </p>
             <p class="text-muted-foreground mt-1 text-xs">
               {weakCount > 0
-                ? t('Passwords shorter than 8 characters.')
+                ? t('Passwords with low security score.')
                 : t('No weak passwords detected.')}
+            </p>
+          </div>
+
+          <div
+            class={cn(
+              'rounded-lg border p-4',
+              breachedCount > 0
+                ? 'border-destructive/40 bg-destructive/5'
+                : 'border-border/60 bg-muted/20'
+            )}
+          >
+            <p class="text-sm font-semibold">{t('Breached Passwords')}</p>
+            <p
+              class={cn(
+                'mt-1 text-2xl font-bold',
+                breachedCount > 0 ? 'text-destructive' : 'text-foreground'
+              )}
+            >
+              {breachedCount}
+            </p>
+            <p class="text-muted-foreground mt-1 text-xs">
+              {breachedCount > 0
+                ? t('Known compromised credentials.')
+                : t('No breached passwords detected.')}
             </p>
           </div>
         </div>
 
-        {#if reusedCount > 0 || weakCount > 0}
+        {#if reusedCount > 0 || weakCount > 0 || breachedCount > 0}
           <div
             class="border-destructive/40 bg-destructive/10 text-destructive mt-4 flex items-start gap-3 rounded-lg border p-3 text-sm"
           >
@@ -950,6 +902,101 @@
                 'Security issues detected. Consider updating shared or short passwords to improve vault integrity.'
               )}
             </p>
+          </div>
+
+          <div class="mt-6 space-y-6">
+            {#if reusedCount > 0}
+              <div class="space-y-3">
+                <h4 class="flex items-center gap-2 text-sm font-semibold">
+                  <RefreshCw class="text-destructive h-4 w-4" />
+                  {t('Reused Password Groups')}
+                </h4>
+                <div class="grid gap-3">
+                  {#each healthReport.reusedPasswords as group (group.passwordHash)}
+                    <div class="border-border/40 bg-muted/10 rounded-lg border p-3">
+                      <div class="mb-2 flex items-center justify-between">
+                        <span class="text-muted-foreground font-mono text-xs">
+                          {group.passwordHash.slice(0, 8)}...
+                        </span>
+                        <Badge variant="outline" class="text-[10px]">{group.count} items</Badge>
+                      </div>
+                      <div class="space-y-2">
+                        {#each group.itemIds as itemId (itemId)}
+                          {@const item = getProblematicItem(itemId)}
+                          {#if item}
+                            <div class="group flex items-center justify-between">
+                              <span class="text-sm">{item.title}</span>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                class="h-7 px-2 opacity-0 transition-opacity group-hover:opacity-100"
+                                onclick={() => navigateToItem(item.id)}
+                              >
+                                {t('View')}
+                              </Button>
+                            </div>
+                          {/if}
+                        {/each}
+                      </div>
+                    </div>
+                  {/each}
+                </div>
+              </div>
+            {/if}
+
+            {#if weakCount > 0}
+              <div class="space-y-3">
+                <h4 class="flex items-center gap-2 text-sm font-semibold">
+                  <TriangleAlert class="text-warning-foreground h-4 w-4" />
+                  {t('Weak Passwords')}
+                </h4>
+                <div class="border-border/40 divide-border/40 divide-y rounded-lg border">
+                  {#each healthReport.weakPasswords as itemId (itemId)}
+                    {@const item = getProblematicItem(itemId)}
+                    {#if item}
+                      <div class="group flex items-center justify-between p-3">
+                        <span class="text-sm">{item.title}</span>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          class="h-7 px-2 opacity-0 transition-opacity group-hover:opacity-100"
+                          onclick={() => navigateToItem(item.id)}
+                        >
+                          {t('View')}
+                        </Button>
+                      </div>
+                    {/if}
+                  {/each}
+                </div>
+              </div>
+            {/if}
+
+            {#if breachedCount > 0}
+              <div class="space-y-3">
+                <h4 class="flex items-center gap-2 text-sm font-semibold">
+                  <ShieldCheck class="text-destructive h-4 w-4" />
+                  {t('Breached Passwords')}
+                </h4>
+                <div class="border-border/40 divide-border/40 divide-y rounded-lg border">
+                  {#each healthReport.breachedPasswords as itemId (itemId)}
+                    {@const item = getProblematicItem(itemId)}
+                    {#if item}
+                      <div class="group flex items-center justify-between p-3">
+                        <span class="text-sm">{item.title}</span>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          class="h-7 px-2 opacity-0 transition-opacity group-hover:opacity-100"
+                          onclick={() => navigateToItem(item.id)}
+                        >
+                          {t('View')}
+                        </Button>
+                      </div>
+                    {/if}
+                  {/each}
+                </div>
+              </div>
+            {/if}
           </div>
         {:else}
           <div
@@ -1623,7 +1670,7 @@
           onclick={async () => {
             try {
               await callBackend('open_app_data_folder');
-            } catch (error) {
+            } catch (_error) {
               toast.error(t('Failed to open app data folder'));
             }
           }}
@@ -1638,7 +1685,7 @@
             try {
               await callBackend('clear_app_logs');
               toast.success(t('Logs cleared successfully'));
-            } catch (error) {
+            } catch (_error) {
               toast.error(t('Failed to clear logs'));
             }
           }}

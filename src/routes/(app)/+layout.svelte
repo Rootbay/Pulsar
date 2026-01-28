@@ -60,6 +60,30 @@
     void loadPasswordItems();
   }
 
+  $effect(() => {
+    if (appState.requestedItemId !== null) {
+      const id = appState.requestedItemId;
+      appState.requestedItemId = null;
+
+      const item = vaultStore.items.find((i) => i.id === id);
+      if (item) {
+        handlePasswordSelected(item);
+      } else {
+        appState.selectedTag = null;
+        appState.filterCategory = 'all';
+        vaultStore.searchTerm = '';
+
+        tick().then(async () => {
+          await vaultStore.loadItems();
+          const reloadedItem = vaultStore.items.find((i) => i.id === id);
+          if (reloadedItem) {
+            handlePasswordSelected(reloadedItem);
+          }
+        });
+      }
+    }
+  });
+
   onMount(() => {
     if (typeof window !== 'undefined') {
       window.addEventListener('pulsar:reload-vault', handleVaultRefreshEvent);
@@ -221,20 +245,19 @@
     }
   }
 
-  async function handlePasswordEditRequested(item: PasswordItem) {
+  async function handlePasswordEditRequested(item: PasswordItemOverview) {
     if (!item || appState.isLocked) {
       return;
     }
 
-    if (!('password' in item)) {
-      await handlePasswordSelected(item);
-    } else {
-      selectedPasswordItem = item;
-    }
+    const fullItem = await vaultStore.getItemDetails(item.id);
+    if (!fullItem) return;
+
+    selectedPasswordItem = fullItem;
 
     await tick();
 
-    await passwordListRef?.focusItem?.(item.id ?? null);
+    await passwordListRef?.focusItem?.(item.id);
     passwordDetailRef?.enterEditMode?.();
   }
 
@@ -304,7 +327,7 @@
     class="bg-background/80 fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-sm sm:p-8"
   >
     <div class="max-h-full w-full max-w-4xl overflow-y-auto rounded-2xl shadow-2xl">
-      <Settings onclose={() => (appState.showSettingsPopup = false)} />
+      <Settings />
     </div>
   </div>
 {/if}

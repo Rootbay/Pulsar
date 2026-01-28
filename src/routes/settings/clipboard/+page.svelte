@@ -15,7 +15,7 @@
   import { cn } from '$lib/utils';
   import type { ClipboardSettings } from '$lib/config/settings';
   import { settings } from '$lib/stores/appSettings.svelte';
-  import { i18n, t as translate } from '$lib/i18n.svelte';
+  import { i18n, t as translate, type I18nKey } from '$lib/i18n.svelte';
   import { clipboardService } from '$lib/utils/clipboardService.svelte';
   import {
     CircleCheck,
@@ -29,7 +29,7 @@
   import { toast } from '$lib/components/ui/sonner';
 
   const locale = $derived(i18n.locale);
-  const t = (key: string, vars = {}) => translate(locale, key as any, vars);
+  const t = (key: string, vars = {}) => translate(locale, key as I18nKey, vars);
 
   let currentSettings = $derived(settings.state.clipboard);
   let showAuditLog = $state(false);

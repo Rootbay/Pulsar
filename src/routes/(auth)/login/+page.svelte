@@ -1,4 +1,4 @@
-﻿<script lang="ts">
+<script lang="ts">
   import { browser } from '$app/environment';
   import { goto } from '$app/navigation';
   import { callBackend } from '$lib/utils/backend';
@@ -73,7 +73,6 @@
         appState.totpVerified = true;
         appState.isLocked = false;
 
-        // Set default view
         const defaultView = settings.state.general.defaultViewOnOpen;
         if (defaultView === 'recent') {
           appState.filterCategory = 'recent';
@@ -133,7 +132,6 @@
         appState.totpVerified = true;
         appState.isLocked = false;
 
-        // Set default view
         const defaultView = settings.state.general.defaultViewOnOpen;
         if (defaultView === 'recent') {
           appState.filterCategory = 'recent';

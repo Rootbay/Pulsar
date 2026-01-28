@@ -1,5 +1,5 @@
 use crate::state::AppState;
-use crate::types::{PasswordItem, PasswordItemOverview, SecretString, CustomField, Attachment};
+use crate::types::{PasswordItem, PasswordItemOverview, CustomField, Attachment};
 use crate::error::{Error, Result};
 use crate::db::utils::{get_key, get_db_pool, CryptoHelper};
 use tauri::State;
@@ -149,7 +149,7 @@ async fn sync_item_tags(
             sqlx::query("INSERT OR IGNORE INTO item_tags (item_id, tag_id) VALUES (?, ?)")
                 .bind(item_id)
                 .bind(button.id)
-                .execute(&mut **tx)
+                .execute(tx.as_mut())
                 .await?;
         }
     }
@@ -166,12 +166,12 @@ async fn sync_search_indices(
 ) -> Result<()> {
     sqlx::query("DELETE FROM search_indices WHERE item_id = ?")
         .bind(item_id)
-        .execute(&mut **tx)
+        .execute(tx.as_mut())
         .await?;
-    
+
     sqlx::query("DELETE FROM search_trigrams WHERE item_id = ?")
         .bind(item_id)
-        .execute(&mut **tx)
+        .execute(tx.as_mut())
         .await?;
 
     let mut all_searchable_text = title.to_string();
@@ -180,14 +180,13 @@ async fn sync_search_indices(
         all_searchable_text.push_str(uname);
     }
 
-    // Full tokens for exact match
     let title_token = helper.generate_search_token(title);
     if !title_token.is_empty() {
         sqlx::query("INSERT INTO search_indices (item_id, field_name, token) VALUES (?, ?, ?)")
             .bind(item_id)
             .bind("title")
             .bind(title_token)
-            .execute(&mut **tx)
+            .execute(tx.as_mut())
             .await?;
     }
 
@@ -198,18 +197,17 @@ async fn sync_search_indices(
                 .bind(item_id)
                 .bind("username")
                 .bind(uname_token)
-                .execute(&mut **tx)
+                .execute(tx.as_mut())
                 .await?;
         }
     }
 
-    // Trigrams for partial match
     let trigrams = helper.generate_trigram_hashes(&all_searchable_text);
     for hash in trigrams {
         sqlx::query("INSERT OR IGNORE INTO search_trigrams (item_id, trigram_hash) VALUES (?, ?)")
             .bind(item_id)
             .bind(hash)
-            .execute(&mut **tx)
+            .execute(tx.as_mut())
             .await?;
     }
 
@@ -252,11 +250,10 @@ pub async fn search_password_items(
     if !query_trimmed.is_empty() {
         sql.push_str(if tag_id.is_some() { " AND " } else { " WHERE " });
         
-        let token = helper.generate_search_token(query_trimmed);
+        let _token = helper.generate_search_token(query_trimmed);
         let trigrams = helper.generate_trigram_hashes(query_trimmed);
         
         if trigrams.len() >= 2 {
-            // Trigram partial match: item must contain at least 60% of query trigrams
             let threshold = (trigrams.len() as f64 * 0.6).ceil() as usize;
             sql.push_str(&format!(
                 "p.id IN (
@@ -269,7 +266,6 @@ pub async fn search_password_items(
                 threshold
             ));
         } else {
-            // Exact token match for very short queries
             sql.push_str("p.id IN (SELECT item_id FROM search_indices WHERE token = ?)");
         }
     }
@@ -305,6 +301,40 @@ pub async fn get_password_overviews(state: State<'_, AppState>) -> Result<Vec<Pa
     let key = get_key(&state).await?;
     let db_pool = get_db_pool(&state).await?;
     get_password_overviews_impl(&db_pool, key.as_slice()).await
+}
+
+#[tauri::command]
+pub async fn get_password_overviews_by_ids(
+    state: State<'_, AppState>,
+    ids: Vec<i64>,
+) -> Result<Vec<PasswordItemOverview>> {
+    if ids.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let key = get_key(&state).await?;
+    let db_pool = get_db_pool(&state).await?;
+    let helper = CryptoHelper::new(key.as_slice())?;
+
+    let placeholders = ids.iter().map(|_| "?").collect::<Vec<_>>().join(", ");
+    let sql = format!(
+        "SELECT id, category, title, description, img, tags, username, url, created_at, updated_at, color 
+         FROM password_items WHERE id IN ({})",
+        placeholders
+    );
+
+    let mut q = sqlx::query(&sql);
+    for id in ids {
+        q = q.bind(id);
+    }
+
+    let rows = q.fetch_all(&db_pool).await?;
+    let mut items = Vec::with_capacity(rows.len());
+    for row in rows {
+        items.push(decrypt_password_item_overview_row(&row, &helper)?);
+    }
+
+    Ok(items)
 }
 
 pub async fn get_password_items_impl(db_pool: &SqlitePool, key: &[u8]) -> Result<Vec<PasswordItem>> {
@@ -346,7 +376,7 @@ pub async fn save_password_item(
     let tags_enc = helper.encrypt_opt(item.tags.as_ref())?;
     let username_enc = helper.encrypt_opt(item.username.as_ref())?;
     let url_enc = helper.encrypt_opt(item.url.as_ref())?;
-    let notes_enc = helper.encrypt_opt(item.notes.as_ref())?;
+    let notes_enc = helper.encrypt_opt(item.notes.as_ref().map(|v| &**v))?;
     let password_enc = helper.encrypt(item.password.as_str())?;
     let totp_secret_enc = item.totp_secret.as_ref()
         .map(|s| helper.encrypt(s.as_str()))
@@ -377,12 +407,21 @@ pub async fn save_password_item(
         .bind(totp_secret_enc)
         .bind(custom_fields_enc)
         .bind(field_order_enc)
-        .execute(&mut *tx)
+        .execute(tx.as_mut())
         .await?
         .last_insert_rowid();
 
     sync_item_tags(&mut tx, item_id, item.tags.as_ref(), key.as_slice()).await?;
     sync_search_indices(&mut tx, item_id, &helper, &item.title, item.username.as_ref()).await?;
+
+    let _ = crate::db::activity::log_activity_impl(
+        tx.as_mut(),
+        key.as_slice(),
+        "item_created",
+        Some(item_id),
+        Some(&item.title),
+        Some("New password item created"),
+    ).await;
 
     tx.commit().await?;
     Ok(item_id)
@@ -406,7 +445,7 @@ pub async fn update_password_item(
     let tags_enc = helper.encrypt_opt(item.tags.as_ref())?;
     let username_enc = helper.encrypt_opt(item.username.as_ref())?;
     let url_enc = helper.encrypt_opt(item.url.as_ref())?;
-    let notes_enc = helper.encrypt_opt(item.notes.as_ref())?;
+    let notes_enc = helper.encrypt_opt(item.notes.as_ref().map(|v| &**v))?;
     let password_enc = helper.encrypt(item.password.as_str())?;
     let totp_secret_enc = item.totp_secret.as_ref()
         .map(|s| helper.encrypt(s.as_str()))
@@ -437,11 +476,20 @@ pub async fn update_password_item(
         .bind(custom_fields_enc)
         .bind(field_order_enc)
         .bind(item.id)
-        .execute(&mut *tx)
+        .execute(tx.as_mut())
         .await?;
 
     sync_item_tags(&mut tx, item.id, item.tags.as_ref(), key.as_slice()).await?;
     sync_search_indices(&mut tx, item.id, &helper, &item.title, item.username.as_ref()).await?;
+
+    let _ = crate::db::activity::log_activity_impl(
+        tx.as_mut(),
+        key.as_slice(),
+        "item_updated",
+        Some(item.id),
+        Some(&item.title),
+        Some("Password item updated"),
+    ).await;
 
     tx.commit().await?;
     Ok(())
@@ -449,9 +497,17 @@ pub async fn update_password_item(
 
 #[tauri::command]
 pub async fn delete_password_item(state: State<'_, AppState>, id: i64) -> Result<()> {
-    get_key(&state).await?;
+    let key = get_key(&state).await?;
     let db_pool = get_db_pool(&state).await?;
     
+    let title_enc: Option<String> = sqlx::query_scalar("SELECT title FROM password_items WHERE id = ?")
+        .bind(id)
+        .fetch_optional(&db_pool)
+        .await?;
+    
+    let helper = CryptoHelper::new(key.as_slice())?;
+    let title = title_enc.and_then(|t| helper.decrypt(&t).ok());
+
     let mut tx = db_pool.begin().await?;
 
     sqlx::query("DELETE FROM attachments WHERE item_id = ?")
@@ -461,9 +517,18 @@ pub async fn delete_password_item(state: State<'_, AppState>, id: i64) -> Result
 
     sqlx::query("DELETE FROM password_items WHERE id = ?")
         .bind(id)
-        .execute(&mut *tx)
+        .execute(tx.as_mut())
         .await?;
     
+    let _ = crate::db::activity::log_activity_impl(
+        tx.as_mut(),
+        key.as_slice(),
+        "item_deleted",
+        Some(id),
+        title.as_deref(),
+        Some("Password item deleted"),
+    ).await;
+
     tx.commit().await?;
     Ok(())
 }
@@ -589,7 +654,6 @@ pub async fn remove_tag_from_password_items(
 
     let mut tx = db_pool.begin().await?;
     
-    // 1. Find the tag ID
     let tag_id: Option<i64> = sqlx::query_scalar("SELECT id FROM buttons WHERE text = ?")
         .bind(helper.encrypt(&tag_trimmed)?)
         .fetch_optional(&mut *tx)
@@ -597,7 +661,6 @@ pub async fn remove_tag_from_password_items(
 
     let Some(tag_id) = tag_id else { return Ok(0); };
 
-    // 2. Get all item IDs that have this tag
     let item_ids: Vec<i64> = sqlx::query_scalar("SELECT item_id FROM item_tags WHERE tag_id = ?")
         .bind(tag_id)
         .fetch_all(&mut *tx)
@@ -605,13 +668,11 @@ pub async fn remove_tag_from_password_items(
 
     let updated_count = item_ids.len() as i64;
 
-    // 3. Remove from junction table
     sqlx::query("DELETE FROM item_tags WHERE tag_id = ?")
         .bind(tag_id)
         .execute(&mut *tx)
         .await?;
 
-    // 4. Update legacy tags column for affected items
     let now = Utc::now().to_rfc3339();
     for id in item_ids {
         let tags_enc: Option<String> = sqlx::query_scalar("SELECT tags FROM password_items WHERE id = ?")
@@ -651,8 +712,6 @@ pub async fn rename_tag_in_password_items(
 
     let mut tx = db_pool.begin().await?;
 
-    // 1. Find the tag ID (the ID itself doesn't change when we rename the text in 'buttons' table,
-    // but here we are renaming the text in the items' legacy tags column)
     let tag_id: Option<i64> = sqlx::query_scalar("SELECT id FROM buttons WHERE text = ?")
         .bind(helper.encrypt(&old_trimmed)?)
         .fetch_optional(&mut *tx)
@@ -660,7 +719,6 @@ pub async fn rename_tag_in_password_items(
 
     let Some(tag_id) = tag_id else { return Ok(0); };
 
-    // 2. Get affected items
     let item_ids: Vec<i64> = sqlx::query_scalar("SELECT item_id FROM item_tags WHERE tag_id = ?")
         .bind(tag_id)
         .fetch_all(&mut *tx)
@@ -668,7 +726,6 @@ pub async fn rename_tag_in_password_items(
 
     let updated_count = item_ids.len() as i64;
 
-    // 3. Update legacy tags column for affected items
     let now = Utc::now().to_rfc3339();
     for id in item_ids {
         let tags_enc: Option<String> = sqlx::query_scalar("SELECT tags FROM password_items WHERE id = ?")

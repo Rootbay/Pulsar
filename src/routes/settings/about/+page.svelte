@@ -26,6 +26,7 @@
   import { onMount } from 'svelte';
   import { toast } from 'svelte-sonner';
   import { callBackend } from '$lib/utils/backend';
+  import type { SecurityReport } from '$lib/stores/security-dashboard.svelte';
 
   type UpdateStatus = 'idle' | 'checking' | 'uptoDate' | 'updateAvailable';
   type IconComponent = typeof FileText;
@@ -102,8 +103,8 @@
               try {
                 await update.downloadAndInstall();
                 toast.success(t('Update installed successfully. Please restart the app.'));
-              } catch (e) {
-                console.error('Failed to install update:', e);
+              } catch (_e) {
+                console.error('Failed to install update:', _e);
                 toast.error(t('Failed to install update'));
               }
             }
@@ -144,29 +145,34 @@
 
   async function handleDiagnosticUpload() {
     if (!uploadDiagnostics) return;
-    
+
     const id = toast.loading(t('Preparing diagnostics…'));
     try {
       const version = await getVersion();
       const tauriVer = await getTauriVersion();
-      const report = await callBackend('get_security_report');
-      
+      const report = await callBackend<SecurityReport>('get_security_report');
+
       const payload = {
         version,
         tauriVer,
         os: window.navigator.platform,
         reportSummary: {
-          reused: (report as any).reusedPasswords.length,
-          weak: (report as any).weakPasswordsCount
+          reused: report.reusedPasswords.length,
+          weak: report.weakPasswords.length
         },
         timestamp: new Date().toISOString()
       };
-      
+
       console.log('Diagnostics ready for upload:', payload);
-      await new Promise(r => setTimeout(r, 2000));
-      
-      toast.success(t('Diagnostics uploaded successfully. Reference ID: {id}', { id: Math.random().toString(36).substring(7).toUpperCase() }), { id });
-    } catch (e) {
+      await new Promise((r) => setTimeout(r, 2000));
+
+      toast.success(
+        t('Diagnostics uploaded successfully. Reference ID: {id}', {
+          id: Math.random().toString(36).substring(7).toUpperCase()
+        }),
+        { id }
+      );
+    } catch (_e) {
       toast.error(t('Failed to upload diagnostics'), { id });
     } finally {
       uploadDiagnostics = false;

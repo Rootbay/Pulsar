@@ -5,7 +5,8 @@ use rand::{rngs::OsRng, RngCore};
 use crate::error::{Error, Result};
 use crate::encryption::{encrypt, decrypt};
 
-pub use system::simulate_autotype;
+pub mod system;
+pub use system::*;
 
 const SETTINGS_KEYRING_SERVICE: &str = "pulsar-settings";
 const SETTINGS_KEYRING_USER: &str = "encryption-key";

@@ -195,14 +195,14 @@ pub async fn export_vault_backend(
     let salt_clone = salt.to_vec();
     let passphrase_clone = passphrase_value.clone();
     
-    let mut export_key = tauri::async_runtime::spawn_blocking(move || {
+    let export_key = tauri::async_runtime::spawn_blocking(move || {
         let params = Params::new(64 * 1024, 3, 1, None).map_err(|e| Error::Internal(e.to_string()))?;
         let argon2 = Argon2::new(Algorithm::Argon2id, Version::V0x13, params);
         let mut key = [0u8; 32];
         argon2
             .hash_password_into(passphrase_clone.as_bytes(), &salt_clone, &mut key)
             .map_err(|e| Error::Internal(format!("KDF failed: {}", e)))?;
-        Ok(key)
+        Ok::<[u8; 32], Error>(key)
     })
     .await
     .map_err(|e| Error::Internal(format!("Runtime error: {}", e)))??;
@@ -215,8 +215,6 @@ pub async fn export_vault_backend(
         .encrypt(XNonce::from_slice(&nonce), vault_data.as_bytes())
         .map_err(|e| Error::Encryption(format!("Encryption failed: {}", e)))?;
 
-    export_key.zeroize();
-
     let export = ExportPayload {
         version: 2,
         salt_b64: general_purpose::STANDARD.encode(salt),
@@ -227,6 +225,16 @@ pub async fn export_vault_backend(
     let export_bytes = serde_json::to_vec_pretty(&export)?;
 
     write_sensitive_bytes(&path, &export_bytes).await?;
+
+    let _ = crate::db::activity::log_activity_impl(
+        &db_pool,
+        key.as_slice(),
+        "vault_exported",
+        None,
+        None,
+        Some(&format!("Vault exported to {}", path.display())),
+    ).await;
+
     Ok(format!("Vault exported successfully to {}", path.display()))
 }
 
@@ -298,7 +306,7 @@ pub async fn export_vault(
         argon2
             .hash_password_into(passphrase_clone.as_bytes(), &salt_clone, &mut key)
             .map_err(|e| Error::Internal(format!("KDF failed: {e}")))?;
-        Ok(key)
+        Ok::<[u8; 32], Error>(key)
     })
     .await
     .map_err(|e| Error::Internal(format!("Runtime error: {}", e)))??;
@@ -389,7 +397,7 @@ pub async fn import_vault(
         argon2
             .hash_password_into(passphrase_clone.as_bytes(), &salt_clone, &mut key)
             .map_err(|e| Error::Internal(format!("KDF failed: {e}")))?;
-        Ok(key)
+        Ok::<[u8; 32], Error>(key)
     })
     .await
     .map_err(|e| Error::Internal(format!("Runtime error: {}", e)))??;
@@ -475,12 +483,13 @@ pub async fn restore_vault_backend(
             let params = Params::new(64 * 1024, 3, 1, None).map_err(|e| Error::Internal(e.to_string()))?;
             let argon2 = Argon2::new(Algorithm::Argon2id, Version::V0x13, params);
             let mut key = [0u8; 32];
-            argon2
-                .hash_password_into(passphrase_clone.as_bytes(), &salt_clone, &mut key)
-                .map_err(|e| Error::Internal(format!("KDF failed: {e}")))?;
-            Ok(key)
-        })
-        .await
+                    argon2
+                        .hash_password_into(passphrase_clone.as_bytes(), &salt_clone, &mut key)
+                        .map_err(|e| Error::Internal(format!("KDF failed: {e}")))?;
+                    Ok::<[u8; 32], Error>(key)
+                })
+                .await
+            
         .map_err(|e| Error::Internal(format!("Runtime error: {}", e)))??;
 
         let cipher = XChaCha20Poly1305::new(Key::from_slice(&key));
@@ -496,7 +505,18 @@ pub async fn restore_vault_backend(
 
     let snapshot: VaultBackupSnapshot = serde_json::from_str(&decrypted_json)?;
 
-    restore_vault_snapshot(state, snapshot.clone()).await?;
+    restore_vault_snapshot(state.clone(), snapshot.clone()).await?;
+
+    let key = get_key(&state).await?;
+    let db_pool = get_db_pool(&state).await?;
+    let _ = crate::db::activity::log_activity_impl(
+        &db_pool,
+        key.as_slice(),
+        "vault_restored",
+        None,
+        None,
+        Some("Vault data was restored from a backup"),
+    ).await;
 
     Ok(snapshot)
 }

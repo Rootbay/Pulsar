@@ -3,7 +3,7 @@ use crate::types::Button;
 use crate::error::Result;
 use crate::db::utils::{get_key, get_db_pool, CryptoHelper};
 use tauri::State;
-use sqlx::{Row, SqlitePool};
+use sqlx::Row;
 
 #[tauri::command]
 pub async fn save_button(
@@ -29,9 +29,12 @@ pub async fn save_button(
     Ok(())
 }
 
-pub async fn get_buttons_impl(db_pool: &SqlitePool, key: &[u8]) -> Result<Vec<Button>> {
+pub async fn get_buttons_impl<'a, E>(executor: E, key: &[u8]) -> Result<Vec<Button>>
+where
+    E: sqlx::SqliteExecutor<'a>,
+{
     let rows = sqlx::query("SELECT id, text, icon, color FROM buttons")
-        .fetch_all(db_pool)
+        .fetch_all(executor)
         .await?;
 
     let helper = CryptoHelper::new(key)?;

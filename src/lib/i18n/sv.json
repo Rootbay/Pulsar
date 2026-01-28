@@ -1,5 +1,5 @@
 {
-  "A new update is available: v{{version}}": "En ny uppdatering finns tillgänglig: v{{version}}",
+  "A new update is available: v{version}": "En ny uppdatering finns tillgänglig: v{version}",
   "A record of important security events and vault changes.": "A record of important security events and vault changes.",
   "About": "Om",
   "Accepted formats: .psec or .json backup files.": "Tillåtna format: .psec- eller .json-backupfiler.",

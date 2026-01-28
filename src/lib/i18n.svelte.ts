@@ -128,9 +128,10 @@ export function t(
   const dictionary = dictionaries[locale] ?? dictionaries.en;
   const template = dictionary[key] ?? dictionaries.en[key] ?? key;
 
-  return template.replace(/\{(\w+)\}/g, (match, token) => {
-    if (Object.prototype.hasOwnProperty.call(vars, token)) {
-      return String(vars[token]);
+  return template.replace(/\{+([^}]+)\}+/g, (match, token) => {
+    const trimmedToken = token.trim();
+    if (Object.prototype.hasOwnProperty.call(vars, trimmedToken)) {
+      return String(vars[trimmedToken]);
     }
     return match;
   });

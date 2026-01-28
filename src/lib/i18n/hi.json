@@ -1,5 +1,5 @@
 {
-  "A new update is available: v{{version}}": "एक नया अपडेट उपलब्ध है: v{{version}}",
+  "A new update is available: v{version}": "एक नया अपडेट उपलब्ध है: v{version}",
   "A record of important security events and vault changes.": "A record of important security events and vault changes.",
   "About": "About",
   "Accepted formats: .psec or .json backup files.": "समर्थित प्रारूप: .psec या .json बैकअप फ़ाइलें।",

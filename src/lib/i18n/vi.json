@@ -1,5 +1,5 @@
 {
-  "A new update is available: v{{version}}": "Có bản cập nhật mới: v{{version}}",
+  "A new update is available: v{version}": "Có bản cập nhật mới: v{version}",
   "A record of important security events and vault changes.": "A record of important security events and vault changes.",
   "About": "About",
   "Accepted formats: .psec or .json backup files.": "Định dạng được hỗ trợ: tệp sao lưu .psec hoặc .json.",

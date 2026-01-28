@@ -96,7 +96,7 @@
         console.log(`Update to ${update.version} available! Date: ${update.date}`);
         console.log(`Release notes: ${update.body}`);
         updateStatus = 'updateAvailable';
-        toast.info(t('A new update is available: v{{version}}', { version: update.version }), {
+        toast.info(t('A new update is available: v{version}', { version: update.version }), {
           action: {
             label: t('Install'),
             onClick: async () => {

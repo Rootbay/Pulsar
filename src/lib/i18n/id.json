@@ -1,5 +1,5 @@
 {
-  "A new update is available: v{{version}}": "Pembaruan baru tersedia: v{{version}}",
+  "A new update is available: v{version}": "Pembaruan baru tersedia: v{version}",
   "A record of important security events and vault changes.": "A record of important security events and vault changes.",
   "About": "About",
   "Accepted formats: .psec or .json backup files.": "Format yang didukung: file cadangan .psec atau .json.",

@@ -1,5 +1,5 @@
 {
-  "A new update is available: v{{version}}": "Er is een nieuwe update beschikbaar: v{{version}}",
+  "A new update is available: v{version}": "Er is een nieuwe update beschikbaar: v{version}",
   "A record of important security events and vault changes.": "A record of important security events and vault changes.",
   "About": "About",
   "Accepted formats: .psec or .json backup files.": "Ondersteunde formaten: .psec- of .json-back-upbestanden.",

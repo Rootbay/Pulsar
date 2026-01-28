@@ -1,5 +1,5 @@
 {
-  "A new update is available: v{{version}}": "Hay una nueva actualización disponible: v{{version}}",
+  "A new update is available: v{version}": "Hay una nueva actualización disponible: v{version}",
   "A record of important security events and vault changes.": "Un registro de eventos de seguridad importantes y cambios en la bóveda.",
   "About": "Acerca de",
   "Accepted formats: .psec or .json backup files.": "Formatos admitidos: archivos de copia de seguridad .psec o .json.",

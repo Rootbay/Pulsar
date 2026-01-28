@@ -1,5 +1,5 @@
 {
-  "A new update is available: v{{version}}": "发现新版本: v{{version}}",
+  "A new update is available: v{version}": "发现新版本: v{version}",
   "A record of important security events and vault changes.": "重要安全事件和保险库更改的记录。",
   "About": "关于",
   "Accepted formats: .psec or .json backup files.": "支持的格式：.psec 或 .json 备份文件。",

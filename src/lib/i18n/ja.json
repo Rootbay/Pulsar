@@ -1,5 +1,5 @@
 {
-  "A new update is available: v{{version}}": "新しいアップデートがあります: v{{version}}",
+  "A new update is available: v{version}": "新しいアップデートがあります: v{version}",
   "A record of important security events and vault changes.": "重要なセキュリティイベントと保管庫の変更の記録。",
   "About": "情報",
   "Accepted formats: .psec or .json backup files.": "対応形式: .psec または .json のバックアップファイル。",

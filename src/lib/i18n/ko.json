@@ -1,5 +1,5 @@
 {
-  "A new update is available: v{{version}}": "새 업데이트를 사용할 수 있습니다: v{{version}}",
+  "A new update is available: v{version}": "새 업데이트를 사용할 수 있습니다: v{version}",
   "A record of important security events and vault changes.": "중요 보안 이벤트 및 보관함 변경 기록입니다.",
   "About": "정보",
   "Accepted formats: .psec or .json backup files.": "지원 형식: .psec 또는 .json 백업 파일.",

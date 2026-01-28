@@ -53,6 +53,18 @@ fn build_pool_options() -> SqlitePoolOptions {
                     .execute(&mut *conn)
                     .await?;
 
+                sqlx::query("PRAGMA mmap_size = 268435456")
+                    .execute(&mut *conn)
+                    .await?;
+
+                sqlx::query("PRAGMA temp_store = MEMORY")
+                    .execute(&mut *conn)
+                    .await?;
+
+                sqlx::query("PRAGMA cache_size = -2000")
+                    .execute(&mut *conn)
+                    .await?;
+
                 sqlx::query("PRAGMA foreign_keys = ON")
                     .execute(&mut *conn)
                     .await?;

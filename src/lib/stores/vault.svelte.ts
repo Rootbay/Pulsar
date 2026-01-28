@@ -35,7 +35,7 @@ class VaultStore {
         if (this.#searchTimeout) clearTimeout(this.#searchTimeout);
         this.#searchTimeout = setTimeout(() => {
           this.loadItems();
-        }, 300);
+        }, 150);
       });
     });
   }

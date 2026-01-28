@@ -56,7 +56,7 @@ pub fn decrypt_zeroized(encrypted_payload: &str, key: &[u8]) -> Result<Zeroizing
     }
 
     let nonce_bytes = general_purpose::STANDARD
-        .decode(nonce_b64)
+        .decode(nonce_b64.trim())
         .map_err(|e| Error::Decryption(format!("Nonce decode failed: {e}")))?;
 
     if nonce_bytes.len() != 24 {
@@ -64,7 +64,7 @@ pub fn decrypt_zeroized(encrypted_payload: &str, key: &[u8]) -> Result<Zeroizing
     }
 
     let ciphertext = general_purpose::STANDARD
-        .decode(ciphertext_b64)
+        .decode(ciphertext_b64.trim())
         .map_err(|e| Error::Decryption(format!("Ciphertext decode failed: {e}")))?;
 
     let nonce = XNonce::from_slice(&nonce_bytes);
@@ -151,7 +151,10 @@ impl CipherSession {
         let mut mac = <Hmac<Sha256> as Mac>::new_from_slice(&self.key)
             .expect("HMAC can take key of any size");
         mac.update(normalized.as_bytes());
-        mac.finalize().into_bytes().to_vec()
+        let result = mac.finalize().into_bytes();
+        // Truncate to 8 bytes for better performance in trigram search
+        // with minimal collision risk for this specific use case.
+        result[..8].to_vec()
     }
 
     pub fn generate_trigram_hashes(&self, text: &str) -> Vec<Vec<u8>> {
@@ -164,13 +167,15 @@ impl CipherSession {
             };
         }
 
+        use rayon::prelude::*;
         let chars: Vec<char> = normalized.chars().collect();
-        let mut hashes = Vec::new();
-        for i in 0..=chars.len() - 3 {
-            let trigram: String = chars[i..i + 3].iter().collect();
-            hashes.push(self.generate_search_token(&trigram));
-        }
-        hashes
+        (0..=chars.len() - 3)
+            .into_par_iter()
+            .map(|i| {
+                let trigram: String = chars[i..i + 3].iter().collect();
+                self.generate_search_token(&trigram)
+            })
+            .collect()
     }
 
     pub fn encrypt(&self, plaintext: &str) -> Result<String> {
@@ -209,7 +214,7 @@ impl CipherSession {
         }
 
         let nonce_bytes = general_purpose::STANDARD
-            .decode(nonce_b64)
+            .decode(nonce_b64.trim())
             .map_err(|e| Error::Decryption(format!("Nonce decode failed: {e}")))?;
 
         if nonce_bytes.len() != 24 {
@@ -217,7 +222,7 @@ impl CipherSession {
         }
 
         let ciphertext = general_purpose::STANDARD
-            .decode(ciphertext_b64)
+            .decode(ciphertext_b64.trim())
             .map_err(|e| Error::Decryption(format!("Ciphertext decode failed: {e}")))?;
 
         let nonce = XNonce::from_slice(&nonce_bytes);

@@ -414,17 +414,20 @@ pub async fn search_password_items(
         let trigrams = helper.generate_trigram_hashes(query_trimmed);
 
         if trigrams.len() >= 2 {
-            let threshold = (trigrams.len() as f64 * 0.6).ceil() as usize;
-            conditions.push(format!(
-                "p.id IN (
-                    SELECT item_id FROM search_trigrams 
-                    WHERE trigram_hash IN ({}) 
-                    GROUP BY item_id 
-                    HAVING COUNT(trigram_hash) >= {}
-                )",
-                trigrams.iter().map(|_| "?").collect::<Vec<_>>().join(", "),
-                threshold
-            ));
+            let placeholders = trigrams.iter().map(|_| "?").collect::<Vec<_>>().join(", ");
+
+            sql.push_str(
+                " JOIN (
+                SELECT item_id FROM search_trigrams 
+                WHERE trigram_hash IN (",
+            );
+            sql.push_str(&placeholders);
+            sql.push_str(
+                ") 
+                GROUP BY item_id 
+                HAVING COUNT(trigram_hash) >= ?
+            ) s ON p.id = s.item_id",
+            );
         } else {
             conditions
                 .push("p.id IN (SELECT item_id FROM search_indices WHERE token = ?)".to_string());
@@ -500,9 +503,11 @@ pub async fn search_password_items(
     if !query_trimmed.is_empty() {
         let trigrams = helper.generate_trigram_hashes(query_trimmed);
         if trigrams.len() >= 2 {
-            for hash in trigrams {
-                q = q.bind(hash);
+            for hash in &trigrams {
+                q = q.bind(hash.clone());
             }
+            let threshold = (trigrams.len() as f64 * 0.6).ceil() as i64;
+            q = q.bind(threshold);
         } else {
             let token = helper.generate_search_token(query_trimmed);
             q = q.bind(token);
@@ -514,12 +519,15 @@ pub async fn search_password_items(
     }
 
     let rows = q.fetch_all(&db_pool).await?;
-    let mut items = Vec::with_capacity(rows.len());
-    for row in rows {
-        items.push(decrypt_password_item_overview_row(&row, &helper)?);
-    }
 
-    Ok(items)
+    // Parallel decryption using Rayon
+    use rayon::prelude::*;
+    let items: Result<Vec<PasswordItemOverview>> = rows
+        .into_par_iter()
+        .map(|row| decrypt_password_item_overview_row(&row, &helper))
+        .collect();
+
+    items
 }
 
 #[tauri::command]
@@ -543,12 +551,15 @@ pub async fn get_password_overviews(
     let rows = sqlx::query(&sql).fetch_all(&db_pool).await?;
 
     let helper = CryptoHelper::new(key.as_slice())?;
-    let mut items = Vec::with_capacity(rows.len());
-    for row in rows {
-        items.push(decrypt_password_item_overview_row(&row, &helper)?);
-    }
 
-    Ok(items)
+    // Parallel decryption using Rayon
+    use rayon::prelude::*;
+    let items: Result<Vec<PasswordItemOverview>> = rows
+        .into_par_iter()
+        .map(|row| decrypt_password_item_overview_row(&row, &helper))
+        .collect();
+
+    items
 }
 
 #[tauri::command]
@@ -577,12 +588,15 @@ pub async fn get_password_overviews_by_ids(
     }
 
     let rows = q.fetch_all(&db_pool).await?;
-    let mut items = Vec::with_capacity(rows.len());
-    for row in rows {
-        items.push(decrypt_password_item_overview_row(&row, &helper)?);
-    }
 
-    Ok(items)
+    // Parallel decryption using Rayon
+    use rayon::prelude::*;
+    let items: Result<Vec<PasswordItemOverview>> = rows
+        .into_par_iter()
+        .map(|row| decrypt_password_item_overview_row(&row, &helper))
+        .collect();
+
+    items
 }
 
 #[tauri::command]

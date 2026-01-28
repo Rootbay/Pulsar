@@ -39,17 +39,21 @@ class SettingsStore {
   initPromise: Promise<void>;
 
   constructor() {
+    console.log('[SettingsStore] Constructor called');
     this.initPromise = this.init();
   }
 
   async init() {
+    console.log('[SettingsStore] init called');
     if (this.isInitialized) return;
 
     try {
+      console.log('[SettingsStore] calling backend');
       const storedSettings = await callBackend<string | null>('get_all_settings');
+      console.log('[SettingsStore] backend returned', storedSettings);
       if (storedSettings) {
         try {
-          let loaded: any;
+          let loaded: unknown;
           try {
             const firstPass = JSON.parse(storedSettings);
             if (typeof firstPass === 'string') {
@@ -62,7 +66,10 @@ class SettingsStore {
           }
 
           if (loaded && typeof loaded === 'object') {
-            this.state = this.#deepMerge(defaultAllSettings, loaded);
+            this.state = this.#deepMerge(
+              defaultAllSettings as unknown as Record<string, unknown>,
+              loaded as Record<string, unknown>
+            );
             callBackend('apply_system_settings').catch(console.error);
           }
         } catch (e) {
@@ -78,28 +85,31 @@ class SettingsStore {
     }
   }
 
-  #isObject(item: any): item is Record<string, any> {
-    return item && typeof item === 'object' && !Array.isArray(item);
+  #isObject(item: unknown): item is Record<string, unknown> {
+    return !!item && typeof item === 'object' && !Array.isArray(item);
   }
 
-  #deepMerge(target: any, source: any): any {
+  #deepMerge(target: Record<string, unknown>, source: Record<string, unknown>): AllSettings {
     if (!this.#isObject(target) || !this.#isObject(source)) {
-      return source !== undefined ? source : target;
+      return (source !== undefined ? source : target) as unknown as AllSettings;
     }
 
-    const output = { ...target };
+    const output: Record<string, unknown> = { ...target };
     Object.keys(source).forEach((key) => {
       if (this.#isObject(source[key])) {
         if (!(key in target)) {
           output[key] = source[key];
         } else {
-          output[key] = this.#deepMerge(target[key], source[key]);
+          output[key] = this.#deepMerge(
+            target[key] as Record<string, unknown>,
+            source[key] as Record<string, unknown>
+          );
         }
       } else {
         output[key] = source[key];
       }
     });
-    return output;
+    return output as unknown as AllSettings;
   }
 
   save() {

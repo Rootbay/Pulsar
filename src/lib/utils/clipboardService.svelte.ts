@@ -2,7 +2,7 @@ import { callBackend } from './backend';
 import type { ClipboardSettings } from '$lib/config/settings';
 import { settings } from '$lib/stores/appSettings.svelte';
 import { appState } from '$lib/stores/appState.svelte';
-import { clear, readText } from '@tauri-apps/plugin-clipboard-manager';
+// import { clear, readText } from '@tauri-apps/plugin-clipboard-manager';
 
 interface ClipboardPolicyStatus {
   integrationAvailable: boolean;
@@ -37,7 +37,6 @@ class ClipboardService {
   #initialized = false;
   #nextAuditId = 1;
   #clearTimer: ReturnType<typeof setTimeout> | null = null;
-  #lastCopiedText: string | null = null;
 
   constructor() {
     $effect.root(() => {
@@ -56,7 +55,7 @@ class ClipboardService {
       time: new Date().toLocaleTimeString(),
       status
     };
-    this.auditLog = [entry, ...this.auditLog].slice(0, 50); // Keep last 50 entries
+    this.auditLog = [entry, ...this.auditLog].slice(0, 50);
   }
 
   private updateState(partial: Partial<ClipboardIntegrationState>) {
@@ -88,7 +87,9 @@ class ClipboardService {
 
     try {
       const status = await callBackend<ClipboardPolicyStatus>('get_clipboard_capabilities');
-      this.updateFromStatus(status);
+      if (status) {
+        this.updateFromStatus(status);
+      }
     } catch (error) {
       const message = this.extractErrorMessage(error);
       this.updateState({
@@ -158,7 +159,9 @@ class ClipboardService {
         clearTimeout(this.#clearTimer);
         this.#clearTimer = null;
       }
-      this.#lastCopiedText = null;
+      
+      // Dynamic import to prevent load-time crash in tests
+      const { clear } = await import('@tauri-apps/plugin-clipboard-manager');
       await clear();
       this.addAuditEntry('Clipboard Cleared', 'success');
     } catch (error) {
@@ -169,7 +172,6 @@ class ClipboardService {
 
   async recordCopy(text: string, itemLabel: string): Promise<void> {
     this.addAuditEntry(`Copied ${itemLabel}`, 'success');
-    this.#lastCopiedText = text;
 
     if (this.#clearTimer) {
       clearTimeout(this.#clearTimer);
@@ -181,6 +183,8 @@ class ClipboardService {
       const delayMs = clipSettings.clearAfterDuration * 1000;
       this.#clearTimer = setTimeout(async () => {
         try {
+          // Dynamic import
+          const { clear, readText } = await import('@tauri-apps/plugin-clipboard-manager');
           const currentClipboard = await readText();
           if (currentClipboard === text) {
             await clear();
@@ -190,7 +194,6 @@ class ClipboardService {
           console.error('Failed to clear clipboard after timeout', error);
         } finally {
           this.#clearTimer = null;
-          this.#lastCopiedText = null;
         }
       }, delayMs);
     }

@@ -1,3 +1,5 @@
+import { EFF_LARGE_WORDLIST } from './wordlist';
+
 export interface GeneratorOptions {
   uppercase: boolean;
   lowercase: boolean;
@@ -6,6 +8,9 @@ export interface GeneratorOptions {
   ambiguous: boolean;
   similar: boolean;
   pronounceable: boolean;
+  mode: 'password' | 'passphrase';
+  wordCount: number;
+  separator: string;
 }
 
 export const SYMBOL_CHARSET = '!@#$%^&*()_+-=[]{}|;:,.<>?';
@@ -16,7 +21,7 @@ export const SIMILAR_CHARS = new Set(
 
 export class GeneratorService {
   static generate(length: number, options: Partial<GeneratorOptions> = {}): string {
-    const opts = {
+    const opts: GeneratorOptions = {
       uppercase: true,
       lowercase: true,
       digits: true,
@@ -24,8 +29,15 @@ export class GeneratorService {
       ambiguous: false,
       similar: false,
       pronounceable: false,
+      mode: 'password',
+      wordCount: 4,
+      separator: '-',
       ...options
     };
+
+    if (opts.mode === 'passphrase') {
+      return this.generatePassphrase(opts.wordCount, opts.separator);
+    }
 
     let charset = '';
     if (opts.uppercase) charset += 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
@@ -83,12 +95,31 @@ export class GeneratorService {
     return password;
   }
 
-  static calculateEntropy(length: number, poolSize: number): number {
+  static generatePassphrase(wordCount: number, separator: string): string {
+    const array = new Uint32Array(wordCount);
+    crypto.getRandomValues(array);
+    const words: string[] = [];
+    for (let i = 0; i < wordCount; i++) {
+      words.push(EFF_LARGE_WORDLIST[array[i] % EFF_LARGE_WORDLIST.length]);
+    }
+    return words.join(separator);
+  }
+
+  static calculateEntropy(
+    length: number,
+    poolSize: number,
+    mode: 'password' | 'passphrase' = 'password'
+  ): number {
+    if (mode === 'passphrase') {
+      return Math.floor(length * Math.log2(EFF_LARGE_WORDLIST.length));
+    }
     if (poolSize <= 0) return 0;
     return Math.floor(length * Math.log2(poolSize));
   }
 
   static getPoolSize(options: Partial<GeneratorOptions>): number {
+    if (options.mode === 'passphrase') return EFF_LARGE_WORDLIST.length;
+
     const opts = {
       uppercase: true,
       lowercase: true,

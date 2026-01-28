@@ -33,7 +33,7 @@ class TagStore {
     this.#isRefreshing = true;
     try {
       const tags = await callBackend<TagButton[]>('get_buttons');
-      this.#tags = tags;
+      this.#tags = tags || [];
     } finally {
       this.#isRefreshing = false;
     }

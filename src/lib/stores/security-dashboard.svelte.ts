@@ -1,13 +1,28 @@
-import type { PasswordItem } from '$lib/types/password';
+import { SvelteSet } from 'svelte/reactivity';
+import type { PasswordItem, PasswordItemOverview } from '$lib/types/password';
 import { SecurityService, type PasswordHealth } from '../utils/security';
 import { appState } from './appState.svelte';
+import { callBackend } from '../utils/backend';
+
+export interface SecurityReport {
+  reusedPasswords: { passwordHash: string; itemIds: number[]; count: number }[];
+  weakPasswords: number[];
+  breachedPasswords: number[];
+  uniquePasswordsCount: number;
+  totalPasswordsCount: number;
+  overallHealthScore: number;
+}
 
 export interface SecurityDashboardState {
   items: Record<number, PasswordHealth>;
+  lastReport: SecurityReport | null;
+  problematicItems: PasswordItemOverview[];
 }
 
 const initialState: SecurityDashboardState = {
-  items: {}
+  items: {},
+  lastReport: null,
+  problematicItems: []
 };
 
 class SecurityDashboardStore {
@@ -27,8 +42,48 @@ class SecurityDashboardStore {
     return this.#state.items;
   }
 
+  get lastReport() {
+    return this.#state.lastReport;
+  }
+
+  get problematicItems() {
+    return this.#state.problematicItems;
+  }
+
   reset() {
-    this.#state = { items: {} };
+    this.#state = {
+      items: {},
+      lastReport: null,
+      problematicItems: []
+    };
+  }
+
+  async runAudit() {
+    try {
+      const report = await callBackend<SecurityReport>('get_security_report');
+      this.#state.lastReport = report;
+
+      const allProblematicIds = new SvelteSet<number>();
+      report.weakPasswords.forEach((id) => allProblematicIds.add(id));
+      report.breachedPasswords.forEach((id) => allProblematicIds.add(id));
+      report.reusedPasswords.forEach((group) =>
+        group.itemIds.forEach((id) => allProblematicIds.add(id))
+      );
+
+      if (allProblematicIds.size > 0) {
+        this.#state.problematicItems = await callBackend<PasswordItemOverview[]>(
+          'get_password_overviews_by_ids',
+          { ids: Array.from(allProblematicIds) }
+        );
+      } else {
+        this.#state.problematicItems = [];
+      }
+
+      return report;
+    } catch (error) {
+      console.error('Audit failed:', error);
+      throw error;
+    }
   }
 
   assessStrength(item: PasswordItem) {

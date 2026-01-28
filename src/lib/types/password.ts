@@ -29,3 +29,12 @@ export interface PasswordItem extends PasswordItemOverview {
   field_order?: string[] | null;
   attachments?: Attachment[];
 }
+
+export interface ActivityEntry {
+  id: number;
+  eventType: string;
+  itemId: number | null;
+  itemTitle: string | null;
+  details: string | null;
+  createdAt: string;
+}

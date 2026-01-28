@@ -11,10 +11,10 @@
   import { Input } from './input';
   import { Label } from './label';
   import { Spinner } from './spinner';
-  import { i18n, t as translate } from '$lib/i18n.svelte';
+  import { i18n, t as translate, type I18nKey } from '$lib/i18n.svelte';
 
   const locale = $derived(i18n.locale);
-  const t = (key: string, vars = {}) => translate(locale, key as any, vars);
+  const t = (key: string, vars = {}) => translate(locale, key as I18nKey, vars);
 
   let {
     open = $bindable(false),
@@ -69,9 +69,7 @@
       </div>
     </div>
     <DialogFooter>
-      <Button variant="outline" onclick={handleCancel} disabled={busy}>
-        Cancel
-      </Button>
+      <Button variant="outline" onclick={handleCancel} disabled={busy}>Cancel</Button>
       <Button onclick={handleConfirm} disabled={busy || !passphrase.trim()}>
         {#if busy}
           <Spinner class="mr-2 h-4 w-4" />

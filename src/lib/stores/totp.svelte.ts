@@ -48,4 +48,3 @@ class LoginTotpStore {
 }
 
 export const loginTotpStore = new LoginTotpStore();
-

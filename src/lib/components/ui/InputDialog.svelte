@@ -10,7 +10,7 @@
   } from './dialog';
   import { Input } from './input';
   import { Label } from './label';
-  import { i18n, t as translate } from '$lib/i18n.svelte';
+  import { i18n, t as translate, type I18nKey } from '$lib/i18n.svelte';
 
   let {
     open = $bindable(false),
@@ -42,7 +42,7 @@
   }
 
   const locale = $derived(i18n.locale);
-  const t = (key: string, vars = {}) => translate(locale, key as any, vars);
+  const t = (key: string, vars = {}) => translate(locale, key as I18nKey, vars);
 </script>
 
 <Dialog bind:open>
@@ -58,8 +58,8 @@
         <Label for="input-value">{label}</Label>
         <Input
           id="input-value"
-          placeholder={placeholder}
-          bind:value={value}
+          {placeholder}
+          bind:value
           onkeydown={(e: KeyboardEvent) => e.key === 'Enter' && handleConfirm()}
         />
       </div>

@@ -16,8 +16,8 @@
 
   let editedItem = $state<any>(null);
   const locale = $derived(i18n.locale);
-  const t = (key: I18nKey, vars: Record<string, string | number> = {}) =>
-    translate(locale, key, vars);
+  const t = (key: string, vars: Record<string, string | number> = {}) =>
+    translate(locale, key as I18nKey, vars);
 
   $effect(() => {
     if (item) {

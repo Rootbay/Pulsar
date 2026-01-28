@@ -16,7 +16,8 @@
   import PasswordFieldList from './password-detail/PasswordFieldList.svelte';
   import PasswordMetadata from './password-detail/PasswordMetadata.svelte';
   import { appState, vaultStore } from '$lib/stores';
-  import { quintOut } from 'svelte/easing';  import {
+  import { quintOut } from 'svelte/easing';
+  import {
     Copy,
     Plus,
     RefreshCw,
@@ -29,7 +30,11 @@
   import { buildDisplayFields } from '$lib/utils/passwordFields';
   import { copyText } from '$lib/utils/copyHelper';
   import { toast } from '$lib/components/ui/sonner';
+  import { i18n, t as translate, type I18nKey } from '$lib/i18n.svelte';
   import type { Snippet } from 'svelte';
+
+  const locale = $derived(i18n.locale);
+  const t = (key: string, vars = {}) => translate(locale, key as I18nKey, vars);
 
   function modernFade(node: Element, { duration = 400 } = {}) {
     const reduce =
@@ -660,22 +665,22 @@
     }
   }
 
-  async function copyTotpSecret() {
+  async function handleCopyTotpSecret() {
     if (!totpSecret) return;
     try {
       await copyText(totpSecret, 'TOTP Secret');
       toast.success(t('totpSecretCopied'));
-    } catch (err) {
+    } catch (_err) {
       toast.error(t('totpSecretCopyError'));
     }
   }
 
-  async function copyTotpCode() {
+  async function handleCopyTotpCode() {
     if (!totpCode) return;
     try {
       await copyText(totpCode, 'TOTP Code');
       toast.success(t('totpCodeCopied'));
-    } catch (err) {
+    } catch (_err) {
       toast.error(t('totpCodeCopyError'));
     }
   }

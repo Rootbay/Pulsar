@@ -15,6 +15,7 @@ class AppState {
   totpVerified = $state<boolean>(false);
   totpRequired = $state<boolean>(false);
   lastActivity = $state<number>(Date.now());
+  requestedItemId = $state<number | null>(null);
 
   constructor() {
     $effect.root(() => {
@@ -26,7 +27,7 @@ class AppState {
 
       if (browser) {
         this.#setupActivityListeners();
-        
+
         $effect(() => {
           if (!this.isLocked && this.isDatabaseLoaded) {
             const interval = setInterval(() => this.#checkInactivity(), 10000);
@@ -70,10 +71,14 @@ class AppState {
     const unit = match[2].toLowerCase();
 
     switch (unit) {
-      case 'second': return value * 1000;
-      case 'minute': return value * 60 * 1000;
-      case 'hour': return value * 60 * 60 * 1000;
-      default: return 0;
+      case 'second':
+        return value * 1000;
+      case 'minute':
+        return value * 60 * 1000;
+      case 'hour':
+        return value * 60 * 60 * 1000;
+      default:
+        return 0;
     }
   }
 

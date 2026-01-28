@@ -24,8 +24,8 @@
   import { securityDashboard } from '$lib/stores';
   import { copyPassword, copyText, copyUrl, copyUsername } from '$lib/utils/copyHelper';
   import { toast } from '$lib/components/ui/sonner';
-  import { GeneratorService } from '$lib/utils/generator';
   import PasswordStrength from '$lib/components/password/PasswordStrength.svelte';
+  import PasswordGeneratorPopup from '$lib/components/password/PasswordGeneratorPopup.svelte';
 
   interface Props {
     isEditing: boolean;
@@ -56,6 +56,7 @@
   }: Props = $props();
 
   let breachCheckTimeout: ReturnType<typeof setTimeout> | null = null;
+  let showGeneratorPopup = $state(false);
 
   $effect(() => {
     const item = passwordItem;
@@ -85,8 +86,7 @@
     };
   });
 
-  function generatePassword() {
-    const newPass = GeneratorService.generate(20);
+  function handlePasswordGenerated(newPass: string) {
     const passField = editingFields.find((f) => f.id === 'password');
     if (passField) {
       passField.value = newPass;
@@ -379,7 +379,7 @@
                       class="text-muted-foreground hover:text-foreground h-6 w-6 p-0"
                       aria-label="Generate password"
                       title="Generate password"
-                      onclick={generatePassword}
+                      onclick={() => (showGeneratorPopup = true)}
                     >
                       <WandSparkles class="h-4.5 w-4.5" />
                     </Button>
@@ -459,3 +459,10 @@
     </div>
   {/if}
 </div>
+
+{#if showGeneratorPopup}
+  <PasswordGeneratorPopup
+    onselect={handlePasswordGenerated}
+    onclose={() => (showGeneratorPopup = false)}
+  />
+{/if}

@@ -64,9 +64,15 @@ export function createResizeController({
     window.addEventListener('mouseup', handleMouseUp);
   };
 
+  const setWidth = (width: number) => {
+    const nextWidth = Math.max(minWidth, Math.min(maxWidth, width));
+    document.documentElement.style.setProperty(cssVar, `${nextWidth}px`);
+    onResizeEnd?.(nextWidth);
+  };
+
   const destroy = () => {
     cleanup();
   };
 
-  return { start, destroy };
+  return { start, setWidth, destroy };
 }

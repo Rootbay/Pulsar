@@ -14,7 +14,13 @@
   import { Input } from '$lib/components/ui/input';
   import { ScrollArea } from '$lib/components/ui/scroll-area';
   import { Skeleton } from '$lib/components/ui/skeleton';
-  import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from '$lib/components/ui/context-menu';
+  import {
+    ContextMenu,
+    ContextMenuContent,
+    ContextMenuItem,
+    ContextMenuSeparator,
+    ContextMenuTrigger
+  } from '$lib/components/ui/context-menu';
   import { createResizeController } from './password-list/resizeController';
   import { settings } from '$lib/stores/appSettings.svelte';
 
@@ -44,8 +50,7 @@
     disableEdit?: boolean;
     onselect?: (item: PasswordItemOverview | null) => void;
     oncreateEntry?: () => void;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    oneditEntry?: (item: any) => void;
+    oneditEntry?: (item: PasswordItemOverview) => void;
     onremoveEntry?: (item: PasswordItemOverview) => void;
   }
 
@@ -68,8 +73,6 @@
   const sectionOrder: SectionTitle[] = ['Pinned', 'Today', 'Yesterday', 'Earlier'];
   const PIN_TAG_NAMES = new Set(['pinned', 'pin']);
   const RECENT_FILTER = 'recent' as const;
-  const DAY_IN_MS = 24 * 60 * 60 * 1000;
-  const RECENT_DAY_WINDOW = 7;
 
   let selectedItemId = $state<number | null>(null);
   let showSkeleton = $state(false);
@@ -290,27 +293,6 @@
     return isSameDay(date, yesterday);
   }
 
-  function isWithinDays(dateStr: string, windowInDays: number): boolean {
-    const date = toDate(dateStr);
-    if (!date) {
-      return false;
-    }
-    const now = new SvelteDate();
-    const diff = now.getTime() - date.getTime();
-    if (diff < 0) {
-      return false;
-    }
-    return diff <= windowInDays * DAY_IN_MS;
-  }
-
-  function isRecent(item: PasswordItemOverview, tagNames: string[]): boolean {
-    if (hasPinnedTag(tagNames)) {
-      return true;
-    }
-
-    return item.updated_at ? isWithinDays(item.updated_at, RECENT_DAY_WINDOW) : false;
-  }
-
   function getFallback(item: PasswordItemOverview): TagMeta {
     const tagNames = getTagNames(item);
     if (tagNames.length > 0) {
@@ -370,6 +352,19 @@
 
   function handleRemoveEntry(item: PasswordItemOverview) {
     onremoveEntry?.(item);
+  }
+
+  function handleKeyDown(e: KeyboardEvent) {
+    const step = e.shiftKey ? 50 : 10;
+    const currentWidth = settings.state.appearance.passwordListWidth || 250;
+
+    if (e.key === 'ArrowLeft') {
+      e.preventDefault();
+      resizeController.setWidth(currentWidth - step);
+    } else if (e.key === 'ArrowRight') {
+      e.preventDefault();
+      resizeController.setWidth(currentWidth + step);
+    }
   }
 
   const resizeController = createResizeController({
@@ -594,9 +589,14 @@
   </ContextMenu>
   <div
     class="resize-handle"
-    role="separator"
+    role="slider"
     aria-label="Resize list"
+    aria-valuenow={settings.state.appearance.passwordListWidth || 250}
+    aria-valuemin={200}
+    aria-valuemax={600}
+    tabindex="0"
     onmousedown={(e) => resizeController.start(e)}
+    onkeydown={handleKeyDown}
   ></div>
 </nav>
 

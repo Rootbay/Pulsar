@@ -1,5 +1,8 @@
 import type { PasswordItem } from '$lib/types/password';
 import { callBackend } from './backend';
+import { appState } from '../stores/appState.svelte';
+import { settings } from '../stores/appSettings.svelte';
+import { clipboardService } from './clipboardService.svelte';
 
 async function copyToClipboard(text: string, label: string = 'Text') {
   const clipSettings = settings.state.clipboard;
@@ -24,7 +27,7 @@ async function copyToClipboard(text: string, label: string = 'Text') {
     }
   }
 
-  await callBackend('copy_to_clipboard', { text });
+  await callBackend('copy_to_clipboard', { text, label });
   await clipboardService.recordCopy(text, label);
 }
 

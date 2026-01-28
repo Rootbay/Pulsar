@@ -10,7 +10,6 @@ class VaultStore {
   #activeVaultId = $state<string | null>(null);
   #searchTerm = $state('');
   #searchTimeout: ReturnType<typeof setTimeout> | null = null;
-  #loadPromise: Promise<void> | null = null;
 
   constructor() {
     $effect.root(() => {
@@ -23,10 +22,9 @@ class VaultStore {
       });
 
       $effect(() => {
-        // Trigger re-search when tag or search term changes
         const _tag = appState.selectedTag;
-        const query = this.#searchTerm;
-        
+        const _query = this.#searchTerm;
+
         if (this.#searchTimeout) clearTimeout(this.#searchTimeout);
         this.#searchTimeout = setTimeout(() => {
           this.loadItems();
@@ -63,9 +61,6 @@ class VaultStore {
   }
 
   filteredItems = $derived.by(() => {
-    // Backend now handles main search and tag filtering
-    // We only do category filtering (recent/favorites) locally for now
-    // or we could move those to backend too.
     const category = appState.filterCategory;
     const RECENT_DAY_WINDOW = 7;
     const DAY_IN_MS = 24 * 60 * 60 * 1000;
@@ -103,10 +98,8 @@ class VaultStore {
     this.#isLoading = true;
     try {
       const tag = appState.selectedTag;
-      // We need to find the tag ID for the selected tag text
-      // This is a bit inefficient, better if appState stored tag ID
       const tagStore = (await import('./tags.svelte')).tagStore;
-      const tagObj = tagStore.tags.find(t => t.text === tag);
+      const tagObj = tagStore.tags.find((t) => t.text === tag);
 
       this.#items = await callBackend<PasswordItemOverview[]>('search_password_items', {
         query: this.#searchTerm,
@@ -127,7 +120,20 @@ class VaultStore {
 
     const fullItem = await callBackend<PasswordItem | null>('get_password_item_by_id', { id });
     if (fullItem) {
-      this.updateItem(fullItem);
+      const overview: PasswordItemOverview = {
+        id: fullItem.id,
+        category: fullItem.category,
+        title: fullItem.title,
+        description: fullItem.description,
+        img: fullItem.img,
+        tags: fullItem.tags,
+        username: fullItem.username,
+        url: fullItem.url,
+        created_at: fullItem.created_at,
+        updated_at: fullItem.updated_at,
+        color: fullItem.color
+      };
+      this.updateItem(overview);
     }
     return fullItem;
   }

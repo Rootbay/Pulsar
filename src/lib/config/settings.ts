@@ -146,7 +146,10 @@ export const defaultGeneratorSettings: GeneratorSettings = {
     symbols: true,
     ambiguous: false,
     similar: false,
-    pronounceable: false
+    pronounceable: false,
+    mode: 'password',
+    wordCount: 4,
+    separator: '-'
   }
 };
 
@@ -203,15 +206,7 @@ export interface PasswordPreset {
   length: number;
   charSet: string;
   strength: number;
-  settings: {
-    uppercase: boolean;
-    lowercase: boolean;
-    digits: boolean;
-    symbols: boolean;
-    ambiguous: boolean;
-    similar: boolean;
-    pronounceable: boolean;
-  };
+  settings: GeneratorOptions;
 }
 
 export const defaultPasswordPresets: PasswordPreset[] = [
@@ -227,7 +222,10 @@ export const defaultPasswordPresets: PasswordPreset[] = [
       symbols: true,
       ambiguous: false,
       similar: false,
-      pronounceable: false
+      pronounceable: false,
+      mode: 'password',
+      wordCount: 4,
+      separator: '-'
     }
   },
   {
@@ -242,7 +240,10 @@ export const defaultPasswordPresets: PasswordPreset[] = [
       symbols: false,
       ambiguous: false,
       similar: false,
-      pronounceable: false
+      pronounceable: false,
+      mode: 'password',
+      wordCount: 4,
+      separator: '-'
     }
   },
   {
@@ -257,7 +258,10 @@ export const defaultPasswordPresets: PasswordPreset[] = [
       symbols: true,
       ambiguous: false,
       similar: false,
-      pronounceable: false
+      pronounceable: false,
+      mode: 'password',
+      wordCount: 4,
+      separator: '-'
     }
   }
 ];
@@ -267,15 +271,7 @@ export interface SiteRule {
   length: number;
   type: string;
   desc: string;
-  settings: {
-    uppercase: boolean;
-    lowercase: boolean;
-    digits: boolean;
-    symbols: boolean;
-    ambiguous: boolean;
-    similar: boolean;
-    pronounceable: boolean;
-  };
+  settings: GeneratorOptions;
 }
 
 export const defaultSiteRules: SiteRule[] = [
@@ -291,7 +287,10 @@ export const defaultSiteRules: SiteRule[] = [
       symbols: false,
       ambiguous: false,
       similar: false,
-      pronounceable: false
+      pronounceable: false,
+      mode: 'password',
+      wordCount: 4,
+      separator: '-'
     }
   },
   {
@@ -306,7 +305,10 @@ export const defaultSiteRules: SiteRule[] = [
       symbols: true,
       ambiguous: false,
       similar: false,
-      pronounceable: false
+      pronounceable: false,
+      mode: 'password',
+      wordCount: 4,
+      separator: '-'
     }
   },
   {
@@ -321,7 +323,10 @@ export const defaultSiteRules: SiteRule[] = [
       symbols: true,
       ambiguous: false,
       similar: false,
-      pronounceable: false
+      pronounceable: false,
+      mode: 'password',
+      wordCount: 4,
+      separator: '-'
     }
   }
 ];

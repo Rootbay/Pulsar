@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, untrack } from 'svelte';
   import { toast } from '$lib/components/ui/sonner';
   import { vaultStore } from '$lib/stores/vault.svelte';
   import { addRecentDatabase, removeRecentDatabase } from '$lib/stores/recentDatabases.svelte';
@@ -20,9 +20,11 @@
   import {
     Archive,
     ChartColumn,
+    Copy,
     Database,
     FolderKanban,
     HardDriveDownload,
+    RefreshCw,
     ShieldAlert,
     ShieldCheck,
     Trash2
@@ -347,6 +349,7 @@
       );
     } catch (e) {
       console.error('Failed to fetch security report:', e);
+      toast.error(t('settingsVaultLoadError'));
     }
   }
 
@@ -406,10 +409,10 @@
     vaultStore.selectVault(id, { ...vault.settings, name: vault.name });
   }
 
-  function updateVaultSetting(setting: keyof VaultSettings): void {
+  function updateVaultSetting(setting: keyof VaultSettings, value: boolean): void {
     vaultStore.updateSettings((current) => ({
       ...current,
-      [setting]: !current[setting]
+      [setting]: value
     }));
   }
 
@@ -424,6 +427,10 @@
   function removeVault(id: string): void {
     const vault = vaults.find((entry) => entry.id === id);
     if (!vault) {
+      return;
+    }
+
+    if (!window.confirm(t('settingsVaultRemoveConfirm', { name: vault.name }))) {
       return;
     }
 
@@ -450,16 +457,29 @@
 
   $effect(() => {
     const id = selectedVaultId;
-    if (id && activeVaultSettings) {
-      vaults = vaults.map((v) =>
-        v.id === id
-          ? {
-              ...v,
-              name: activeVaultSettings.name,
-              settings: { ...v.settings, ...activeVaultSettings }
-            }
-          : v
-      );
+    const currentSettings = activeVaultSettings;
+    if (id && currentSettings) {
+      const currentVaults = untrack(() => vaults);
+      const index = currentVaults.findIndex((v) => v.id === id);
+
+      if (index !== -1) {
+        const v = currentVaults[index];
+        const hasChanges =
+          v.name !== currentSettings.name ||
+          v.settings.totp !== currentSettings.totp ||
+          v.settings.backups !== currentSettings.backups ||
+          v.settings.compression !== currentSettings.compression;
+
+        if (hasChanges) {
+          const nextVaults = [...currentVaults];
+          nextVaults[index] = {
+            ...v,
+            name: currentSettings.name,
+            settings: { ...v.settings, ...currentSettings }
+          };
+          vaults = nextVaults;
+        }
+      }
     }
   });
 </script>
@@ -502,6 +522,19 @@
           <Archive class="size-4" aria-hidden="true" />
           {t('settingsVaultCreateAction')}
         </Button>
+        <div class="border-border/60 ml-2 border-l pl-2">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            class="text-muted-foreground hover:text-primary size-9 h-10 w-10"
+            onclick={() => refreshVaults()}
+            disabled={loadingVaults || busyAction !== null}
+            aria-label={t('totpRefresh')}
+          >
+            <RefreshCw class={cn('size-4', loadingVaults && 'animate-spin')} aria-hidden="true" />
+          </Button>
+        </div>
       </div>
     </CardHeader>
 
@@ -543,7 +576,24 @@
                         <Badge variant="outline">{formatItemBadge(vault.itemCount)}</Badge>
                       </div>
                     </div>
-                    <p class="text-muted-foreground text-xs">{vault.path}</p>
+                    <div class="flex items-center gap-1 overflow-hidden">
+                      <p class="text-muted-foreground truncate text-xs" title={vault.path}>
+                        {vault.path}
+                      </p>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        class="text-muted-foreground hover:text-primary size-6 shrink-0"
+                        onclick={(e) => {
+                          e.stopPropagation();
+                          navigator.clipboard.writeText(vault.path);
+                          toast.success(t('totpCopySuccess'));
+                        }}
+                      >
+                        <Copy class="size-3" aria-hidden="true" />
+                      </Button>
+                    </div>
                   </div>
                 </div>
                 <div class="text-muted-foreground flex flex-wrap items-center gap-4 text-xs">
@@ -623,7 +673,7 @@
                 <Switch
                   checked={activeVaultSettings.totp}
                   aria-label="Toggle per-entry TOTP storage"
-                  onCheckedChange={() => updateVaultSetting('totp')}
+                  onCheckedChange={(checked) => updateVaultSetting('totp', checked)}
                   disabled={busyAction !== null}
                 />
               </div>
@@ -642,7 +692,7 @@
                 <Switch
                   checked={activeVaultSettings.backups}
                   aria-label="Toggle automatic backups"
-                  onCheckedChange={() => updateVaultSetting('backups')}
+                  onCheckedChange={(checked) => updateVaultSetting('backups', checked)}
                   disabled={busyAction !== null}
                 />
               </div>
@@ -661,7 +711,7 @@
                 <Switch
                   checked={activeVaultSettings.compression}
                   aria-label="Toggle compression"
-                  onCheckedChange={() => updateVaultSetting('compression')}
+                  onCheckedChange={(checked) => updateVaultSetting('compression', checked)}
                   disabled={busyAction !== null}
                 />
               </div>
@@ -710,20 +760,33 @@
   </Card>
 
   <Card class="border-border/60 bg-card/80 supports-backdrop-filter:bg-card/70 backdrop-blur">
-    <CardHeader class="flex items-start gap-3">
-      <div
-        class="bg-primary/10 text-primary flex h-10 w-10 items-center justify-center rounded-full"
+    <CardHeader class="flex flex-row items-start justify-between gap-3">
+      <div class="flex items-start gap-3">
+        <div
+          class="bg-primary/10 text-primary flex h-10 w-10 items-center justify-center rounded-full"
+        >
+          <ChartColumn class="size-5" aria-hidden="true" />
+        </div>
+        <div>
+          <CardTitle>
+            {t('settingsVaultInsightsTitle')}
+          </CardTitle>
+          <CardDescription>
+            {t('settingsVaultInsightsDesc')}
+          </CardDescription>
+        </div>
+      </div>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        class="text-muted-foreground hover:text-primary size-8"
+        onclick={() => fetchSecurityReport()}
+        disabled={loadingVaults}
+        aria-label={t('totpRefresh')}
       >
-        <ChartColumn class="size-5" aria-hidden="true" />
-      </div>
-      <div>
-        <CardTitle>
-          {t('settingsVaultInsightsTitle')}
-        </CardTitle>
-        <CardDescription>
-          {t('settingsVaultInsightsDesc')}
-        </CardDescription>
-      </div>
+        <RefreshCw class="size-4" aria-hidden="true" />
+      </Button>
     </CardHeader>
     <CardContent>
       <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

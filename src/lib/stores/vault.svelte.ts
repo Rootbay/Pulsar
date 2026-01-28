@@ -3,6 +3,7 @@ import { defaultVaultSettings, type VaultSettings } from '../config/settings';
 import type { PasswordItem, PasswordItemOverview } from '../types/password';
 import { callBackend } from '../utils/backend';
 import { appState } from './appState.svelte';
+import { tagStore } from './tags.svelte';
 
 class VaultStore {
   #items = $state<PasswordItemOverview[]>([]);
@@ -70,6 +71,20 @@ class VaultStore {
     return { ...defaultVaultSettings, ...existing };
   }
 
+  async #fetchItems() {
+    const tag = appState.selectedTag;
+    const category = appState.filterCategory;
+    const tagObj = tagStore.tags.find((t) => t.text === tag);
+
+    return await callBackend<PasswordItemOverview[]>('search_password_items', {
+      query: this.#searchTerm,
+      tagId: tagObj?.id ?? null,
+      category: category === 'all' ? null : category,
+      limit: this.#limit,
+      offset: this.#offset
+    });
+  }
+
   async loadItems() {
     if (appState.isLocked) {
       this.#items = [];
@@ -80,19 +95,7 @@ class VaultStore {
     this.#offset = 0;
     this.#hasMore = true;
     try {
-      const tag = appState.selectedTag;
-      const category = appState.filterCategory;
-      const tagStore = (await import('./tags.svelte')).tagStore;
-      const tagObj = tagStore.tags.find((t) => t.text === tag);
-
-      const results = await callBackend<PasswordItemOverview[]>('search_password_items', {
-        query: this.#searchTerm,
-        tagId: tagObj?.id ?? null,
-        category: category === 'all' ? null : category,
-        limit: this.#limit,
-        offset: this.#offset
-      });
-
+      const results = await this.#fetchItems();
       this.#items = results;
       this.#hasMore = results.length === this.#limit;
       this.#offset = results.length;
@@ -108,19 +111,7 @@ class VaultStore {
 
     this.#isLoading = true;
     try {
-      const tag = appState.selectedTag;
-      const category = appState.filterCategory;
-      const tagStore = (await import('./tags.svelte')).tagStore;
-      const tagObj = tagStore.tags.find((t) => t.text === tag);
-
-      const results = await callBackend<PasswordItemOverview[]>('search_password_items', {
-        query: this.#searchTerm,
-        tagId: tagObj?.id ?? null,
-        category: category === 'all' ? null : category,
-        limit: this.#limit,
-        offset: this.#offset
-      });
-
+      const results = await this.#fetchItems();
       if (results.length > 0) {
         this.#items = [...this.#items, ...results];
         this.#offset += results.length;

@@ -4,42 +4,109 @@ use crate::state::AppState;
 use crate::types::{Attachment, CustomField, PasswordItem, PasswordItemOverview};
 use chrono::Utc;
 use sqlx::{Row, SqlitePool};
+use std::collections::HashMap;
 use tauri::State;
 use validator::Validate;
 
-async fn fetch_attachments_for_item(
+async fn fetch_attachments_bulk(
     pool: &SqlitePool,
     helper: &CryptoHelper,
-    item_id: i64,
-) -> Result<Vec<Attachment>> {
-    let rows = sqlx::query(
-        "SELECT id, file_name, file_size, mime_type, created_at FROM attachments WHERE item_id = ?",
-    )
-    .bind(item_id)
-    .fetch_all(pool)
-    .await?;
+    item_ids: &[i64],
+) -> Result<HashMap<i64, Vec<Attachment>>> {
+    if item_ids.is_empty() {
+        return Ok(HashMap::new());
+    }
 
-    let mut attachments = Vec::new();
+    let placeholders = item_ids.iter().map(|_| "?").collect::<Vec<_>>().join(", ");
+    let query_str = format!(
+        "SELECT id, item_id, file_name, file_size, mime_type, created_at FROM attachments WHERE item_id IN ({})",
+        placeholders
+    );
+
+    let mut q = sqlx::query(&query_str);
+    for id in item_ids {
+        q = q.bind(id);
+    }
+
+    let rows = q.fetch_all(pool).await?;
+    let mut map: HashMap<i64, Vec<Attachment>> = HashMap::new();
+
     for row in rows {
+        let item_id: i64 = row.get("item_id");
         let name_enc: String = row.get("file_name");
         let mime_enc: String = row.get("mime_type");
 
-        attachments.push(Attachment {
+        let att = Attachment {
             id: row.get("id"),
             item_id,
             file_name: helper.decrypt(&name_enc)?,
             file_size: row.get("file_size"),
             mime_type: helper.decrypt(&mime_enc)?,
             created_at: row.get("created_at"),
-        });
+        };
+
+        map.entry(item_id).or_default().push(att);
     }
-    Ok(attachments)
+
+    Ok(map)
 }
 
-async fn decrypt_password_item_row(
+pub struct AuditPasswordItem {
+    pub id: i64,
+    pub title: String,
+    pub username: Option<String>,
+    pub password: String,
+    pub tags: Option<String>,
+}
+
+struct PreparedPasswordItem {
+    category: String,
+    title: String,
+    description: Option<String>,
+    img: Option<String>,
+    tags: Option<String>,
+    username: Option<String>,
+    url: Option<String>,
+    notes: Option<String>,
+    password: String,
+    totp_secret: Option<String>,
+    custom_fields: String,
+    field_order: Option<String>,
+}
+
+impl PreparedPasswordItem {
+    fn new(item: &PasswordItem, helper: &CryptoHelper) -> Result<Self> {
+        Ok(Self {
+            category: helper.encrypt(&item.category)?,
+            title: helper.encrypt(&item.title)?,
+            description: helper.encrypt_opt(item.description.as_ref())?,
+            img: helper.encrypt_opt(item.img.as_ref())?,
+            tags: helper.encrypt_opt(item.tags.as_ref())?,
+            username: helper.encrypt_opt(item.username.as_ref())?,
+            url: helper.encrypt_opt(item.url.as_ref())?,
+            notes: helper.encrypt_opt(item.notes.as_ref().map(|v| &**v))?,
+            password: helper.encrypt(item.password.as_str())?,
+            totp_secret: item
+                .totp_secret
+                .as_ref()
+                .map(|s| helper.encrypt(s.as_str()))
+                .transpose()?,
+            custom_fields: helper.encrypt(&serde_json::to_string(&item.custom_fields)?)?,
+            field_order: item
+                .field_order
+                .as_ref()
+                .map(|fo| serde_json::to_string(fo))
+                .transpose()?
+                .map(|fo| helper.encrypt(&fo))
+                .transpose()?,
+        })
+    }
+}
+
+fn decrypt_password_item_row(
     row: &sqlx::sqlite::SqliteRow,
     helper: &CryptoHelper,
-    db_pool: &SqlitePool,
+    attachments: Option<Vec<Attachment>>,
 ) -> Result<PasswordItem> {
     let id: i64 = row.get("id");
 
@@ -77,8 +144,6 @@ async fn decrypt_password_item_row(
     let field_order = field_order_enc
         .and_then(|fo_enc| helper.decrypt(&fo_enc).ok())
         .and_then(|fo_json| serde_json::from_str(&fo_json).ok());
-
-    let attachments = fetch_attachments_for_item(db_pool, helper, id).await.ok();
 
     Ok(PasswordItem {
         id,
@@ -227,15 +292,79 @@ async fn sync_search_indices(
     }
 
     let trigrams = helper.generate_trigram_hashes(&all_searchable_text);
-    for hash in trigrams {
-        sqlx::query("INSERT OR IGNORE INTO search_trigrams (item_id, trigram_hash) VALUES (?, ?)")
-            .bind(item_id)
-            .bind(hash)
-            .execute(tx.as_mut())
-            .await?;
+    if !trigrams.is_empty() {
+        // SQLite parameter limit is usually 999 or 32766, but let's be safe with a chunk size.
+        // Each row has 2 parameters (item_id, hash).
+        for chunk in trigrams.chunks(400) {
+            let mut sql =
+                "INSERT OR IGNORE INTO search_trigrams (item_id, trigram_hash) VALUES ".to_string();
+            let placeholders = chunk
+                .iter()
+                .map(|_| "(?, ?)")
+                .collect::<Vec<_>>()
+                .join(", ");
+            sql.push_str(&placeholders);
+
+            let mut q = sqlx::query(&sql);
+            for hash in chunk {
+                q = q.bind(item_id).bind(hash);
+            }
+            q.execute(tx.as_mut()).await?;
+        }
     }
 
     Ok(())
+}
+
+pub async fn get_password_items_impl(
+    db_pool: &SqlitePool,
+    key: &[u8],
+) -> Result<Vec<PasswordItem>> {
+    let rows = sqlx::query("SELECT id, category, title, description, img, tags, username, url, notes, password, created_at, updated_at, color, totp_secret, custom_fields, field_order FROM password_items")
+        .fetch_all(db_pool)
+        .await?;
+
+    let helper = CryptoHelper::new(key)?;
+    let item_ids: Vec<i64> = rows.iter().map(|r| r.get("id")).collect();
+    let attachments_map = fetch_attachments_bulk(db_pool, &helper, &item_ids).await?;
+
+    let mut items = Vec::with_capacity(rows.len());
+    for row in rows {
+        let id: i64 = row.get("id");
+        items.push(decrypt_password_item_row(
+            &row,
+            &helper,
+            attachments_map.get(&id).cloned(),
+        )?);
+    }
+
+    Ok(items)
+}
+pub async fn get_password_audit_data_impl(
+    db_pool: &SqlitePool,
+    key: &[u8],
+) -> Result<Vec<AuditPasswordItem>> {
+    let rows = sqlx::query("SELECT id, title, username, password, tags FROM password_items")
+        .fetch_all(db_pool)
+        .await?;
+
+    let helper = CryptoHelper::new(key)?;
+    let mut items = Vec::with_capacity(rows.len());
+
+    for row in rows {
+        let password_enc: String = row.get("password");
+        let title_enc: String = row.get("title");
+
+        items.push(AuditPasswordItem {
+            id: row.get("id"),
+            title: helper.decrypt(&title_enc)?,
+            username: helper.decrypt_opt(row.get("username"))?,
+            password: helper.decrypt(&password_enc)?,
+            tags: helper.decrypt_opt(row.get("tags"))?,
+        });
+    }
+
+    Ok(items)
 }
 
 #[allow(dead_code)]
@@ -271,7 +400,8 @@ pub async fn search_password_items(
 
     let query_trimmed = query.trim();
 
-    let mut sql = "SELECT DISTINCT p.id, p.category, p.title, p.description, p.img, p.tags, p.username, p.url, p.created_at, p.updated_at, p.color 
+    // Optimization: tag_id join doesn't need DISTINCT if (item_id, tag_id) is PK
+    let mut sql = "SELECT p.id, p.category, p.title, p.description, p.img, p.tags, p.username, p.url, p.created_at, p.updated_at, p.color 
                    FROM password_items p".to_string();
 
     if tag_id.is_some() {
@@ -281,7 +411,6 @@ pub async fn search_password_items(
     let mut conditions = Vec::new();
 
     if !query_trimmed.is_empty() {
-        let _token = helper.generate_search_token(query_trimmed);
         let trigrams = helper.generate_trigram_hashes(query_trimmed);
 
         if trigrams.len() >= 2 {
@@ -302,33 +431,48 @@ pub async fn search_password_items(
         }
     }
 
+    let mut category_tag_ids = Vec::new();
+
     if let Some(cat) = &category {
         match cat.as_str() {
-            "recent" => {
-                let pin_tags = ["pinned", "pin"]
+            "recent" | "favorites" => {
+                let buttons =
+                    crate::db::buttons::get_buttons_impl(&db_pool, key.as_slice()).await?;
+                let target_names = if cat == "recent" {
+                    vec!["pinned", "pin"]
+                } else {
+                    vec!["favorite", "fav", "star"]
+                };
+
+                category_tag_ids = buttons
                     .iter()
-                    .map(|t| helper.encrypt(t).unwrap_or_default())
+                    .filter(|b| target_names.contains(&b.text.as_str()))
+                    .map(|b| b.id)
                     .collect::<Vec<_>>();
 
-                let placeholders = pin_tags.iter().map(|_| "?").collect::<Vec<_>>().join(", ");
-
-                conditions.push(format!(
-                    "(p.id IN (SELECT item_id FROM item_tags JOIN buttons ON item_tags.tag_id = buttons.id WHERE buttons.text IN ({})) OR p.updated_at >= datetime('now', '-7 days'))",
-                    placeholders
-                ));
-            }
-            "favorites" => {
-                let fav_tags = ["favorite", "fav", "star"]
-                    .iter()
-                    .map(|t| helper.encrypt(t).unwrap_or_default())
-                    .collect::<Vec<_>>();
-
-                let placeholders = fav_tags.iter().map(|_| "?").collect::<Vec<_>>().join(", ");
-
-                conditions.push(format!(
-                    "p.id IN (SELECT item_id FROM item_tags JOIN buttons ON item_tags.tag_id = buttons.id WHERE buttons.text IN ({}))",
-                    placeholders
-                ));
+                if !category_tag_ids.is_empty() {
+                    let placeholders = category_tag_ids
+                        .iter()
+                        .map(|_| "?")
+                        .collect::<Vec<_>>()
+                        .join(", ");
+                    if cat == "recent" {
+                        conditions.push(format!(
+                            "(p.id IN (SELECT item_id FROM item_tags WHERE tag_id IN ({})) OR p.updated_at >= datetime('now', '-7 days'))",
+                            placeholders
+                        ));
+                    } else {
+                        conditions.push(format!(
+                            "p.id IN (SELECT item_id FROM item_tags WHERE tag_id IN ({}))",
+                            placeholders
+                        ));
+                    }
+                } else if cat == "recent" {
+                    conditions.push("p.updated_at >= datetime('now', '-7 days')".to_string());
+                } else {
+                    // Favorites but no tags found - return empty results
+                    return Ok(Vec::new());
+                }
             }
             _ => {}
         }
@@ -365,28 +509,8 @@ pub async fn search_password_items(
         }
     }
 
-    if let Some(cat) = category {
-        match cat.as_str() {
-            "recent" => {
-                let pin_tags = ["pinned", "pin"]
-                    .iter()
-                    .map(|t| helper.encrypt(t).unwrap_or_default())
-                    .collect::<Vec<_>>();
-                for tag in pin_tags {
-                    q = q.bind(tag);
-                }
-            }
-            "favorites" => {
-                let fav_tags = ["favorite", "fav", "star"]
-                    .iter()
-                    .map(|t| helper.encrypt(t).unwrap_or_default())
-                    .collect::<Vec<_>>();
-                for tag in fav_tags {
-                    q = q.bind(tag);
-                }
-            }
-            _ => {}
-        }
+    for id in category_tag_ids {
+        q = q.bind(id);
     }
 
     let rows = q.fetch_all(&db_pool).await?;
@@ -461,23 +585,6 @@ pub async fn get_password_overviews_by_ids(
     Ok(items)
 }
 
-pub async fn get_password_items_impl(
-    db_pool: &SqlitePool,
-    key: &[u8],
-) -> Result<Vec<PasswordItem>> {
-    let rows = sqlx::query("SELECT id, category, title, description, img, tags, username, url, notes, password, created_at, updated_at, color, totp_secret, custom_fields, field_order FROM password_items")
-        .fetch_all(db_pool)
-        .await?;
-
-    let helper = CryptoHelper::new(key)?;
-    let mut items = Vec::with_capacity(rows.len());
-    for row in rows {
-        items.push(decrypt_password_item_row(&row, &helper, db_pool).await?);
-    }
-
-    Ok(items)
-}
-
 #[tauri::command]
 pub async fn get_password_items(state: State<'_, AppState>) -> Result<Vec<PasswordItem>> {
     let key = get_key(&state).await?;
@@ -494,50 +601,27 @@ pub async fn save_password_item(state: State<'_, AppState>, item: PasswordItem) 
     let helper = CryptoHelper::new(key.as_slice())?;
     let now = Utc::now().to_rfc3339();
 
-    let category_enc = helper.encrypt(&item.category)?;
-    let title_enc = helper.encrypt(&item.title)?;
-    let description_enc = helper.encrypt_opt(item.description.as_ref())?;
-    let img_enc = helper.encrypt_opt(item.img.as_ref())?;
-    let tags_enc = helper.encrypt_opt(item.tags.as_ref())?;
-    let username_enc = helper.encrypt_opt(item.username.as_ref())?;
-    let url_enc = helper.encrypt_opt(item.url.as_ref())?;
-    let notes_enc = helper.encrypt_opt(item.notes.as_ref().map(|v| &**v))?;
-    let password_enc = helper.encrypt(item.password.as_str())?;
-    let totp_secret_enc = item
-        .totp_secret
-        .as_ref()
-        .map(|s| helper.encrypt(s.as_str()))
-        .transpose()?;
-
-    let custom_fields_json = serde_json::to_string(&item.custom_fields)?;
-    let custom_fields_enc = helper.encrypt(&custom_fields_json)?;
-
-    let field_order_json = item
-        .field_order
-        .as_ref()
-        .map(|fo| serde_json::to_string(&fo))
-        .transpose()?;
-    let field_order_enc = helper.encrypt_opt(field_order_json.as_ref())?;
+    let prepared = PreparedPasswordItem::new(&item, &helper)?;
 
     let db_pool = get_db_pool(&state).await?;
     let mut tx = db_pool.begin().await?;
 
     let item_id = sqlx::query("INSERT INTO password_items (category, title, description, img, tags, username, url, notes, password, created_at, updated_at, color, totp_secret, custom_fields, field_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
-        .bind(category_enc)
-        .bind(title_enc)
-        .bind(description_enc)
-        .bind(img_enc)
-        .bind(tags_enc)
-        .bind(username_enc)
-        .bind(url_enc)
-        .bind(notes_enc)
-        .bind(password_enc)
+        .bind(prepared.category)
+        .bind(prepared.title)
+        .bind(prepared.description)
+        .bind(prepared.img)
+        .bind(prepared.tags)
+        .bind(prepared.username)
+        .bind(prepared.url)
+        .bind(prepared.notes)
+        .bind(prepared.password)
         .bind(now.clone())
         .bind(now)
         .bind(item.color)
-        .bind(totp_secret_enc)
-        .bind(custom_fields_enc)
-        .bind(field_order_enc)
+        .bind(prepared.totp_secret)
+        .bind(prepared.custom_fields)
+        .bind(prepared.field_order)
         .execute(tx.as_mut())
         .await?
         .last_insert_rowid();
@@ -576,49 +660,26 @@ pub async fn update_password_item(state: State<'_, AppState>, item: PasswordItem
     let helper = CryptoHelper::new(key.as_slice())?;
     let now = Utc::now().to_rfc3339();
 
-    let category_enc = helper.encrypt(&item.category)?;
-    let title_enc = helper.encrypt(&item.title)?;
-    let description_enc = helper.encrypt_opt(item.description.as_ref())?;
-    let img_enc = helper.encrypt_opt(item.img.as_ref())?;
-    let tags_enc = helper.encrypt_opt(item.tags.as_ref())?;
-    let username_enc = helper.encrypt_opt(item.username.as_ref())?;
-    let url_enc = helper.encrypt_opt(item.url.as_ref())?;
-    let notes_enc = helper.encrypt_opt(item.notes.as_ref().map(|v| &**v))?;
-    let password_enc = helper.encrypt(item.password.as_str())?;
-    let totp_secret_enc = item
-        .totp_secret
-        .as_ref()
-        .map(|s| helper.encrypt(s.as_str()))
-        .transpose()?;
-
-    let custom_fields_json = serde_json::to_string(&item.custom_fields)?;
-    let custom_fields_enc = helper.encrypt(&custom_fields_json)?;
-
-    let field_order_json = item
-        .field_order
-        .as_ref()
-        .map(|fo| serde_json::to_string(&fo))
-        .transpose()?;
-    let field_order_enc = helper.encrypt_opt(field_order_json.as_ref())?;
+    let prepared = PreparedPasswordItem::new(&item, &helper)?;
 
     let db_pool = get_db_pool(&state).await?;
     let mut tx = db_pool.begin().await?;
 
     sqlx::query("UPDATE password_items SET category = ?, title = ?, description = ?, img = ?, tags = ?, username = ?, url = ?, notes = ?, password = ?, updated_at = ?, color = ?, totp_secret = ?, custom_fields = ?, field_order = ? WHERE id = ?")
-        .bind(category_enc)
-        .bind(title_enc)
-        .bind(description_enc)
-        .bind(img_enc)
-        .bind(tags_enc)
-        .bind(username_enc)
-        .bind(url_enc)
-        .bind(notes_enc)
-        .bind(password_enc)
+        .bind(prepared.category)
+        .bind(prepared.title)
+        .bind(prepared.description)
+        .bind(prepared.img)
+        .bind(prepared.tags)
+        .bind(prepared.username)
+        .bind(prepared.url)
+        .bind(prepared.notes)
+        .bind(prepared.password)
         .bind(now)
         .bind(item.color)
-        .bind(totp_secret_enc)
-        .bind(custom_fields_enc)
-        .bind(field_order_enc)
+        .bind(prepared.totp_secret)
+        .bind(prepared.custom_fields)
+        .bind(prepared.field_order)
         .bind(item.id)
         .execute(tx.as_mut())
         .await?;
@@ -702,9 +763,34 @@ pub async fn get_password_item_by_id(
 
     if let Some(row) = row {
         let helper = CryptoHelper::new(key.as_slice())?;
-        Ok(Some(
-            decrypt_password_item_row(&row, &helper, &db_pool).await?,
-        ))
+        let id: i64 = row.get("id");
+
+        let attachments = sqlx::query(
+            "SELECT id, file_name, file_size, mime_type, created_at FROM attachments WHERE item_id = ?",
+        )
+        .bind(id)
+        .fetch_all(&db_pool)
+        .await?;
+
+        let mut decrypted_attachments = Vec::new();
+        for att_row in attachments {
+            let name_enc: String = att_row.get("file_name");
+            let mime_enc: String = att_row.get("mime_type");
+            decrypted_attachments.push(Attachment {
+                id: att_row.get("id"),
+                item_id: id,
+                file_name: helper.decrypt(&name_enc)?,
+                file_size: att_row.get("file_size"),
+                mime_type: helper.decrypt(&mime_enc)?,
+                created_at: att_row.get("created_at"),
+            });
+        }
+
+        Ok(Some(decrypt_password_item_row(
+            &row,
+            &helper,
+            Some(decrypted_attachments),
+        )?))
     } else {
         Ok(None)
     }

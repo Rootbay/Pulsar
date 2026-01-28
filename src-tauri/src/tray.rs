@@ -13,8 +13,12 @@ pub fn setup_tray<R: Runtime>(app: &AppHandle<R>) -> Result<()> {
     let menu = Menu::with_items(app, &[&show_i, &quit_i])
         .map_err(|e| crate::error::Error::Internal(e.to_string()))?;
 
-    let _ = TrayIconBuilder::with_id("main")
-        .icon(app.default_window_icon().unwrap().clone())
+    let mut builder = TrayIconBuilder::with_id("main");
+    if let Some(icon) = app.default_window_icon() {
+        builder = builder.icon(icon.clone());
+    }
+
+    let _ = builder
         .menu(&menu)
         .on_menu_event(|app, event| match event.id.as_ref() {
             "show" => {

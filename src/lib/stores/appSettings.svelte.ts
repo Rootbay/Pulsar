@@ -118,9 +118,9 @@ class SettingsStore {
       this.#saveTimeout = null;
     }
 
-    this.isSaving = true;
     try {
-      await callBackend('set_all_settings', { settings: JSON.stringify(this.state) });
+      const snapshot = $state.snapshot(this.state);
+      await callBackend('set_all_settings', { settings: JSON.stringify(snapshot) });
       await callBackend('apply_system_settings');
     } catch (error) {
       console.error('Failed to save settings:', error);

@@ -2,11 +2,83 @@ use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::time::UNIX_EPOCH;
 
+use crate::db::init_db_lazy;
 use crate::error::{Error, Result};
 use crate::state::AppState;
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
 use tauri::State;
+use zeroize::Zeroize;
+
+#[tauri::command]
+pub async fn is_database_loaded(state: State<'_, AppState>) -> Result<bool> {
+    let guard = state.db.lock().await;
+    Ok(guard.is_some())
+}
+
+#[tauri::command]
+pub async fn get_active_db_path(state: State<'_, AppState>) -> Result<Option<String>> {
+    let guard = state.db_path.lock().await;
+    Ok(guard.as_ref().map(|p| p.to_string_lossy().to_string()))
+}
+
+#[tauri::command]
+pub async fn switch_database(db_path: PathBuf, app_state: State<'_, AppState>) -> Result<()> {
+    let _rekey_lock = app_state.rekey.lock().await;
+
+    {
+        let path_guard = app_state.db_path.lock().await;
+        if let Some(active_path) = path_guard.as_ref() {
+            if active_path == &db_path {
+                let db_guard = app_state.db.lock().await;
+                if db_guard.is_some() {
+                    return Ok(());
+                }
+            }
+        }
+    }
+
+    {
+        let mut guard = app_state.db.lock().await;
+        if let Some(old_pool) = guard.take() {
+            old_pool.close().await;
+        }
+    }
+
+    {
+        let mut kg = app_state.key.lock().await;
+        *kg = None;
+    }
+
+    {
+        let mut pending = app_state.pending_key.lock().await;
+        if let Some(mut key) = pending.take() {
+            key.key.zeroize();
+        }
+    }
+
+    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+
+    match init_db_lazy(&db_path, None, true).await {
+        Ok(new_pool) => {
+            let mut guard = app_state.db.lock().await;
+            *guard = Some(new_pool);
+
+            let mut path_guard = app_state.db_path.lock().await;
+            *path_guard = Some(db_path.clone());
+        }
+        Err(e) => {
+            eprintln!(
+                "Failed to initialize database pool at {}: {}",
+                db_path.display(),
+                e
+            );
+            return Err(Error::Internal(e));
+        }
+    };
+
+    Ok(())
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]

@@ -111,8 +111,9 @@ pub fn set_autostart(enabled: bool) -> Result<()> {
 </plist>"#,
                 exe_path.display()
             );
-            fs::create_dir_all(plist_path.parent().unwrap())
-                .map_err(|e| Error::Internal(e.to_string()))?;
+            if let Some(parent) = plist_path.parent() {
+                fs::create_dir_all(parent).map_err(|e| Error::Internal(e.to_string()))?;
+            }
             fs::write(plist_path, plist_content).map_err(|e| Error::Internal(e.to_string()))?;
         } else if plist_path.exists() {
             fs::remove_file(plist_path).map_err(|e| Error::Internal(e.to_string()))?;

@@ -17,85 +17,12 @@ mod types;
 mod utils;
 mod vault_commands;
 
-use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::{Mutex, Semaphore};
 
 use crate::auth::UNLOCK_CONCURRENCY_LIMIT;
-use crate::error::{Error, Result};
 use crate::state::AppState;
-use tauri::{Manager, RunEvent, State};
-use zeroize::Zeroize;
-
-#[tauri::command]
-async fn is_database_loaded(state: State<'_, AppState>) -> Result<bool> {
-    let guard = state.db.lock().await;
-    Ok(guard.is_some())
-}
-
-#[tauri::command]
-async fn get_active_db_path(state: State<'_, AppState>) -> Result<Option<String>> {
-    let guard = state.db_path.lock().await;
-    Ok(guard.as_ref().map(|p| p.to_string_lossy().to_string()))
-}
-
-#[tauri::command]
-async fn switch_database(db_path: PathBuf, app_state: State<'_, AppState>) -> Result<()> {
-    let _rekey_lock = app_state.rekey.lock().await;
-
-    {
-        let path_guard = app_state.db_path.lock().await;
-        if let Some(active_path) = path_guard.as_ref() {
-            if active_path == &db_path {
-                let db_guard = app_state.db.lock().await;
-                if db_guard.is_some() {
-                    return Ok(());
-                }
-            }
-        }
-    }
-
-    {
-        let mut guard = app_state.db.lock().await;
-        if let Some(old_pool) = guard.take() {
-            old_pool.close().await;
-        }
-    }
-
-    {
-        let mut kg = app_state.key.lock().await;
-        *kg = None;
-    }
-
-    {
-        let mut pending = app_state.pending_key.lock().await;
-        if let Some(mut key) = pending.take() {
-            key.key.zeroize();
-        }
-    }
-
-    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-
-    match crate::db::init_db_lazy(&db_path, None, true).await {
-        Ok(new_pool) => {
-            let mut guard = app_state.db.lock().await;
-            *guard = Some(new_pool);
-
-            let mut path_guard = app_state.db_path.lock().await;
-            *path_guard = Some(db_path.clone());
-        }
-        Err(e) => {
-            eprintln!(
-                "Failed to initialize database pool at {}: {}",
-                db_path.display(),
-                e
-            );
-            return Err(Error::Internal(e));
-        }
-    };
-
-    Ok(())
-}
+use tauri::{Manager, RunEvent};
 
 fn main() {
     let context = tauri::generate_context!();
@@ -123,9 +50,9 @@ fn main() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_store::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
-            is_database_loaded,
-            get_active_db_path,
-            switch_database,
+            vault_commands::is_database_loaded,
+            vault_commands::get_active_db_path,
+            vault_commands::switch_database,
             auth::set_master_password,
             auth::unlock,
             auth::verify_login_totp,

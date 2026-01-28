@@ -193,7 +193,7 @@ pub struct ReusedPasswordGroup {
 pub async fn get_security_report(state: State<'_, AppState>) -> Result<SecurityReport> {
     let key = get_key(&state).await?;
     let pool = get_db_pool(&state).await?;
-    let items = crate::db::get_password_items_impl(&pool, key.as_slice()).await?;
+    let items = crate::db::get_password_audit_data_impl(&pool, key.as_slice()).await?;
 
     use sha2::{Digest, Sha256};
     use std::collections::HashMap;

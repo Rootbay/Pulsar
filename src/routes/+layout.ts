@@ -25,8 +25,6 @@ export async function load() {
   const defaultVault = settings.state.general.defaultVaultOnStartup;
 
   if (defaultVault !== 'none' && recentDbPaths.length > 0 && !activePath) {
-    // If defaultVault is 'last_used' or a specific path, we use it.
-    // For now, we only support 'last_used' or 'none'.
     const targetPath = defaultVault === 'last_used' ? recentDbPaths[0] : defaultVault;
 
     try {
@@ -59,6 +57,9 @@ export async function load() {
       console.error('Failed to check if master password is configured:', e);
     }
     appState.isLocked = vaultLocked;
+  } else {
+    appState.isDatabaseLoaded = false;
+    appState.isLocked = true;
   }
 
   return { vaultLocked };

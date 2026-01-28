@@ -1,11 +1,9 @@
-import { invoke } from '@tauri-apps/api/core';
-import { toast } from '$lib/components/ui/sonner';
-
 export async function callBackend<T>(
   command: string,
   args: Record<string, unknown> = {}
 ): Promise<T> {
   try {
+    const { invoke } = await import('@tauri-apps/api/core');
     return await invoke<T>(command, args);
   } catch (error: unknown) {
     let errorMessage = 'An unknown error occurred';
@@ -27,7 +25,9 @@ export async function callBackend<T>(
       errorMessage.toLowerCase().includes('cancel');
 
     if (!isSilent) {
-      toast.error(errorMessage);
+      import('svelte-sonner').then(({ toast }) => {
+        toast.error(errorMessage);
+      }).catch(() => {});
     }
 
     throw error;

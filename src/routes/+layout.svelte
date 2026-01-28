@@ -82,8 +82,8 @@
     }
   });
 
-  const requiredAuthRoute = $derived(
-    !appState.isDatabaseLoaded
+  const requiredAuthRoute = $derived.by(() => {
+    const route = !appState.isDatabaseLoaded
       ? '/select-vault'
       : appState.needsPasswordSetup
         ? '/setup'
@@ -91,8 +91,9 @@
           ? '/login'
           : appState.totpRequired && !appState.totpVerified
             ? '/totp'
-            : null
-  );
+            : null;
+    return route;
+  });
 
   $effect(() => {
     if (browser) {

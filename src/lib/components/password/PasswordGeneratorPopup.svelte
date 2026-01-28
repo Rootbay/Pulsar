@@ -28,18 +28,23 @@
   const wordCount = $derived(options.wordCount || 4);
   const separator = $derived(options.separator || '-');
 
-  function generate() {
-    const pass = GeneratorService.generate(passwordLength, options);
-    if (pass) generatedPassword = pass;
+  async function generate() {
+    if (mode === 'passphrase') {
+      const pass = await GeneratorService.generatePassphrase(options.wordCount, options.separator);
+      if (pass) generatedPassword = pass;
+    } else {
+      const pass = GeneratorService.generate(passwordLength, options);
+      if (pass) generatedPassword = pass;
+    }
   }
 
   function handleModeChange(newMode: string) {
     options.mode = newMode as 'password' | 'passphrase';
-    generate();
+    void generate();
   }
 
   $effect(() => {
-    generate();
+    void generate();
   });
 
   function selectAndClose() {
@@ -48,9 +53,7 @@
   }
 </script>
 
-<div
-  class="fixed inset-0 z-100 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm"
->
+<div class="fixed inset-0 z-100 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
   <div class="border-border bg-card w-full max-w-lg overflow-hidden rounded-2xl border shadow-2xl">
     <div class="border-border bg-muted/30 flex items-center justify-between border-b p-4">
       <div class="flex items-center gap-2">

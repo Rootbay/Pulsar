@@ -1,5 +1,5 @@
+use crate::types::vault::{Button, PasswordItem, RecipientKey};
 use serde::{Deserialize, Serialize};
-use crate::types::vault::{PasswordItem, Button, RecipientKey};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]

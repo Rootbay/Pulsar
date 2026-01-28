@@ -38,7 +38,6 @@
       const appearance = settings.state.appearance;
       const currentTheme = appearance.theme;
 
-      // Theme
       htmlElement.classList.remove('light', 'dark');
       if (currentTheme === 'system') {
         htmlElement.classList.add(prefersDark ? 'dark' : 'light');
@@ -46,34 +45,28 @@
         htmlElement.classList.add(currentTheme);
       }
 
-      // High Contrast
       if (appearance.highContrast) {
         htmlElement.classList.add('high-contrast');
       } else {
         htmlElement.classList.remove('high-contrast');
       }
 
-      // Reduced Motion
       if (appearance.reducedMotion) {
         htmlElement.classList.add('reduced-motion');
       } else {
         htmlElement.classList.remove('reduced-motion');
       }
 
-      // Page Density
       htmlElement.classList.remove('density-comfortable', 'density-compact', 'density-dense');
       htmlElement.classList.add(`density-${appearance.pageDensity || 'comfortable'}`);
 
-      // Font Size
       htmlElement.style.fontSize = `${appearance.fontSize || 14}px`;
 
-      // Sidebar Width
       htmlElement.style.setProperty(
         '--passwordList-width',
         `${appearance.passwordListWidth || 300}px`
       );
-      
-      // Compact Mode
+
       if (appearance.compactMode) {
         htmlElement.classList.add('compact-mode');
       } else {

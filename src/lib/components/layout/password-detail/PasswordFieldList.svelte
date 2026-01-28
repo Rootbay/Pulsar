@@ -21,7 +21,7 @@
   import { Skeleton } from '$lib/components/ui/skeleton';
   import type { DisplayField } from '$lib/types/password-fields';
   import type { PasswordItem } from '$lib/types/password';
-  import { securityDashboard } from '$lib/stores';
+  import { SecurityService } from '$lib/utils/security';
   import { copyPassword, copyText, copyUrl, copyUsername } from '$lib/utils/copyHelper';
   import { toast } from '$lib/components/ui/sonner';
   import PasswordStrength from '$lib/components/password/PasswordStrength.svelte';
@@ -220,22 +220,6 @@
       toast.error(getCopyErrorMessage(field));
     }
   }
-
-  function getBadgeColorClass(score: number, isBreached: boolean | null): string {
-    if (isBreached) return 'text-red-500 bg-red-500/10 border-red-500/20 hover:bg-red-500/20';
-    if (score < 2) return 'text-red-500 bg-red-500/10 border-red-500/20 hover:bg-red-500/20';
-    if (score === 2)
-      return 'text-orange-500 bg-orange-500/10 border-orange-500/20 hover:bg-orange-500/20';
-    if (score === 3)
-      return 'text-yellow-500 bg-yellow-500/10 border-yellow-500/20 hover:bg-yellow-500/20';
-    return 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20 hover:bg-emerald-500/20';
-  }
-
-  function getBadgeLabel(score: number, isBreached: boolean | null, count: number): string {
-    if (isBreached) return `Breached (${count})`;
-    const labels = ['Weak', 'Weak', 'Fair', 'Good', 'Strong'];
-    return labels[score] || 'Unknown';
-  }
 </script>
 
 <div
@@ -277,7 +261,7 @@
                 {#if health}
                   <Badge
                     variant="outline"
-                    class={`h-6 gap-1.5 px-2 transition-colors ${getBadgeColorClass(health.score, health.isBreached)}`}
+                    class={`h-6 gap-1.5 px-2 transition-colors ${SecurityService.getStrengthBadgeClass(health.score, health.isBreached)}`}
                   >
                     {#if health.isBreached}
                       <ShieldAlert class="h-3.5 w-3.5" />
@@ -287,7 +271,11 @@
                       <Shield class="h-3.5 w-3.5" />
                     {/if}
                     <span class="text-[10px] font-semibold tracking-wider uppercase"
-                      >{getBadgeLabel(health.score, health.isBreached, health.breachCount)}</span
+                      >{SecurityService.getStrengthLabel(
+                        health.score,
+                        health.isBreached,
+                        health.breachCount
+                      )}</span
                     >
                   </Badge>
                 {/if}
@@ -390,7 +378,7 @@
                     {#if health}
                       <Badge
                         variant="outline"
-                        class={`h-6 gap-1.5 px-2 transition-colors ${getBadgeColorClass(health.score, health.isBreached)}`}
+                        class={`h-6 gap-1.5 px-2 transition-colors ${SecurityService.getStrengthBadgeClass(health.score, health.isBreached)}`}
                       >
                         {#if health.isBreached}
                           <ShieldAlert class="h-3.5 w-3.5" />
@@ -400,7 +388,7 @@
                           <Shield class="h-3.5 w-3.5" />
                         {/if}
                         <span class="text-[10px] font-semibold tracking-wider uppercase"
-                          >{getBadgeLabel(
+                          >{SecurityService.getStrengthLabel(
                             health.score,
                             health.isBreached,
                             health.breachCount
@@ -448,7 +436,7 @@
                 </div>
               {/if}
             {/snippet}
-          </Input>
+          {/Input}
           {#if isEditing && field.id === 'password'}
             <div class="mt-2 px-3 pb-2">
               <PasswordStrength password={field.value ?? ''} showDetails={true} />

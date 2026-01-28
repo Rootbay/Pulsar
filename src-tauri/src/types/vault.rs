@@ -1,6 +1,6 @@
+use crate::types::secret::SecretString;
 use serde::{Deserialize, Serialize};
 use validator::Validate;
-use crate::types::secret::SecretString;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Button {

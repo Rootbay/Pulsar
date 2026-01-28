@@ -93,9 +93,7 @@
       )
   );
 
-  const filteredItems = $derived(vaultStore.filteredItems);
-
-  const sectionedItems = $derived.by(() => partitionItems(filteredItems));
+  const sectionedItems = $derived.by(() => partitionItems(vaultStore.items));
 
   const currentSkeletonKey = $derived(
     () => `${appState.selectedTag ?? 'all'}|${appState.filterCategory}`
@@ -103,7 +101,7 @@
 
   let lastDispatchedId: number | null = null;
   $effect(() => {
-    const visibleIds = new Set(filteredItems.map((item) => item.id));
+    const visibleIds = new Set(vaultStore.items.map((item) => item.id));
 
     let desiredId: number | null = null;
     if (selectedId !== null && visibleIds.has(selectedId)) {
@@ -124,7 +122,7 @@
       }
 
       if (lastDispatchedId !== desiredId) {
-        const item = filteredItems.find((i) => i.id === desiredId);
+        const item = vaultStore.items.find((i) => i.id === desiredId);
         if (item) {
           onselect?.(item);
           lastDispatchedId = desiredId;
@@ -141,7 +139,7 @@
 
     lastSkeletonKey = skeletonKey;
 
-    if (filteredItems.length === 0) {
+    if (vaultStore.items.length === 0) {
       showSkeleton = false;
       if (skeletonTimer) {
         clearTimeout(skeletonTimer);
@@ -151,7 +149,7 @@
     }
 
     tick().then(() => {
-      if (filteredItems.length === 0) {
+      if (vaultStore.items.length === 0) {
         return;
       }
 
@@ -318,9 +316,9 @@
 
     try {
       await callBackend('update_password_item_tags', { id, tags: updatedTags });
-      const itemIndex = filteredItems.findIndex((candidate) => candidate.id === id);
+      const itemIndex = vaultStore.items.findIndex((candidate) => candidate.id === id);
       if (itemIndex !== -1) {
-        const updatedItem = { ...filteredItems[itemIndex], tags: updatedTags };
+        const updatedItem = { ...vaultStore.items[itemIndex], tags: updatedTags };
         vaultStore.updateItem(updatedItem);
       }
     } catch (error) {
@@ -374,8 +372,31 @@
     }
   });
 
+  let observer: IntersectionObserver | null = null;
+  let sentinelRef: HTMLElement | null = null;
+
+  $effect(() => {
+    if (!sentinelRef) return;
+
+    observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && vaultStore.hasMore && !vaultStore.isLoading) {
+          vaultStore.loadMore();
+        }
+      },
+      { rootMargin: '100px' }
+    );
+
+    observer.observe(sentinelRef);
+
+    return () => {
+      observer?.disconnect();
+    };
+  });
+
   onDestroy(() => {
     resizeController.destroy();
+    observer?.disconnect();
     if (skeletonTimer) {
       clearTimeout(skeletonTimer);
       skeletonTimer = null;
@@ -470,7 +491,7 @@
 
         <ScrollArea class="navScroll">
           <div class="scrollContent">
-            {#if filteredItems.length === 0}
+            {#if vaultStore.items.length === 0}
               <ul class="itemList" role="list">
                 <li class="no-items-message">
                   {#if appState.selectedTag}
@@ -578,6 +599,12 @@
                   </ul>
                 {/if}
               {/each}
+              <div bind:this={sentinelRef} class="h-4 w-full"></div>
+              {#if vaultStore.hasMore || vaultStore.isLoading}
+                <div class="flex items-center justify-center py-4">
+                  <Skeleton class="h-4 w-32" />
+                </div>
+              {/if}
             {/if}
           </div>
         </ScrollArea>

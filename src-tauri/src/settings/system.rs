@@ -228,17 +228,13 @@ pub async fn simulate_autotype() -> Result<()> {
             let mut utf16 = [0u16; 2];
             let encoded = c.encode_utf16(&mut utf16);
 
-            let event_down =
-                CGEvent::new_keyboard_event(source.clone(), 0, true).map_err(|_| {
-                    Error::Internal("Failed to create keyboard event down".to_string())
-                })?;
+            let event_down = CGEvent::new_keyboard_event(source.clone(), 0, true)
+                .map_err(|_| Error::Internal("Failed to create keyboard event down".to_string()))?;
             event_down.set_string(encoded);
             event_down.post(CGEventTapLocation::HID);
 
-            let event_up =
-                CGEvent::new_keyboard_event(source.clone(), 0, false).map_err(|_| {
-                    Error::Internal("Failed to create keyboard event up".to_string())
-                })?;
+            let event_up = CGEvent::new_keyboard_event(source.clone(), 0, false)
+                .map_err(|_| Error::Internal("Failed to create keyboard event up".to_string()))?;
             event_up.set_string(encoded);
             event_up.post(CGEventTapLocation::HID);
 
@@ -246,7 +242,6 @@ pub async fn simulate_autotype() -> Result<()> {
             tokio::time::sleep(std::time::Duration::from_millis(delay)).await;
         }
 
-        // Send Enter
         let event_down = CGEvent::new_keyboard_event(source.clone(), 36, true)
             .map_err(|_| Error::Internal("Failed to create enter key down".to_string()))?;
         event_down.post(CGEventTapLocation::HID);
@@ -259,9 +254,34 @@ pub async fn simulate_autotype() -> Result<()> {
 
     #[cfg(target_os = "linux")]
     {
-        // Linux implementation often requires external tools or specific permissions
-        // for uinput. Placeholder for now.
-        Ok(())
+        use tokio::process::Command;
+
+        let test_text = "Pulsar Autotype Test - 123456";
+        tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+
+        let type_status = Command::new("xdotool")
+            .arg("type")
+            .arg("--delay")
+            .arg("50")
+            .arg(test_text)
+            .status()
+            .await;
+
+        match type_status {
+            Ok(s) if s.success() => {
+                let _ = Command::new("xdotool")
+                    .arg("key")
+                    .arg("Return")
+                    .status()
+                    .await;
+                Ok(())
+            }
+            _ => {
+                Err(Error::Internal(
+                    "Autotype failed: 'xdotool' not found or failed. Please install xdotool to use this feature on Linux.".to_string(),
+                ))
+            }
+        }
     }
 
     #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
@@ -271,4 +291,3 @@ pub async fn simulate_autotype() -> Result<()> {
         ))
     }
 }
-

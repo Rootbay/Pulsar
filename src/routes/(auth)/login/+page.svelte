@@ -17,6 +17,7 @@
   import { appState } from '$lib/stores';
   import { settings } from '$lib/stores/appSettings.svelte';
   import { i18n, t as translate, type I18nKey } from '$lib/i18n.svelte';
+  import { parseError } from '$lib/utils/error';
   import { Lock, Eye, EyeOff, ArrowLeft, FingerprintPattern, TriangleAlert } from '@lucide/svelte';
   import { onMount } from 'svelte';
 
@@ -86,12 +87,8 @@
       }
     } catch (error: unknown) {
       console.error('Biometric unlock failed:', error);
-      const msg = (error as Record<string, unknown>).message || String(error);
-      if (
-        typeof msg === 'string' &&
-        !msg.toLowerCase().includes('cancel') &&
-        !msg.toLowerCase().includes('user canceled')
-      ) {
+      const msg = parseError(error);
+      if (!msg.toLowerCase().includes('cancel') && !msg.toLowerCase().includes('user canceled')) {
         loginError = t('loginBiometricFailed');
       }
     } finally {
@@ -147,7 +144,7 @@
       console.error('Unlock failed:', error);
       appState.totpRequired = false;
       appState.totpVerified = false;
-      loginError = ((error as Record<string, unknown>).message as string) || t('loginUnknownError');
+      loginError = parseError(error) || t('loginUnknownError');
     } finally {
       isUnlocking = false;
     }

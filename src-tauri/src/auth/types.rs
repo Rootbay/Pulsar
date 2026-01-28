@@ -1,6 +1,6 @@
-use serde::{Deserialize, Serialize};
 use crate::error::{Error, Result};
 use argon2::Params;
+use serde::{Deserialize, Serialize};
 use std::time::Duration;
 
 pub const PENDING_TOTP_TTL: Duration = Duration::from_secs(120);

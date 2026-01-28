@@ -1,13 +1,13 @@
-use tauri::{AppHandle, State};
+use crate::auth::metadata::get_vault_id;
+use crate::encryption::{decrypt, encrypt};
 use crate::error::{Error, Result};
 use crate::state::AppState;
-use crate::auth::metadata::get_vault_id;
-use crate::encryption::{encrypt, decrypt};
+use base64::{engine::general_purpose, Engine as _};
 use keyring::Entry;
-use zeroize::{Zeroize, Zeroizing};
 use rand::rngs::OsRng;
 use rand::RngCore;
-use base64::{engine::general_purpose, Engine as _};
+use tauri::{AppHandle, State};
+use zeroize::{Zeroize, Zeroizing};
 
 const KEYRING_SERVICE: &str = "pulsar-vault";
 
@@ -18,7 +18,7 @@ use tauri_plugin_biometric::{AuthOptions, BiometricExt, BiometryType};
 use windows::{
     core::HSTRING,
     Security::Credentials::UI::{
-        UserConsentVerifier, UserConsentVerifierAvailability, UserConsentVerificationResult,
+        UserConsentVerificationResult, UserConsentVerifier, UserConsentVerifierAvailability,
     },
 };
 
@@ -26,8 +26,8 @@ use windows::{
 use {
     block::ConcreteBlock,
     dispatch::Semaphore,
-    objc::{class, msg_send, sel, sel_impl},
     objc::runtime::Object,
+    objc::{class, msg_send, sel, sel_impl},
     objc_foundation::NSString,
     std::sync::{
         atomic::{AtomicBool, Ordering},
@@ -128,9 +128,9 @@ pub fn authenticate_biometric(app: &AppHandle, reason: &str) -> Result<()> {
 
         match result {
             UserConsentVerificationResult::Verified => Ok(()),
-            UserConsentVerificationResult::DeviceBusy => Err(Error::Internal(
-                "Biometric device is busy.".to_string(),
-            )),
+            UserConsentVerificationResult::DeviceBusy => {
+                Err(Error::Internal("Biometric device is busy.".to_string()))
+            }
             UserConsentVerificationResult::DeviceNotPresent => Err(Error::Internal(
                 "No biometric device is present.".to_string(),
             )),
@@ -166,12 +166,15 @@ pub fn authenticate_biometric(app: &AppHandle, reason: &str) -> Result<()> {
             })
             .copy();
 
-            let _: () = msg_send![context, evaluatePolicy:policy localizedReason:reason_ns reply:handler];
+            let _: () =
+                msg_send![context, evaluatePolicy:policy localizedReason:reason_ns reply:handler];
             semaphore.wait();
             if success.load(Ordering::SeqCst) {
                 Ok(())
             } else {
-                Err(Error::Internal("Biometric verification failed.".to_string()))
+                Err(Error::Internal(
+                    "Biometric verification failed.".to_string(),
+                ))
             }
         }
     }
@@ -185,13 +188,17 @@ pub fn authenticate_biometric(app: &AppHandle, reason: &str) -> Result<()> {
     }
 }
 
-pub async fn is_biometrics_enabled_impl(app: &AppHandle, state: &State<'_, AppState>) -> Result<bool> {
+pub async fn is_biometrics_enabled_impl(
+    app: &AppHandle,
+    state: &State<'_, AppState>,
+) -> Result<bool> {
     if ensure_biometric_available(app).is_err() {
         return Ok(false);
     }
     let db_path = crate::auth::get_db_path(state).await?;
     let vault_user = get_vault_id(&db_path);
-    let entry = Entry::new(KEYRING_SERVICE, &vault_user).map_err(|e| Error::Internal(e.to_string()))?;
+    let entry =
+        Entry::new(KEYRING_SERVICE, &vault_user).map_err(|e| Error::Internal(e.to_string()))?;
     match entry.get_password() {
         Ok(_) => Ok(true),
         Err(keyring::Error::NoEntry) => Ok(false),
@@ -199,12 +206,16 @@ pub async fn is_biometrics_enabled_impl(app: &AppHandle, state: &State<'_, AppSt
     }
 }
 
-pub async fn get_biometric_master_password(app: &AppHandle, state: &State<'_, AppState>) -> Result<String> {
+pub async fn get_biometric_master_password(
+    app: &AppHandle,
+    state: &State<'_, AppState>,
+) -> Result<String> {
     authenticate_biometric(app, "Unlock your Pulsar vault")?;
     let db_path = crate::auth::get_db_path(state).await?;
     let vault_user = get_vault_id(&db_path);
 
-    let entry = Entry::new(KEYRING_SERVICE, &vault_user).map_err(|e| Error::Internal(e.to_string()))?;
+    let entry =
+        Entry::new(KEYRING_SERVICE, &vault_user).map_err(|e| Error::Internal(e.to_string()))?;
     let bio_key_b64 = entry.get_password().map_err(|e| {
         if matches!(e, keyring::Error::NoEntry) {
             Error::Internal("Biometrics not configured for this vault".to_string())
@@ -225,11 +236,15 @@ pub async fn get_biometric_master_password(app: &AppHandle, state: &State<'_, Ap
     bio_key_vec.zeroize();
 
     let db_pool = state.db.lock().await.clone().ok_or(Error::VaultNotLoaded)?;
-    let row: Option<String> = sqlx::query_scalar("SELECT value FROM configuration WHERE key = 'biometric_encrypted_password'")
-        .fetch_optional(&db_pool)
-        .await?;
+    let row: Option<String> = sqlx::query_scalar(
+        "SELECT value FROM configuration WHERE key = 'biometric_encrypted_password'",
+    )
+    .fetch_optional(&db_pool)
+    .await?;
 
-    let encrypted_password_blob = row.ok_or_else(|| Error::Internal("Biometric configuration corrupted (DB entry missing)".to_string()))?;
+    let encrypted_password_blob = row.ok_or_else(|| {
+        Error::Internal("Biometric configuration corrupted (DB entry missing)".to_string())
+    })?;
 
     let master_password = decrypt(&encrypted_password_blob, &bio_key_bytes)
         .map_err(|_| Error::Internal("Biometric decryption failed".to_string()))?;
@@ -245,7 +260,7 @@ pub async fn enable_biometrics_impl(
 ) -> Result<()> {
     ensure_biometric_available(app)?;
     let db_path = crate::auth::get_db_path(state).await?;
-    
+
     let mut bio_key_bytes = [0u8; 32];
     OsRng.fill_bytes(&mut bio_key_bytes);
     let bio_key_b64 = Zeroizing::new(general_purpose::STANDARD.encode(bio_key_bytes));
@@ -260,8 +275,11 @@ pub async fn enable_biometrics_impl(
     .await?;
 
     let vault_user = get_vault_id(&db_path);
-    let entry = Entry::new(KEYRING_SERVICE, &vault_user).map_err(|e| Error::Internal(e.to_string()))?;
-    entry.set_password(bio_key_b64.as_str()).map_err(|e| Error::Internal(e.to_string()))?;
+    let entry =
+        Entry::new(KEYRING_SERVICE, &vault_user).map_err(|e| Error::Internal(e.to_string()))?;
+    entry
+        .set_password(bio_key_b64.as_str())
+        .map_err(|e| Error::Internal(e.to_string()))?;
     bio_key_bytes.zeroize();
 
     Ok(())
@@ -271,14 +289,15 @@ pub async fn disable_biometrics_impl(state: &State<'_, AppState>) -> Result<()> 
     let db_path = crate::auth::get_db_path(state).await?;
     let vault_user = get_vault_id(&db_path);
 
-    let entry = Entry::new(KEYRING_SERVICE, &vault_user).map_err(|e| Error::Internal(e.to_string()))?;
-    let _ = entry.delete_credential(); 
+    let entry =
+        Entry::new(KEYRING_SERVICE, &vault_user).map_err(|e| Error::Internal(e.to_string()))?;
+    let _ = entry.delete_credential();
 
     if let Some(db_pool) = state.db.lock().await.as_ref() {
         let _ = sqlx::query("DELETE FROM configuration WHERE key = 'biometric_encrypted_password'")
             .execute(db_pool)
             .await;
     }
-    
+
     Ok(())
 }

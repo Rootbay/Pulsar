@@ -208,7 +208,6 @@
     }
 
     if (vaultStore.items.length) {
-      // Fallback if ID is missing for some reason
       let newest = vaultStore.items[0];
 
       for (const item of vaultStore.items) {

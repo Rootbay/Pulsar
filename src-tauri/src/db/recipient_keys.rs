@@ -1,10 +1,10 @@
+use crate::db::utils::{get_db_pool, get_key};
+use crate::encryption::{decrypt, decrypt_zeroized, encrypt};
+use crate::error::Result;
 use crate::state::AppState;
 use crate::types::{RecipientKey, SecretString};
-use crate::encryption::{encrypt, decrypt, decrypt_zeroized};
-use crate::error::Result;
-use crate::db::utils::{get_key, get_db_pool};
-use tauri::State;
 use sqlx::{Row, SqlitePool};
+use tauri::State;
 
 #[tauri::command]
 pub async fn save_recipient_key(
@@ -28,7 +28,10 @@ pub async fn save_recipient_key(
     Ok(())
 }
 
-pub async fn get_recipient_keys_impl(db_pool: &SqlitePool, key: &[u8]) -> Result<Vec<RecipientKey>> {
+pub async fn get_recipient_keys_impl(
+    db_pool: &SqlitePool,
+    key: &[u8],
+) -> Result<Vec<RecipientKey>> {
     let rows = sqlx::query("SELECT id, name, public_key, private_key FROM recipient_keys")
         .fetch_all(db_pool)
         .await?;
@@ -43,12 +46,14 @@ pub async fn get_recipient_keys_impl(db_pool: &SqlitePool, key: &[u8]) -> Result
             id: row.get("id"),
             name: decrypt(name_enc.as_str(), key)?,
             public_key: decrypt(public_key_enc.as_str(), key)?,
-            private_key: SecretString::from_zeroized(decrypt_zeroized(private_key_enc.as_str(), key)?),
+            private_key: SecretString::from_zeroized(decrypt_zeroized(
+                private_key_enc.as_str(),
+                key,
+            )?),
         });
     }
     Ok(keys)
 }
-
 
 #[tauri::command]
 pub async fn get_recipient_keys(state: State<'_, AppState>) -> Result<Vec<RecipientKey>> {

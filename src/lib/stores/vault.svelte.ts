@@ -10,6 +10,9 @@ class VaultStore {
   #activeVaultId = $state<string | null>(null);
   #searchTerm = $state('');
   #searchTimeout: ReturnType<typeof setTimeout> | null = null;
+  #limit = 50;
+  #offset = 0;
+  #hasMore = $state(true);
 
   constructor() {
     $effect.root(() => {
@@ -18,11 +21,14 @@ class VaultStore {
           this.#items = [];
           this.#activeVaultId = null;
           this.#searchTerm = '';
+          this.#offset = 0;
+          this.#hasMore = true;
         }
       });
 
       $effect(() => {
         const _tag = appState.selectedTag;
+        const _category = appState.filterCategory;
         const _query = this.#searchTerm;
 
         if (this.#searchTimeout) clearTimeout(this.#searchTimeout);
@@ -39,6 +45,10 @@ class VaultStore {
 
   get isLoading() {
     return this.#isLoading;
+  }
+
+  get hasMore() {
+    return this.#hasMore;
   }
 
   get activeVaultId() {
@@ -60,35 +70,6 @@ class VaultStore {
     return { ...defaultVaultSettings, ...existing };
   }
 
-  filteredItems = $derived.by(() => {
-    const category = appState.filterCategory;
-    const RECENT_DAY_WINDOW = 7;
-    const DAY_IN_MS = 24 * 60 * 60 * 1000;
-    const PIN_TAG_NAMES = ['pinned', 'pin'];
-    const FAVORITE_TAG_NAMES = ['favorite', 'fav', 'star'];
-
-    return this.#items.filter((item) => {
-      if (category === 'recent') {
-        const itemTags = item.tags?.split(',').map((t) => t.trim().toLowerCase()) ?? [];
-        const isPinned = itemTags.some((t) => PIN_TAG_NAMES.includes(t));
-
-        if (!isPinned) {
-          const updatedAt = item.updated_at ? new Date(item.updated_at).getTime() : 0;
-          const now = Date.now();
-          if (now - updatedAt > RECENT_DAY_WINDOW * DAY_IN_MS) return false;
-        }
-      }
-
-      if (category === 'favorites') {
-        const itemTags = item.tags?.split(',').map((t) => t.trim().toLowerCase()) ?? [];
-        const isFav = itemTags.some((t) => FAVORITE_TAG_NAMES.includes(t));
-        if (!isFav) return false;
-      }
-
-      return true;
-    });
-  });
-
   async loadItems() {
     if (appState.isLocked) {
       this.#items = [];
@@ -96,17 +77,57 @@ class VaultStore {
     }
 
     this.#isLoading = true;
+    this.#offset = 0;
+    this.#hasMore = true;
     try {
       const tag = appState.selectedTag;
+      const category = appState.filterCategory;
       const tagStore = (await import('./tags.svelte')).tagStore;
       const tagObj = tagStore.tags.find((t) => t.text === tag);
 
-      this.#items = await callBackend<PasswordItemOverview[]>('search_password_items', {
+      const results = await callBackend<PasswordItemOverview[]>('search_password_items', {
         query: this.#searchTerm,
-        tagId: tagObj?.id ?? null
+        tagId: tagObj?.id ?? null,
+        category: category === 'all' ? null : category,
+        limit: this.#limit,
+        offset: this.#offset
       });
+
+      this.#items = results;
+      this.#hasMore = results.length === this.#limit;
+      this.#offset = results.length;
     } catch (error) {
       console.error('Failed to load vault items:', error);
+    } finally {
+      this.#isLoading = false;
+    }
+  }
+
+  async loadMore() {
+    if (this.#isLoading || !this.#hasMore || appState.isLocked) return;
+
+    this.#isLoading = true;
+    try {
+      const tag = appState.selectedTag;
+      const category = appState.filterCategory;
+      const tagStore = (await import('./tags.svelte')).tagStore;
+      const tagObj = tagStore.tags.find((t) => t.text === tag);
+
+      const results = await callBackend<PasswordItemOverview[]>('search_password_items', {
+        query: this.#searchTerm,
+        tagId: tagObj?.id ?? null,
+        category: category === 'all' ? null : category,
+        limit: this.#limit,
+        offset: this.#offset
+      });
+
+      if (results.length > 0) {
+        this.#items = [...this.#items, ...results];
+        this.#offset += results.length;
+      }
+      this.#hasMore = results.length === this.#limit;
+    } catch (error) {
+      console.error('Failed to load more vault items:', error);
     } finally {
       this.#isLoading = false;
     }

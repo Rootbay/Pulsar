@@ -1,20 +1,12 @@
-use tauri::{AppHandle, State};
-use tauri_plugin_clipboard_manager::ClipboardExt;
-use crate::error::{Error, Result};
-use crate::state::{AppState, PendingUnlock};
-use crate::security::register_device;
-use crate::encryption::{decrypt, encrypt};
-use crate::auth::*;
-use crate::auth::metadata::*;
 use crate::auth::biometrics::*;
-use crate::auth::types::*;
 use crate::auth::crypto_utils::*;
-use zeroize::Zeroizing;
-use std::time::{Instant, Duration};
-use std::path::Path;
-use tokio::fs;
-use sqlx::sqlite::{SqliteConnectOptions, SqliteConnection};
-use sqlx::Connection;
+use crate::auth::metadata::*;
+use crate::auth::types::*;
+use crate::auth::*;
+use crate::encryption::{decrypt, encrypt};
+use crate::error::{Error, Result};
+use crate::security::register_device;
+use crate::state::{AppState, PendingUnlock};
 use base64::{engine::general_purpose, Engine as _};
 use chacha20poly1305::{
     aead::{Aead, KeyInit},
@@ -22,8 +14,16 @@ use chacha20poly1305::{
 };
 use rand::rngs::OsRng;
 use rand::RngCore;
+use sqlx::sqlite::{SqliteConnectOptions, SqliteConnection};
+use sqlx::Connection;
+use std::path::Path;
+use std::time::{Duration, Instant};
 use subtle::ConstantTimeEq;
+use tauri::{AppHandle, State};
+use tauri_plugin_clipboard_manager::ClipboardExt;
+use tokio::fs;
 use totp_rs::{Algorithm as TotpAlgorithm, Secret, TOTP};
+use zeroize::Zeroizing;
 
 const PASSWORD_CHECK_PLAINTEXT: &[u8] = b"pulsar-password-check";
 const SQLCIPHER_PAGE_SIZE: i64 = 4096;
@@ -74,7 +74,9 @@ async fn connect_with_key(db_path: &Path, key_bytes: &[u8]) -> Result<SqliteConn
         .busy_timeout(Duration::from_secs(10))
         .pragma("key", format!("\"x'{}'\"", hex_key));
 
-    SqliteConnection::connect_with(&connect_options).await.map_err(Error::Database)
+    SqliteConnection::connect_with(&connect_options)
+        .await
+        .map_err(Error::Database)
 }
 
 async fn connect_plaintext(db_path: &Path) -> Result<SqliteConnection> {
@@ -84,7 +86,9 @@ async fn connect_plaintext(db_path: &Path) -> Result<SqliteConnection> {
         .busy_timeout(Duration::from_secs(10))
         .pragma("key", "''");
 
-    SqliteConnection::connect_with(&connect_options).await.map_err(Error::Database)
+    SqliteConnection::connect_with(&connect_options)
+        .await
+        .map_err(Error::Database)
 }
 
 async fn connect_plaintext_raw(db_path: &Path) -> Result<SqliteConnection> {
@@ -93,7 +97,9 @@ async fn connect_plaintext_raw(db_path: &Path) -> Result<SqliteConnection> {
         .create_if_missing(false)
         .busy_timeout(Duration::from_secs(10));
 
-    SqliteConnection::connect_with(&connect_options).await.map_err(Error::Database)
+    SqliteConnection::connect_with(&connect_options)
+        .await
+        .map_err(Error::Database)
 }
 
 fn is_not_a_database_error(err: &sqlx::Error) -> bool {
@@ -106,11 +112,7 @@ fn is_unable_to_open_db_error(err: &sqlx::Error) -> bool {
     msg.contains("unable to open database") || msg.contains("code 14") || msg.contains("code: 14")
 }
 
-async fn replace_db_with_backup(
-    db_path: &Path,
-    temp_db_path: &Path,
-    context: &str,
-) -> Result<()> {
+async fn replace_db_with_backup(db_path: &Path, temp_db_path: &Path, context: &str) -> Result<()> {
     let backup_path = db_path.with_extension("psec_backup");
     if backup_path.exists() {
         let _ = fs::remove_file(&backup_path).await;
@@ -138,16 +140,22 @@ fn build_attach_cmd(path: &Path, hex_key: &str) -> String {
     )
 }
 
-async fn apply_sqlcipher_pragmas(
-    conn: &mut SqliteConnection,
-    db_name: Option<&str>,
-) -> Result<()> {
+async fn apply_sqlcipher_pragmas(conn: &mut SqliteConnection, db_name: Option<&str>) -> Result<()> {
     let prefix = db_name.map(|name| format!("{}.", name)).unwrap_or_default();
     let statements = [
-        format!("PRAGMA {}cipher_page_size = {}", prefix, SQLCIPHER_PAGE_SIZE),
+        format!(
+            "PRAGMA {}cipher_page_size = {}",
+            prefix, SQLCIPHER_PAGE_SIZE
+        ),
         format!("PRAGMA {}kdf_iter = {}", prefix, SQLCIPHER_KDF_ITER),
-        format!("PRAGMA {}cipher_hmac_algorithm = {}", prefix, SQLCIPHER_HMAC_ALG),
-        format!("PRAGMA {}cipher_kdf_algorithm = {}", prefix, SQLCIPHER_KDF_ALG),
+        format!(
+            "PRAGMA {}cipher_hmac_algorithm = {}",
+            prefix, SQLCIPHER_HMAC_ALG
+        ),
+        format!(
+            "PRAGMA {}cipher_kdf_algorithm = {}",
+            prefix, SQLCIPHER_KDF_ALG
+        ),
     ];
 
     for stmt in statements {
@@ -298,9 +306,7 @@ async fn close_pool_with_timeout(pool: sqlx::SqlitePool, timeout: Duration) -> R
     tokio::time::timeout(timeout, pool.close())
         .await
         .map_err(|_| {
-            Error::Internal(
-                "Timed out while closing the database. Please try again.".to_string(),
-            )
+            Error::Internal("Timed out while closing the database. Please try again.".to_string())
         })?;
     Ok(())
 }
@@ -351,7 +357,9 @@ async fn rekey_plaintext_db(db_path: &Path, key_bytes: &[u8]) -> Result<()> {
             sqlx::query("SELECT sqlcipher_export('encrypted')")
                 .execute(&mut conn)
                 .await?;
-            sqlx::query("DETACH DATABASE encrypted").execute(&mut conn).await?;
+            sqlx::query("DETACH DATABASE encrypted")
+                .execute(&mut conn)
+                .await?;
             Ok(())
         }
         .await;
@@ -392,10 +400,7 @@ async fn connect_with_timeout(
     }
 }
 
-async fn finalize_unlock(
-    state: &State<'_, AppState>,
-    key_z: Zeroizing<Vec<u8>>,
-) -> Result<()> {
+async fn finalize_unlock(state: &State<'_, AppState>, key_z: Zeroizing<Vec<u8>>) -> Result<()> {
     let db_path = get_db_path(state).await?;
 
     {
@@ -420,7 +425,6 @@ async fn finalize_unlock(
         let mut db_guard = state.db.lock().await;
         *db_guard = Some(new_pool);
     }
-
 
     {
         let mut key_guard = state.key.lock().await;
@@ -447,10 +451,7 @@ async fn finalize_unlock(
 }
 
 #[tauri::command]
-pub async fn set_master_password(
-    state: State<'_, AppState>,
-    password: String,
-) -> Result<()> {
+pub async fn set_master_password(state: State<'_, AppState>, password: String) -> Result<()> {
     let password = Zeroizing::new(password);
     validate_new_password(password.as_str())?;
     let _rekey_lock = tokio::time::timeout(Duration::from_secs(15), state.rekey.lock())
@@ -519,32 +520,38 @@ pub async fn set_master_password(
         .filename(&db_path)
         .create_if_missing(false)
         .busy_timeout(Duration::from_secs(20));
-    
+
     let mut last_err: Option<Error> = None;
     match connect_with_timeout(&connect_options, Duration::from_secs(10)).await {
         Ok(mut conn) => {
             attach_encrypted_db(&mut conn, &temp_db_path, &hex_key).await?;
-            sqlx::query("SELECT sqlcipher_export('encrypted')").execute(&mut conn).await?;
-            sqlx::query("DETACH DATABASE encrypted").execute(&mut conn).await?;
+            sqlx::query("SELECT sqlcipher_export('encrypted')")
+                .execute(&mut conn)
+                .await?;
+            sqlx::query("DETACH DATABASE encrypted")
+                .execute(&mut conn)
+                .await?;
 
             conn.close().await?;
 
             write_password_metadata_to_db(&temp_db_path, key_z.as_slice(), &metadata).await?;
-            
+
             tokio::time::sleep(Duration::from_millis(50)).await;
             fs::remove_file(&db_path).await?;
             fs::rename(&temp_db_path, &db_path).await?;
-            
-            write_password_metadata(db_path.as_path(), &metadata, Some(key_z.as_slice()))
-                .await?;
+
+            write_password_metadata(db_path.as_path(), &metadata, Some(key_z.as_slice())).await?;
         }
         Err(e) => {
             last_err = Some(Error::Database(e));
         }
     }
-    
+
     if let Some(e) = last_err {
-        return Err(Error::Internal(format!("Failed to connect for rekeying: {}", e)));
+        return Err(Error::Internal(format!(
+            "Failed to connect for rekeying: {}",
+            e
+        )));
     }
 
     finalize_unlock(&state, key_z.clone()).await?;
@@ -552,10 +559,7 @@ pub async fn set_master_password(
 }
 
 #[tauri::command]
-pub async fn unlock(
-    state: State<'_, AppState>,
-    password: String,
-) -> Result<UnlockResponse> {
+pub async fn unlock(state: State<'_, AppState>, password: String) -> Result<UnlockResponse> {
     let password = Zeroizing::new(password);
     let _unlock_permit = state
         .unlock_guard
@@ -572,8 +576,9 @@ pub async fn unlock(
         }
     };
 
-    let meta =
-        metadata.ok_or_else(|| Error::Internal("Vault is not initialised with a master password.".to_string()))?;
+    let meta = metadata.ok_or_else(|| {
+        Error::Internal("Vault is not initialised with a master password.".to_string())
+    })?;
     let (salt, nonce, ciphertext) = decode_metadata(&meta)?;
 
     let argon_params = meta.argon2_params();
@@ -582,7 +587,7 @@ pub async fn unlock(
     let salt_clone = salt.to_vec();
     let password_clone = password.clone();
     let argon_params_clone = argon_params.clone();
-    
+
     let derived_key = tauri::async_runtime::spawn_blocking(move || {
         derive_key(password_clone.as_str(), &salt_clone, &argon_params_clone)
     })
@@ -661,8 +666,11 @@ pub async fn unlock(
                     }
                     tokio::time::sleep(Duration::from_millis(1000)).await;
                     rekey_plaintext_db(db_path.as_path(), key_z.as_slice()).await?;
-                    let mut retry_conn = connect_with_key(db_path.as_path(), key_z.as_slice()).await?;
-                    let value = sqlx::query_scalar(totp_query).fetch_one(&mut retry_conn).await?;
+                    let mut retry_conn =
+                        connect_with_key(db_path.as_path(), key_z.as_slice()).await?;
+                    let value = sqlx::query_scalar(totp_query)
+                        .fetch_one(&mut retry_conn)
+                        .await?;
                     conn = retry_conn;
                     value
                 } else {
@@ -710,14 +718,18 @@ pub async fn verify_login_totp(state: State<'_, AppState>, token: String) -> Res
             if let Some(mut expired) = guard.take() {
                 expired.key.zeroize();
             }
-            return Err(Error::Validation("TOTP session expired. Please unlock again.".to_string()));
+            return Err(Error::Validation(
+                "TOTP session expired. Please unlock again.".to_string(),
+            ));
         }
 
         if pending.attempts >= MAX_TOTP_ATTEMPTS {
             if let Some(mut exhausted) = guard.take() {
                 exhausted.key.zeroize();
             }
-            return Err(Error::Validation("Too many invalid attempts. Please unlock again.".to_string()));
+            return Err(Error::Validation(
+                "Too many invalid attempts. Please unlock again.".to_string(),
+            ));
         }
 
         pending.key.clone()
@@ -740,7 +752,8 @@ pub async fn verify_login_totp(state: State<'_, AppState>, token: String) -> Res
             .fetch_optional(&mut conn)
             .await?;
 
-    let secret_enc = secret_enc.ok_or_else(|| Error::Internal("Login TOTP is not configured.".to_string()))?;
+    let secret_enc =
+        secret_enc.ok_or_else(|| Error::Internal("Login TOTP is not configured.".to_string()))?;
     let secret_b32 = Zeroizing::new(decrypt(&secret_enc, pending_key.as_slice())?);
 
     let secret = Secret::Encoded(secret_b32.to_string());
@@ -796,7 +809,11 @@ pub async fn rotate_master_password(
     let argon_params_clone = argon_params.clone();
 
     let mut current_key_bytes = tauri::async_runtime::spawn_blocking(move || {
-        derive_key(current_password_clone.as_str(), &salt_clone, &argon_params_clone)
+        derive_key(
+            current_password_clone.as_str(),
+            &salt_clone,
+            &argon_params_clone,
+        )
     })
     .await
     .map_err(|e| Error::Internal(format!("Runtime error: {}", e)))??;
@@ -822,7 +839,11 @@ pub async fn rotate_master_password(
     let argon_params_new_clone = argon_params.clone();
 
     let mut new_key_bytes = tauri::async_runtime::spawn_blocking(move || {
-        derive_key(new_password_clone.as_str(), &new_salt_clone, &argon_params_new_clone)
+        derive_key(
+            new_password_clone.as_str(),
+            &new_salt_clone,
+            &argon_params_new_clone,
+        )
     })
     .await
     .map_err(|e| Error::Internal(format!("Runtime error: {}", e)))??;
@@ -861,22 +882,27 @@ pub async fn rotate_master_password(
         .create_if_missing(false)
         .busy_timeout(Duration::from_secs(30))
         .pragma("key", format!("\"x'{}'\"", hex_old_key));
-    
+
     let mut _last_err: Option<Error> = None;
     for _ in 0..10 {
         match connect_with_timeout(&connect_options, Duration::from_secs(15)).await {
             Ok(mut conn) => {
                 attach_encrypted_db(&mut conn, &temp_db_path, &hex_new_key).await?;
-                sqlx::query("SELECT sqlcipher_export('encrypted')").execute(&mut conn).await?;
-                sqlx::query("DETACH DATABASE encrypted").execute(&mut conn).await?;
+                sqlx::query("SELECT sqlcipher_export('encrypted')")
+                    .execute(&mut conn)
+                    .await?;
+                sqlx::query("DETACH DATABASE encrypted")
+                    .execute(&mut conn)
+                    .await?;
 
                 let _ = conn.close().await;
 
-                write_password_metadata_to_db(&temp_db_path, new_key_z.as_slice(), &metadata).await?;
-                
+                write_password_metadata_to_db(&temp_db_path, new_key_z.as_slice(), &metadata)
+                    .await?;
+
                 tokio::time::sleep(Duration::from_millis(1000)).await;
                 replace_db_with_backup(&db_path, &temp_db_path, "master password rotation").await?;
-                
+
                 write_password_metadata(db_path.as_path(), &metadata, Some(new_key_z.as_slice()))
                     .await?;
                 _last_err = None;
@@ -888,7 +914,7 @@ pub async fn rotate_master_password(
             }
         }
     }
-    
+
     finalize_unlock(&state, new_key_z.clone()).await?;
 
     let _ = crate::db::activity::log_activity_impl(
@@ -898,20 +924,25 @@ pub async fn rotate_master_password(
         None,
         None,
         Some("Master password was changed"),
-    ).await;
+    )
+    .await;
 
     Ok(())
 }
 
 fn validate_password_inputs(current: &str, new_password: &str) -> Result<()> {
     if current.trim().is_empty() {
-        return Err(Error::Validation("Current password is required.".to_string()));
+        return Err(Error::Validation(
+            "Current password is required.".to_string(),
+        ));
     }
 
     validate_new_password(new_password)?;
 
     if new_password.trim() == current.trim() {
-        return Err(Error::Validation("New password must be different from the current password.".to_string()));
+        return Err(Error::Validation(
+            "New password must be different from the current password.".to_string(),
+        ));
     }
 
     Ok(())
@@ -923,7 +954,9 @@ fn validate_new_password(new_password: &str) -> Result<()> {
         return Err(Error::Validation("Password is required.".to_string()));
     }
     if trimmed.len() < 12 {
-        return Err(Error::Validation("Password must be at least 12 characters.".to_string()));
+        return Err(Error::Validation(
+            "Password must be at least 12 characters.".to_string(),
+        ));
     }
     Ok(())
 }
@@ -951,7 +984,9 @@ pub async fn update_argon2_params(
 ) -> Result<()> {
     let current_password = Zeroizing::new(current_password);
     if current_password.trim().is_empty() {
-        return Err(Error::Validation("Current password is required.".to_string()));
+        return Err(Error::Validation(
+            "Current password is required.".to_string(),
+        ));
     }
 
     let new_params = Argon2ParamsConfig {
@@ -974,7 +1009,11 @@ pub async fn update_argon2_params(
     let current_params_clone = current_params.clone();
 
     let mut current_key_bytes = tauri::async_runtime::spawn_blocking(move || {
-        derive_key(current_password_clone.as_str(), &salt_clone, &current_params_clone)
+        derive_key(
+            current_password_clone.as_str(),
+            &salt_clone,
+            &current_params_clone,
+        )
     })
     .await
     .map_err(|e| Error::Internal(format!("Runtime error: {}", e)))??;
@@ -1000,7 +1039,11 @@ pub async fn update_argon2_params(
     let new_params_clone = new_params.clone();
 
     let mut new_key_bytes = tauri::async_runtime::spawn_blocking(move || {
-        derive_key(current_password_new_clone.as_str(), &new_salt_clone, &new_params_clone)
+        derive_key(
+            current_password_new_clone.as_str(),
+            &new_salt_clone,
+            &new_params_clone,
+        )
     })
     .await
     .map_err(|e| Error::Internal(format!("Runtime error: {}", e)))??;
@@ -1040,22 +1083,27 @@ pub async fn update_argon2_params(
         .create_if_missing(false)
         .busy_timeout(Duration::from_secs(30))
         .pragma("key", format!("\"x'{}'\"", hex_old_key));
-    
+
     let mut last_err: Option<Error> = None;
     for _ in 0..10 {
         match connect_with_timeout(&connect_options, Duration::from_secs(15)).await {
             Ok(mut conn) => {
                 attach_encrypted_db(&mut conn, &temp_db_path, &hex_new_key).await?;
-                sqlx::query("SELECT sqlcipher_export('encrypted')").execute(&mut conn).await?;
-                sqlx::query("DETACH DATABASE encrypted").execute(&mut conn).await?;
+                sqlx::query("SELECT sqlcipher_export('encrypted')")
+                    .execute(&mut conn)
+                    .await?;
+                sqlx::query("DETACH DATABASE encrypted")
+                    .execute(&mut conn)
+                    .await?;
 
                 conn.close().await?;
 
-                write_password_metadata_to_db(&temp_db_path, new_key_z.as_slice(), &metadata).await?;
-                
+                write_password_metadata_to_db(&temp_db_path, new_key_z.as_slice(), &metadata)
+                    .await?;
+
                 tokio::time::sleep(Duration::from_millis(1000)).await;
                 replace_db_with_backup(&db_path, &temp_db_path, "Argon2 parameter update").await?;
-                
+
                 write_password_metadata(db_path.as_path(), &metadata, Some(new_key_z.as_slice()))
                     .await?;
                 last_err = None;
@@ -1067,9 +1115,12 @@ pub async fn update_argon2_params(
             }
         }
     }
-    
+
     if let Some(e) = last_err {
-        return Err(Error::Internal(format!("Failed to connect for Argon2 parameter update: {}", e)));
+        return Err(Error::Internal(format!(
+            "Failed to connect for Argon2 parameter update: {}",
+            e
+        )));
     }
 
     finalize_unlock(&state, new_key_z.clone()).await?;
@@ -1081,24 +1132,19 @@ pub async fn update_argon2_params(
         None,
         None,
         Some("KDF parameters were updated"),
-    ).await;
+    )
+    .await;
 
     Ok(())
 }
 
 #[tauri::command]
-pub async fn verify_master_password(
-    state: State<'_, AppState>,
-    password: String,
-) -> Result<bool> {
+pub async fn verify_master_password(state: State<'_, AppState>, password: String) -> Result<bool> {
     crate::auth::verify_master_password_internal(&state, &password).await
 }
 
 #[tauri::command]
-pub async fn configure_login_totp(
-    state: State<'_, AppState>,
-    secret_b32: String,
-) -> Result<()> {
+pub async fn configure_login_totp(state: State<'_, AppState>, secret_b32: String) -> Result<()> {
     let secret_b32 = Zeroizing::new(secret_b32);
     let key_opt = {
         let guard = state.key.lock().await;
@@ -1204,10 +1250,11 @@ pub async fn is_master_password_configured(state: State<'_, AppState>) -> Result
     }
 
     if let Ok(db_pool) = get_db_pool(&state).await {
-        let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM configuration WHERE key = 'password_salt'")
-            .fetch_one(&db_pool)
-            .await
-            .unwrap_or(0);
+        let count: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM configuration WHERE key = 'password_salt'")
+                .fetch_one(&db_pool)
+                .await
+                .unwrap_or(0);
         return Ok(count > 0);
     }
 

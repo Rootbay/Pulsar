@@ -1,10 +1,10 @@
+use crate::error::{Error, Result};
+use base64::{engine::general_purpose, Engine as _};
 use chacha20poly1305::{
     aead::{Aead, KeyInit},
-    XChaCha20Poly1305, Key, XNonce,
+    Key, XChaCha20Poly1305, XNonce,
 };
 use rand::{rngs::OsRng, RngCore};
-use base64::{engine::general_purpose, Engine as _};
-use crate::error::{Error, Result};
 use zeroize::Zeroizing;
 
 const KEY_LEN_BYTES: usize = 32;
@@ -42,17 +42,23 @@ pub fn decrypt(encrypted_payload: &str, key: &[u8]) -> Result<String> {
 pub fn decrypt_zeroized(encrypted_payload: &str, key: &[u8]) -> Result<Zeroizing<String>> {
     ensure_key_len(key, Error::Decryption)?;
     let mut parts = encrypted_payload.split(':');
-    let nonce_b64 = parts.next().ok_or_else(|| Error::Decryption("Invalid encrypted payload format: missing nonce".to_string()))?;
-    let ciphertext_b64 = parts.next().ok_or_else(|| Error::Decryption("Invalid encrypted payload format: missing ciphertext".to_string()))?;
+    let nonce_b64 = parts.next().ok_or_else(|| {
+        Error::Decryption("Invalid encrypted payload format: missing nonce".to_string())
+    })?;
+    let ciphertext_b64 = parts.next().ok_or_else(|| {
+        Error::Decryption("Invalid encrypted payload format: missing ciphertext".to_string())
+    })?;
 
     if parts.next().is_some() {
-        return Err(Error::Decryption("Invalid encrypted payload format: too many parts".to_string()));
+        return Err(Error::Decryption(
+            "Invalid encrypted payload format: too many parts".to_string(),
+        ));
     }
 
     let nonce_bytes = general_purpose::STANDARD
         .decode(nonce_b64)
         .map_err(|e| Error::Decryption(format!("Nonce decode failed: {e}")))?;
-    
+
     if nonce_bytes.len() != 24 {
         return Err(Error::Decryption("Invalid nonce length".to_string()));
     }
@@ -72,7 +78,7 @@ pub fn decrypt_zeroized(encrypted_payload: &str, key: &[u8]) -> Result<Zeroizing
 
     let s = String::from_utf8(decrypted_bytes)
         .map_err(|e| Error::Decryption(format!("UTF-8 conversion failed: {e}")))?;
-    
+
     Ok(Zeroizing::new(s))
 }
 
@@ -99,7 +105,9 @@ pub fn encrypt_bytes(data: &[u8], key: &[u8]) -> Result<Vec<u8>> {
 pub fn decrypt_bytes(encrypted_data: &[u8], key: &[u8]) -> Result<Vec<u8>> {
     ensure_key_len(key, Error::Decryption)?;
     if encrypted_data.len() < 24 {
-        return Err(Error::Decryption("Invalid encrypted data: too short to contain nonce".to_string()));
+        return Err(Error::Decryption(
+            "Invalid encrypted data: too short to contain nonce".to_string(),
+        ));
     }
 
     let (nonce_bytes, ciphertext) = encrypted_data.split_at(24);
@@ -117,15 +125,52 @@ pub fn decrypt_bytes(encrypted_data: &[u8], key: &[u8]) -> Result<Vec<u8>> {
 
 pub struct CipherSession {
     cipher: XChaCha20Poly1305,
+    key: Vec<u8>,
 }
 
 impl CipherSession {
     pub fn new(key: &[u8]) -> Result<Self> {
         ensure_key_len(key, Error::Encryption)?;
-        let key: &Key = Key::from_slice(key);
+        let key_vec = key.to_vec();
+        let key_slice: &Key = Key::from_slice(key);
         Ok(Self {
-            cipher: XChaCha20Poly1305::new(key),
+            cipher: XChaCha20Poly1305::new(key_slice),
+            key: key_vec,
         })
+    }
+
+    pub fn generate_search_token(&self, text: &str) -> Vec<u8> {
+        use hmac::{Hmac, Mac};
+        use sha2::Sha256;
+
+        let normalized = text.trim().to_lowercase();
+        if normalized.is_empty() {
+            return Vec::new();
+        }
+
+        let mut mac = <Hmac<Sha256> as Mac>::new_from_slice(&self.key)
+            .expect("HMAC can take key of any size");
+        mac.update(normalized.as_bytes());
+        mac.finalize().into_bytes().to_vec()
+    }
+
+    pub fn generate_trigram_hashes(&self, text: &str) -> Vec<Vec<u8>> {
+        let normalized = text.trim().to_lowercase();
+        if normalized.len() < 3 {
+            return if normalized.is_empty() {
+                Vec::new()
+            } else {
+                vec![self.generate_search_token(&normalized)]
+            };
+        }
+
+        let chars: Vec<char> = normalized.chars().collect();
+        let mut hashes = Vec::new();
+        for i in 0..=chars.len() - 3 {
+            let trigram: String = chars[i..i + 3].iter().collect();
+            hashes.push(self.generate_search_token(&trigram));
+        }
+        hashes
     }
 
     pub fn encrypt(&self, plaintext: &str) -> Result<String> {
@@ -133,7 +178,8 @@ impl CipherSession {
         OsRng.fill_bytes(&mut nonce_bytes);
         let nonce = XNonce::from_slice(&nonce_bytes);
 
-        let ciphertext = self.cipher
+        let ciphertext = self
+            .cipher
             .encrypt(nonce, plaintext.as_bytes())
             .map_err(|e| Error::Encryption(format!("Encryption failed: {e}")))?;
 
@@ -149,17 +195,23 @@ impl CipherSession {
 
     pub fn decrypt_zeroized(&self, encrypted_payload: &str) -> Result<Zeroizing<String>> {
         let mut parts = encrypted_payload.split(':');
-        let nonce_b64 = parts.next().ok_or_else(|| Error::Decryption("Invalid encrypted payload format: missing nonce".to_string()))?;
-        let ciphertext_b64 = parts.next().ok_or_else(|| Error::Decryption("Invalid encrypted payload format: missing ciphertext".to_string()))?;
+        let nonce_b64 = parts.next().ok_or_else(|| {
+            Error::Decryption("Invalid encrypted payload format: missing nonce".to_string())
+        })?;
+        let ciphertext_b64 = parts.next().ok_or_else(|| {
+            Error::Decryption("Invalid encrypted payload format: missing ciphertext".to_string())
+        })?;
 
         if parts.next().is_some() {
-            return Err(Error::Decryption("Invalid encrypted payload format: too many parts".to_string()));
+            return Err(Error::Decryption(
+                "Invalid encrypted payload format: too many parts".to_string(),
+            ));
         }
 
         let nonce_bytes = general_purpose::STANDARD
             .decode(nonce_b64)
             .map_err(|e| Error::Decryption(format!("Nonce decode failed: {e}")))?;
-        
+
         if nonce_bytes.len() != 24 {
             return Err(Error::Decryption("Invalid nonce length".to_string()));
         }
@@ -170,13 +222,14 @@ impl CipherSession {
 
         let nonce = XNonce::from_slice(&nonce_bytes);
 
-        let decrypted_bytes = self.cipher
+        let decrypted_bytes = self
+            .cipher
             .decrypt(nonce, ciphertext.as_ref())
             .map_err(|e| Error::Decryption(format!("Decryption failed: {e}")))?;
 
         let s = String::from_utf8(decrypted_bytes)
             .map_err(|e| Error::Decryption(format!("UTF-8 conversion failed: {e}")))?;
-        
+
         Ok(Zeroizing::new(s))
     }
 }

@@ -2,12 +2,11 @@ use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::time::UNIX_EPOCH;
 
+use crate::error::{Error, Result};
+use crate::state::AppState;
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
 use tauri::State;
-use crate::error::{Error, Result};
-use crate::state::AppState;
-
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
@@ -66,7 +65,7 @@ fn metadata_path(db_path: &Path) -> PathBuf {
 
 async fn load_stored_settings(app_handle: &tauri::AppHandle) -> Result<StoredAppSettings> {
     use crate::settings::get_all_settings_internal;
-    
+
     let settings_json = get_all_settings_internal(app_handle).await?;
 
     let Some(raw) = settings_json else {
@@ -189,7 +188,9 @@ pub async fn list_vaults(
             "available"
         };
 
-        let encrypted = tokio::fs::try_exists(metadata_path(&path)).await.unwrap_or(false);
+        let encrypted = tokio::fs::try_exists(metadata_path(&path))
+            .await
+            .unwrap_or(false);
 
         let item_count = resolve_item_count(active_pool.clone(), is_active && is_unlocked).await;
 
@@ -208,4 +209,3 @@ pub async fn list_vaults(
 
     Ok(results)
 }
-

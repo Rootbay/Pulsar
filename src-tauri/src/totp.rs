@@ -1,10 +1,10 @@
-use totp_rs::{Algorithm, Secret, TOTP};
-use rand::Rng;
-use base32::{encode, Alphabet};
-use crate::error::{Error, Result};
-use tauri::State;
-use crate::state::AppState;
 use crate::db;
+use crate::error::{Error, Result};
+use crate::state::AppState;
+use base32::{encode, Alphabet};
+use rand::Rng;
+use tauri::State;
+use totp_rs::{Algorithm, Secret, TOTP};
 
 fn build_totp(secret_b32: &str) -> Result<TOTP> {
     let secret = Secret::Encoded(secret_b32.to_string());
@@ -35,23 +35,23 @@ pub fn generate_totp_secret() -> Result<String> {
 #[tauri::command]
 pub fn generate_totp(secret_b32: String) -> Result<String> {
     let totp = build_totp(&secret_b32)?;
-    totp.generate_current().map_err(|e| Error::Totp(e.to_string()))
+    totp.generate_current()
+        .map_err(|e| Error::Totp(e.to_string()))
 }
 
 #[tauri::command]
-pub async fn verify_totp(
-    state: State<'_, AppState>,
-    id: i64,
-    token: String,
-) -> Result<bool> {
+pub async fn verify_totp(state: State<'_, AppState>, id: i64, token: String) -> Result<bool> {
     let password_item_option = db::get_password_item_by_id(state, id).await?;
 
     if let Some(password_item) = password_item_option {
         if let Some(secret_string) = password_item.totp_secret {
             let totp = build_totp(secret_string.as_str())?;
-            totp.check_current(&token).map_err(|e| Error::Totp(e.to_string()))
+            totp.check_current(&token)
+                .map_err(|e| Error::Totp(e.to_string()))
         } else {
-            Err(Error::Internal("TOTP secret not found for this item.".to_string()))
+            Err(Error::Internal(
+                "TOTP secret not found for this item.".to_string(),
+            ))
         }
     } else {
         Err(Error::Internal("Password item not found.".to_string()))
@@ -61,5 +61,6 @@ pub async fn verify_totp(
 #[tauri::command]
 pub fn verify_totp_secret(secret_b32: String, token: String) -> Result<bool> {
     let totp = build_totp(&secret_b32)?;
-    totp.check_current(&token).map_err(|e| Error::Totp(e.to_string()))
+    totp.check_current(&token)
+        .map_err(|e| Error::Totp(e.to_string()))
 }

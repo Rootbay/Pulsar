@@ -112,19 +112,28 @@ class SettingsStore {
     return output as unknown as AllSettings;
   }
 
+  async saveNow() {
+    if (this.#saveTimeout) {
+      clearTimeout(this.#saveTimeout);
+      this.#saveTimeout = null;
+    }
+
+    this.isSaving = true;
+    try {
+      await callBackend('set_all_settings', { settings: JSON.stringify(this.state) });
+      await callBackend('apply_system_settings');
+    } catch (error) {
+      console.error('Failed to save settings:', error);
+    } finally {
+      this.isSaving = false;
+    }
+  }
+
   save() {
     if (this.#saveTimeout) clearTimeout(this.#saveTimeout);
 
-    this.#saveTimeout = setTimeout(async () => {
-      this.isSaving = true;
-      try {
-        await callBackend('set_all_settings', { settings: JSON.stringify(this.state) });
-        await callBackend('apply_system_settings');
-      } catch (error) {
-        console.error('Failed to save settings:', error);
-      } finally {
-        this.isSaving = false;
-      }
+    this.#saveTimeout = setTimeout(() => {
+      this.saveNow();
     }, 500);
   }
 
@@ -135,7 +144,7 @@ class SettingsStore {
 
   setState(newState: AllSettings) {
     this.state = newState;
-    this.save();
+    this.saveNow();
   }
 }
 

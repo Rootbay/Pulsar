@@ -3,7 +3,6 @@
   import { settings } from '$lib/stores/appSettings.svelte';
   import { appState } from '$lib/stores';
   import { callBackend } from '$lib/utils/backend';
-  // import { getCurrentWindow } from '@tauri-apps/api/window';
   import type { SecuritySettings } from '$lib/config/settings';
 
   let inactivityTimer: ReturnType<typeof setTimeout> | null = null;
@@ -83,54 +82,56 @@
   onMount(() => {
     let unlistenBlur: (() => void) | null = null;
 
-    // Use dynamic import for Tauri window API
-    import('@tauri-apps/api/window').then(({ getCurrentWindow }) => {
-      const appWindow = getCurrentWindow();
-      
-      appWindow
-        .onFocusChanged(async ({ payload }) => {
-          if (payload === true) {
-            clearMinimizeTimer();
-            resetInactivityTimer();
-            return;
-          }
-          if (payload === false) {
-            const currentSettings = settings.state.security;
-            if (currentSettings.lockOnMinimize) {
-              try {
-                const minimized = await appWindow.isMinimized();
-                if (minimized) {
-                  clearMinimizeTimer();
-                  const graceMs = getLockGraceMs(currentSettings);
-                  if (graceMs === 0) {
-                    await lockVault();
-                  } else {
-                    minimizeTimer = setTimeout(async () => {
+    import('@tauri-apps/api/window')
+      .then(({ getCurrentWindow }) => {
+        const appWindow = getCurrentWindow();
+
+        appWindow
+          .onFocusChanged(async ({ payload }) => {
+            if (payload === true) {
+              clearMinimizeTimer();
+              resetInactivityTimer();
+              return;
+            }
+            if (payload === false) {
+              const currentSettings = settings.state.security;
+              if (currentSettings.lockOnMinimize) {
+                try {
+                  const minimized = await appWindow.isMinimized();
+                  if (minimized) {
+                    clearMinimizeTimer();
+                    const graceMs = getLockGraceMs(currentSettings);
+                    if (graceMs === 0) {
                       await lockVault();
-                      minimizeTimer = null;
-                    }, graceMs);
+                    } else {
+                      minimizeTimer = setTimeout(async () => {
+                        await lockVault();
+                        minimizeTimer = null;
+                      }, graceMs);
+                    }
                   }
+                } catch (error) {
+                  console.warn('Failed to read window minimize state', error);
                 }
-              } catch (error) {
-                console.warn('Failed to read window minimize state', error);
               }
             }
-          }
-        })
-        .then((unlisten) => {
-          unlistenBlur = unlisten;
-        })
-        .catch((error) => {
-          console.warn('Failed to register window focus listener', error);
-        });
-    }).catch(() => {
-      console.warn('Tauri window API not available (not running in Tauri?)');
-    });
+          })
+          .then((unlisten) => {
+            unlistenBlur = unlisten;
+          })
+          .catch((error) => {
+            console.warn('Failed to register window focus listener', error);
+          });
+      })
+      .catch(() => {
+        console.warn('Tauri window API not available (not running in Tauri?)');
+      });
 
     window.addEventListener('mousemove', handleActivity);
     window.addEventListener('keydown', handleActivity);
     window.addEventListener('mousedown', handleActivity);
     window.addEventListener('touchstart', handleActivity);
+    window.addEventListener('scroll', handleActivity);
     resetInactivityTimer();
 
     const handleVisibility = async () => {
@@ -161,6 +162,7 @@
       window.removeEventListener('keydown', handleActivity);
       window.removeEventListener('mousedown', handleActivity);
       window.removeEventListener('touchstart', handleActivity);
+      window.removeEventListener('scroll', handleActivity);
       document.removeEventListener('visibilitychange', handleVisibility);
       if (unlistenBlur) {
         unlistenBlur();

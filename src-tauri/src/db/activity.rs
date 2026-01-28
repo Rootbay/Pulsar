@@ -1,10 +1,10 @@
-use crate::state::AppState;
-use crate::error::Result;
 use crate::db::utils::{get_db_pool, get_key};
-use crate::encryption::{encrypt, decrypt};
-use tauri::State;
+use crate::encryption::{decrypt, encrypt};
+use crate::error::Result;
+use crate::state::AppState;
 use serde::{Deserialize, Serialize};
 use sqlx::Row;
+use tauri::State;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -45,7 +45,10 @@ where
 }
 
 #[tauri::command]
-pub async fn get_activity_log(state: State<'_, AppState>, limit: i64) -> Result<Vec<ActivityEntry>> {
+pub async fn get_activity_log(
+    state: State<'_, AppState>,
+    limit: i64,
+) -> Result<Vec<ActivityEntry>> {
     let key = get_key(&state).await?;
     let pool = get_db_pool(&state).await?;
 
@@ -63,8 +66,12 @@ pub async fn get_activity_log(state: State<'_, AppState>, limit: i64) -> Result<
             id: row.get("id"),
             event_type: row.get("event_type"),
             item_id: row.get("item_id"),
-            item_title: item_title_enc.map(|t| decrypt(&t, key.as_slice())).transpose()?,
-            details: details_enc.map(|d| decrypt(&d, key.as_slice())).transpose()?,
+            item_title: item_title_enc
+                .map(|t| decrypt(&t, key.as_slice()))
+                .transpose()?,
+            details: details_enc
+                .map(|d| decrypt(&d, key.as_slice()))
+                .transpose()?,
             created_at: row.get("created_at"),
         });
     }
@@ -75,6 +82,8 @@ pub async fn get_activity_log(state: State<'_, AppState>, limit: i64) -> Result<
 #[tauri::command]
 pub async fn clear_activity_log(state: State<'_, AppState>) -> Result<()> {
     let pool = get_db_pool(&state).await?;
-    sqlx::query("DELETE FROM activity_log").execute(&pool).await?;
+    sqlx::query("DELETE FROM activity_log")
+        .execute(&pool)
+        .await?;
     Ok(())
 }

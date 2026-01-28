@@ -46,6 +46,8 @@
     HardDrive
   } from '@lucide/svelte';
   import { i18n, t as translate, type I18nKey } from '$lib/i18n.svelte';
+  import { parseError } from '$lib/utils/error';
+  import { SecurityService } from '$lib/utils/security';
   import type { SecuritySettings } from '$lib/config/settings';
   import { cn } from '$lib/utils';
   import { toast } from '$lib/components/ui/sonner';
@@ -148,11 +150,7 @@
   const memoryFormatter = new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 });
   const gigabyteFormatter = new Intl.NumberFormat(undefined, { maximumFractionDigits: 1 });
 
-  const toErrorMessage = (error: unknown): string => {
-    if (typeof error === 'string') return error;
-    if (error instanceof Error) return error.message;
-    return locale === 'sv' ? 'Ett oväntat fel inträffade.' : 'An unexpected error occurred.';
-  };
+  const toErrorMessage = parseError;
 
   const formatSecret = (secret: string) => secret.replace(/(.{4})/g, '$1 ').trim();
 
@@ -330,7 +328,7 @@
         loginTotpStore.secret = null;
       }
     } catch (error) {
-      totpStatusError = toErrorMessage(error);
+      totpStatusError = parseError(error);
     } finally {
       isTotpStatusLoading = false;
     }
@@ -360,7 +358,7 @@
         uriCopyFeedback = null;
       }
     } catch (error) {
-      totpGenerationError = toErrorMessage(error);
+      totpGenerationError = parseError(error);
     } finally {
       isGeneratingTotpSecret = false;
     }
@@ -373,7 +371,7 @@
       await copyText(secret, 'TOTP Secret');
       setSecretCopyFeedback(context, 'Secret copied to clipboard.', 'success');
     } catch (error) {
-      setSecretCopyFeedback(context, toErrorMessage(error), 'error');
+      setSecretCopyFeedback(context, parseError(error), 'error');
     }
   }
 
@@ -384,7 +382,7 @@
       await copyText(uri, 'TOTP Setup Link');
       setUriCopyFeedback(context, 'Setup link copied to clipboard.', 'success');
     } catch (error) {
-      setUriCopyFeedback(context, toErrorMessage(error), 'error');
+      setUriCopyFeedback(context, parseError(error), 'error');
     }
   }
 
@@ -425,7 +423,7 @@
       appState.totpVerified = true;
       await refreshTotpStatus();
     } catch (error) {
-      totpVerificationError = toErrorMessage(error);
+      totpVerificationError = parseError(error);
     } finally {
       isConfirmingTotp = false;
     }
@@ -452,7 +450,7 @@
       appState.totpVerified = false;
       await refreshTotpStatus();
     } catch (error) {
-      totpStatusError = toErrorMessage(error);
+      totpStatusError = parseError(error);
     } finally {
       isDisablingTotp = false;
     }
@@ -515,20 +513,6 @@
     const seconds = parseInt(value);
     if (!isNaN(seconds)) {
       clipboardService.updateSettings({ clearAfterDuration: seconds });
-    }
-  }
-
-  function parseError(error: unknown): string {
-    if (error instanceof Error) {
-      return error.message;
-    }
-    if (typeof error === 'string') {
-      return error;
-    }
-    try {
-      return JSON.stringify(error);
-    } catch {
-      return 'Unknown error';
     }
   }
 

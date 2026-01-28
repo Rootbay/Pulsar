@@ -10,6 +10,7 @@
   import { importVaultBackup, notifyVaultRefresh } from '$lib/utils/backup';
   import type { ImportVaultProgressStage } from '$lib/utils/backup';
   import { i18n, t as translate, type I18nKey } from '$lib/i18n.svelte';
+  import { parseError } from '$lib/utils/error';
   import { Spinner } from '$lib/components/ui/spinner/index.js';
   import { Button } from '$lib/components/ui/button';
 
@@ -84,10 +85,9 @@
       await addRecentDatabase(path);
     } catch (cause: unknown) {
       console.error('Failed to load database:', cause);
-      error = ((cause as Record<string, unknown>).message as string) || t('failedToLoadVault');
+      error = parseError(cause) || t('failedToLoadVault');
 
-      const message =
-        ((cause as Record<string, unknown>).message as string) || cause?.toString() || '';
+      const message = parseError(cause);
       if (!triedElevated && message.toLowerCase().includes('access is denied')) {
         triedElevated = true;
         void attemptElevatedCopy();
@@ -109,7 +109,7 @@
       }
     } catch (cause: unknown) {
       console.error('Elevated copy failed:', cause);
-      error = ((cause as Record<string, unknown>).message as string) || t('elevatedCopyFailed');
+      error = parseError(cause) || t('elevatedCopyFailed');
     }
   };
 

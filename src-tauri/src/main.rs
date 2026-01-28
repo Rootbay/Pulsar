@@ -14,15 +14,16 @@ mod state;
 mod totp;
 mod tray;
 mod types;
+mod utils;
 mod vault_commands;
 
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::{Mutex, Semaphore};
 
-use crate::state::AppState;
 use crate::auth::UNLOCK_CONCURRENCY_LIMIT;
 use crate::error::{Error, Result};
+use crate::state::AppState;
 use tauri::{Manager, RunEvent, State};
 use zeroize::Zeroize;
 
@@ -79,7 +80,7 @@ async fn switch_database(db_path: PathBuf, app_state: State<'_, AppState>) -> Re
         Ok(new_pool) => {
             let mut guard = app_state.db.lock().await;
             *guard = Some(new_pool);
-            
+
             let mut path_guard = app_state.db_path.lock().await;
             *path_guard = Some(db_path.clone());
         }
@@ -209,17 +210,17 @@ fn main() {
             clipboard::clear_clipboard,
         ]);
 
-    let app = builder.build(context).expect("error while building tauri application");
-    app.run(|app_handle, event| {
-        match event {
-            RunEvent::ExitRequested { .. } | RunEvent::Exit => {
-                tauri::async_runtime::block_on(async {
-                    let state = app_handle.state::<AppState>();
-                    let policy = state.clipboard_policy.lock().await;
-                    clipboard::restore_clipboard_history(&policy);
-                });
-            }
-            _ => {}
+    let app = builder
+        .build(context)
+        .expect("error while building tauri application");
+    app.run(|app_handle, event| match event {
+        RunEvent::ExitRequested { .. } | RunEvent::Exit => {
+            tauri::async_runtime::block_on(async {
+                let state = app_handle.state::<AppState>();
+                let policy = state.clipboard_policy.lock().await;
+                clipboard::restore_clipboard_history(&policy);
+            });
         }
+        _ => {}
     });
 }

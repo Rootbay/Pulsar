@@ -1,17 +1,17 @@
-use std::path::{Path, PathBuf};
-use tokio::fs;
+use crate::auth::crypto_utils::derive_metadata_mac_key;
+use crate::auth::types::PasswordMetadata;
+use crate::error::{Error, Result};
 use base64::{engine::general_purpose, Engine as _};
 use chacha20poly1305::{
     aead::{Aead, KeyInit, Payload},
     Key, XChaCha20Poly1305, XNonce,
 };
-use subtle::ConstantTimeEq;
 use rand::rngs::OsRng;
 use rand::RngCore;
 use serde::Serialize;
-use crate::error::{Error, Result};
-use crate::auth::types::{PasswordMetadata};
-use crate::auth::crypto_utils::{derive_metadata_mac_key};
+use std::path::{Path, PathBuf};
+use subtle::ConstantTimeEq;
+use tokio::fs;
 
 pub fn metadata_path(db_path: &Path) -> PathBuf {
     let file_name = db_path
@@ -64,15 +64,13 @@ pub async fn write_password_metadata(
             .mode(0o600)
             .open(&tmp_path)
             .await?;
-        let _ = file.set_permissions(std::fs::Permissions::from_mode(0o600)).await;
+        let _ = file
+            .set_permissions(std::fs::Permissions::from_mode(0o600))
+            .await;
         file.write_all(&bytes).await?;
         file.sync_all().await?;
         fs::rename(&tmp_path, &path).await?;
-        if let Ok(dir) = fs::File::open(
-            path.parent().unwrap_or_else(|| Path::new(".")),
-        )
-        .await
-        {
+        if let Ok(dir) = fs::File::open(path.parent().unwrap_or_else(|| Path::new("."))).await {
             let _ = dir.sync_all().await;
         }
         return Ok(());
@@ -140,7 +138,13 @@ pub fn compute_metadata_mac(
     OsRng.fill_bytes(&mut nonce_bytes);
     let nonce = XNonce::from_slice(&nonce_bytes);
     let tag = cipher
-        .encrypt(nonce, Payload { msg: b"", aad: &payload })
+        .encrypt(
+            nonce,
+            Payload {
+                msg: b"",
+                aad: &payload,
+            },
+        )
         .map_err(|e| Error::Encryption(format!("Metadata MAC failed: {}", e)))?;
 
     let nonce_b64 = general_purpose::STANDARD.encode(nonce_bytes);
@@ -148,10 +152,16 @@ pub fn compute_metadata_mac(
     Ok((nonce_b64, tag_b64))
 }
 
-pub fn verify_metadata_mac(meta: &PasswordMetadata, vault_id: &str, master_key: &[u8]) -> Result<()> {
+pub fn verify_metadata_mac(
+    meta: &PasswordMetadata,
+    vault_id: &str,
+    master_key: &[u8],
+) -> Result<()> {
     let mac_key = derive_metadata_mac_key(master_key)?;
     if meta.mac_version.unwrap_or(1) != 1 {
-        return Err(Error::Validation("Unsupported metadata MAC version".to_string()));
+        return Err(Error::Validation(
+            "Unsupported metadata MAC version".to_string(),
+        ));
     }
     let nonce_b64 = meta
         .mac_nonce_b64
@@ -166,7 +176,9 @@ pub fn verify_metadata_mac(meta: &PasswordMetadata, vault_id: &str, master_key: 
         .decode(nonce_b64)
         .map_err(|e| Error::Validation(format!("Invalid metadata MAC nonce: {}", e)))?;
     if nonce_bytes.len() != 24 {
-        return Err(Error::Validation("Invalid metadata MAC nonce length".to_string()));
+        return Err(Error::Validation(
+            "Invalid metadata MAC nonce length".to_string(),
+        ));
     }
 
     let tag_bytes = general_purpose::STANDARD
@@ -176,12 +188,16 @@ pub fn verify_metadata_mac(meta: &PasswordMetadata, vault_id: &str, master_key: 
     let payload = metadata_mac_payload(meta, vault_id)?;
     let cipher = XChaCha20Poly1305::new(Key::from_slice(&mac_key));
     let expected_tag = cipher
-        .encrypt(XNonce::from_slice(&nonce_bytes), Payload { msg: b"", aad: &payload })
+        .encrypt(
+            XNonce::from_slice(&nonce_bytes),
+            Payload {
+                msg: b"",
+                aad: &payload,
+            },
+        )
         .map_err(|e| Error::Encryption(format!("Metadata MAC failed: {}", e)))?;
 
-    if expected_tag.len() != tag_bytes.len()
-        || expected_tag.ct_eq(&tag_bytes).unwrap_u8() != 1
-    {
+    if expected_tag.len() != tag_bytes.len() || expected_tag.ct_eq(&tag_bytes).unwrap_u8() != 1 {
         return Err(Error::Validation(
             "Vault metadata integrity check failed.".to_string(),
         ));

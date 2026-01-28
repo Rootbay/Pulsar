@@ -1,7 +1,7 @@
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 use sqlx::SqlitePool;
-use std::path::{Path, PathBuf};
 use std::env;
+use std::path::{Path, PathBuf};
 use zeroize::Zeroize;
 
 fn resolve_db_path(db_path: &Path) -> Result<PathBuf, String> {
@@ -84,12 +84,13 @@ pub async fn init_db_lazy(
     let db_path_abs = resolve_db_path(db_path)?;
 
     if let Some(parent) = db_path_abs.parent() {
-        tokio::fs::create_dir_all(parent)
-            .await
-            .map_err(|e| {
-                eprintln!("Failed to create database directory {}: {e}", parent.display());
-                "Failed to access database directory".to_string()
-            })?;
+        tokio::fs::create_dir_all(parent).await.map_err(|e| {
+            eprintln!(
+                "Failed to create database directory {}: {e}",
+                parent.display()
+            );
+            "Failed to access database directory".to_string()
+        })?;
     }
 
     let opts = build_connect_options(db_path_abs.as_path(), password, create_if_missing);

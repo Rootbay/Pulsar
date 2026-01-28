@@ -5,18 +5,6 @@ class LoginTotpStore {
   #secret = $state<string | null>(null);
   #configured = $state<boolean>(false);
 
-  constructor() {
-    if (browser) {
-      $effect.root(() => {
-        $effect(() => {
-          if (appState.isLocked) {
-            this.reset();
-          }
-        });
-      });
-    }
-  }
-
   get secret() {
     return this.#secret;
   }

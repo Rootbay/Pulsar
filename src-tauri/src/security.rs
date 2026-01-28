@@ -1,11 +1,11 @@
 use crate::db::utils::{get_db_pool, get_key};
+use crate::encryption::{decrypt, encrypt};
 use crate::error::{Error, Result};
 use crate::state::AppState;
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
 use tauri::State;
 use zeroize::{Zeroize, Zeroizing};
-use crate::encryption::{encrypt, decrypt};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -69,7 +69,7 @@ pub async fn register_device(state: &AppState) -> Result<()> {
     let hostname = std::env::var("COMPUTERNAME")
         .or_else(|_| std::env::var("HOSTNAME"))
         .unwrap_or_else(|_| "Unknown Device".to_string());
-    
+
     let platform = if cfg!(target_os = "windows") {
         "Windows"
     } else if cfg!(target_os = "macos") {
@@ -195,8 +195,8 @@ pub async fn get_security_report(state: State<'_, AppState>) -> Result<SecurityR
     let pool = get_db_pool(&state).await?;
     let items = crate::db::get_password_items_impl(&pool, key.as_slice()).await?;
 
+    use sha2::{Digest, Sha256};
     use std::collections::HashMap;
-    use sha2::{Sha256, Digest};
 
     let mut password_map: HashMap<String, Vec<i64>> = HashMap::new();
     let mut breached_passwords = Vec::new();
@@ -209,7 +209,7 @@ pub async fn get_security_report(state: State<'_, AppState>) -> Result<SecurityR
             let hash = hex::encode(hasher.finalize());
             password_map.entry(hash).or_default().push(item.id);
         }
-        
+
         let mut is_breached = false;
         if let Some(tags) = &item.tags {
             let t = tags.to_lowercase();
@@ -217,7 +217,7 @@ pub async fn get_security_report(state: State<'_, AppState>) -> Result<SecurityR
                 is_breached = true;
             }
         }
-        
+
         if is_breached {
             breached_passwords.push(item.id);
         }
@@ -228,19 +228,67 @@ pub async fn get_security_report(state: State<'_, AppState>) -> Result<SecurityR
     let unique_passwords_count = password_map.len();
     let mut total_reused_items = 0;
 
-    for (hash, ids) in &password_map {
+    for (hash, ids) in password_map {
         if ids.len() > 1 {
-            reused_passwords.push(ReusedPasswordGroup {
-                password_hash: hash.clone(),
-                item_ids: ids.clone(),
-                count: ids.len(),
-            });
             total_reused_items += ids.len();
+            reused_passwords.push(ReusedPasswordGroup {
+                password_hash: hash,
+                count: ids.len(),
+                item_ids: ids,
+            });
         }
     }
 
     for item in &items {
-        if !item.password.as_str().is_empty() && (item.password.len() < 12 || item.password.as_str() == "password123") {
+        let mut is_weak = false;
+        let p = item.password.as_str();
+
+        if !p.is_empty() && p != "N/A" {
+            if p.len() < 12 {
+                is_weak = true;
+            } else {
+                let has_upper = p.chars().any(|c| c.is_uppercase());
+                let has_lower = p.chars().any(|c| c.is_lowercase());
+                let has_digit = p.chars().any(|c| c.is_digit(10));
+                let has_special = p.chars().any(|c| !c.is_alphanumeric());
+
+                let variety_count = [has_upper, has_lower, has_digit, has_special]
+                    .iter()
+                    .filter(|&&v| v)
+                    .count();
+                if variety_count < 3 {
+                    is_weak = true;
+                }
+
+                let p_lower = p.to_lowercase();
+                if p_lower.contains("password")
+                    || p_lower.contains("123456")
+                    || p_lower.contains("qwerty")
+                {
+                    is_weak = true;
+                }
+
+                let title_lower = item.title.to_lowercase();
+                if !title_lower.is_empty()
+                    && title_lower.len() > 3
+                    && p_lower.contains(&title_lower)
+                {
+                    is_weak = true;
+                }
+
+                if let Some(uname) = &item.username {
+                    let uname_lower = uname.to_lowercase();
+                    if !uname_lower.is_empty()
+                        && uname_lower.len() > 3
+                        && p_lower.contains(&uname_lower)
+                    {
+                        is_weak = true;
+                    }
+                }
+            }
+        }
+
+        if is_weak {
             weak_passwords.push(item.id);
         }
     }
@@ -249,8 +297,9 @@ pub async fn get_security_report(state: State<'_, AppState>) -> Result<SecurityR
     if total_passwords_count > 0 {
         let reused_penalty = (total_reused_items as f64 / total_passwords_count as f64) * 40.0;
         let weak_penalty = (weak_passwords.len() as f64 / total_passwords_count as f64) * 30.0;
-        let breached_penalty = (breached_passwords.len() as f64 / total_passwords_count as f64) * 50.0;
-        
+        let breached_penalty =
+            (breached_passwords.len() as f64 / total_passwords_count as f64) * 50.0;
+
         score = (score - reused_penalty - weak_penalty - breached_penalty).max(0.0);
     }
 

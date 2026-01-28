@@ -24,6 +24,22 @@ export class SecurityService {
     return zxcvbn(password, userInputs);
   }
 
+  static getStrengthBadgeClass(score: number, isBreached: boolean | null): string {
+    if (isBreached) return 'text-red-500 bg-red-500/10 border-red-500/20 hover:bg-red-500/20';
+    if (score < 2) return 'text-red-500 bg-red-500/10 border-red-500/20 hover:bg-red-500/20';
+    if (score === 2)
+      return 'text-orange-500 bg-orange-500/10 border-orange-500/20 hover:bg-orange-500/20';
+    if (score === 3)
+      return 'text-yellow-500 bg-yellow-500/10 border-yellow-500/20 hover:bg-yellow-500/20';
+    return 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20 hover:bg-emerald-500/20';
+  }
+
+  static getStrengthLabel(score: number, isBreached: boolean | null, count: number = 0): string {
+    if (isBreached) return `Breached (${count})`;
+    const labels = ['Very Weak', 'Weak', 'Fair', 'Strong', 'Very Strong'];
+    return labels[score] || 'Unknown';
+  }
+
   static async checkBreach(password: string): Promise<number> {
     if (!password) return 0;
 

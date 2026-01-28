@@ -2,7 +2,6 @@ import { callBackend } from './backend';
 import type { ClipboardSettings } from '$lib/config/settings';
 import { settings } from '$lib/stores/appSettings.svelte';
 import { appState } from '$lib/stores/appState.svelte';
-// import { clear, readText } from '@tauri-apps/plugin-clipboard-manager';
 
 interface ClipboardPolicyStatus {
   integrationAvailable: boolean;
@@ -42,7 +41,7 @@ class ClipboardService {
     $effect.root(() => {
       $effect(() => {
         if (appState.isLocked) {
-          this.clearNow().catch(() => {});
+          this.clearNow().catch(() => { });
         }
       });
     });
@@ -159,8 +158,7 @@ class ClipboardService {
         clearTimeout(this.#clearTimer);
         this.#clearTimer = null;
       }
-      
-      // Dynamic import to prevent load-time crash in tests
+
       const { clear } = await import('@tauri-apps/plugin-clipboard-manager');
       await clear();
       this.addAuditEntry('Clipboard Cleared', 'success');
@@ -183,7 +181,6 @@ class ClipboardService {
       const delayMs = clipSettings.clearAfterDuration * 1000;
       this.#clearTimer = setTimeout(async () => {
         try {
-          // Dynamic import
           const { clear, readText } = await import('@tauri-apps/plugin-clipboard-manager');
           const currentClipboard = await readText();
           if (currentClipboard === text) {

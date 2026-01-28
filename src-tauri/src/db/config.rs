@@ -1,9 +1,9 @@
-use crate::state::AppState;
-use crate::encryption::{encrypt, decrypt};
+use crate::db::utils::{get_db_pool, get_key};
+use crate::encryption::{decrypt, encrypt};
 use crate::error::Result;
-use crate::db::utils::{get_key, get_db_pool};
-use tauri::State;
+use crate::state::AppState;
 use sqlx::Row;
+use tauri::State;
 
 #[tauri::command]
 pub async fn wipe_vault_database(state: State<'_, AppState>) -> Result<()> {
@@ -11,10 +11,16 @@ pub async fn wipe_vault_database(state: State<'_, AppState>) -> Result<()> {
     let db_pool = get_db_pool(&state).await?;
     let mut tx = db_pool.begin().await?;
 
-    sqlx::query("DELETE FROM password_items").execute(&mut *tx).await?;
+    sqlx::query("DELETE FROM password_items")
+        .execute(&mut *tx)
+        .await?;
     sqlx::query("DELETE FROM buttons").execute(&mut *tx).await?;
-    sqlx::query("DELETE FROM recipient_keys").execute(&mut *tx).await?;
-    sqlx::query("DELETE FROM attachments").execute(&mut *tx).await?;
+    sqlx::query("DELETE FROM recipient_keys")
+        .execute(&mut *tx)
+        .await?;
+    sqlx::query("DELETE FROM attachments")
+        .execute(&mut *tx)
+        .await?;
 
     if let Err(e) = sqlx::query("DELETE FROM sqlite_sequence WHERE name IN ('password_items', 'buttons', 'recipient_keys', 'attachments')").execute(&mut *tx).await {
          let _ = e;
@@ -25,7 +31,10 @@ pub async fn wipe_vault_database(state: State<'_, AppState>) -> Result<()> {
 }
 
 #[tauri::command]
-pub async fn save_profile_settings(state: State<'_, AppState>, settings_json: String) -> Result<()> {
+pub async fn save_profile_settings(
+    state: State<'_, AppState>,
+    settings_json: String,
+) -> Result<()> {
     let key = get_key(&state).await?;
     let db_pool = get_db_pool(&state).await?;
 

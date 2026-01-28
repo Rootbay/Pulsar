@@ -1,17 +1,20 @@
-use crate::file_dialog::pick_save_file;
-use crate::types::{PasswordItem, ExportPayload, PubKeyExportPayload};
 use crate::error::{Error, Result};
+use crate::file_dialog::pick_save_file;
+use crate::types::{ExportPayload, PasswordItem, PubKeyExportPayload};
+use argon2::{Algorithm, Argon2, Params, Version};
 use base64::{engine::general_purpose, Engine as _};
+use chacha20poly1305::{
+    aead::{Aead, KeyInit},
+    Key, XChaCha20Poly1305, XNonce,
+};
+use hkdf::Hkdf;
 use rand::rngs::OsRng;
 use rand::RngCore;
-use argon2::{Argon2, Algorithm, Params, Version};
-use chacha20poly1305::{aead::{Aead, KeyInit}, XChaCha20Poly1305, Key, XNonce};
-use hkdf::Hkdf;
 use sha2::Sha256;
-use x25519_dalek::{PublicKey as X25519Public, EphemeralSecret as X25519Secret, StaticSecret};
-use zeroize::{Zeroize, Zeroizing};
-use tauri::Window;
 use std::path::Path;
+use tauri::Window;
+use x25519_dalek::{EphemeralSecret as X25519Secret, PublicKey as X25519Public, StaticSecret};
+use zeroize::{Zeroize, Zeroizing};
 
 #[tauri::command]
 pub async fn export_password_entry(
@@ -88,12 +91,13 @@ pub async fn export_password_entry_to_public_key(
     let path_str = pick_save_file(window).await?;
     let path = std::path::PathBuf::from(&path_str);
 
-
     let recip_pk_bytes = general_purpose::STANDARD
         .decode(recipient_pubkey_b64)
         .map_err(|_| Error::Validation("invalid recipient public key b64".to_string()))?;
     if recip_pk_bytes.len() != 32 {
-        return Err(Error::Validation("recipient public key must be 32 bytes".into()));
+        return Err(Error::Validation(
+            "recipient public key must be 32 bytes".into(),
+        ));
     }
 
     let mut recip_pk_array = [0u8; 32];
@@ -161,8 +165,7 @@ pub async fn import_password_entry_with_private_key(
     payload_json: String,
     recipient_secret_b64: String,
 ) -> Result<PasswordItem> {
-    let payload: PubKeyExportPayload =
-        serde_json::from_str(&payload_json)?;
+    let payload: PubKeyExportPayload = serde_json::from_str(&payload_json)?;
 
     if payload.scheme != "x25519-ephemeral-static"
         || payload.kdf != "hkdf-sha256"
@@ -214,10 +217,7 @@ pub async fn import_password_entry_with_private_key(
 
     let aad = format!(
         "v1:x25519-ephemeral-static:hkdf-sha256:xchacha20poly1305:{}:{}:{}:{}",
-        payload.recipient_pub_b64,
-        payload.eph_pub_b64,
-        payload.salt_b64,
-        payload.nonce_b64
+        payload.recipient_pub_b64, payload.eph_pub_b64, payload.salt_b64, payload.nonce_b64
     );
 
     let cipher = XChaCha20Poly1305::new(Key::from_slice(&aead_key));
@@ -250,7 +250,8 @@ async fn write_sensitive_bytes(path: &Path, bytes: &[u8]) -> Result<()> {
             .write(true)
             .truncate(true)
             .mode(0o600)
-            .open(&tmp_path).await?;
+            .open(&tmp_path)
+            .await?;
         tokio::io::AsyncWriteExt::write_all(&mut file, bytes).await?;
         file.sync_all().await?;
     }
@@ -261,7 +262,8 @@ async fn write_sensitive_bytes(path: &Path, bytes: &[u8]) -> Result<()> {
             .create(true)
             .write(true)
             .truncate(true)
-            .open(&tmp_path).await?;
+            .open(&tmp_path)
+            .await?;
         tokio::io::AsyncWriteExt::write_all(&mut file, bytes).await?;
         file.sync_all().await?;
     }
@@ -269,4 +271,3 @@ async fn write_sensitive_bytes(path: &Path, bytes: &[u8]) -> Result<()> {
     tokio::fs::rename(&tmp_path, path).await?;
     Ok(())
 }
-

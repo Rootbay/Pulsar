@@ -1,5 +1,3 @@
-import { EFF_LARGE_WORDLIST } from './wordlist';
-
 export interface GeneratorOptions {
   uppercase: boolean;
   lowercase: boolean;
@@ -36,7 +34,7 @@ export class GeneratorService {
     };
 
     if (opts.mode === 'passphrase') {
-      return this.generatePassphrase(opts.wordCount, opts.separator);
+      return '';
     }
 
     let charset = '';
@@ -95,7 +93,8 @@ export class GeneratorService {
     return password;
   }
 
-  static generatePassphrase(wordCount: number, separator: string): string {
+  static async generatePassphrase(wordCount: number, separator: string): Promise<string> {
+    const { EFF_LARGE_WORDLIST } = await import('./wordlist');
     const array = new Uint32Array(wordCount);
     crypto.getRandomValues(array);
     const words: string[] = [];
@@ -105,20 +104,24 @@ export class GeneratorService {
     return words.join(separator);
   }
 
-  static calculateEntropy(
+  static async calculateEntropy(
     length: number,
     poolSize: number,
     mode: 'password' | 'passphrase' = 'password'
-  ): number {
+  ): Promise<number> {
     if (mode === 'passphrase') {
+      const { EFF_LARGE_WORDLIST } = await import('./wordlist');
       return Math.floor(length * Math.log2(EFF_LARGE_WORDLIST.length));
     }
     if (poolSize <= 0) return 0;
     return Math.floor(length * Math.log2(poolSize));
   }
 
-  static getPoolSize(options: Partial<GeneratorOptions>): number {
-    if (options.mode === 'passphrase') return EFF_LARGE_WORDLIST.length;
+  static async getPoolSize(options: Partial<GeneratorOptions>): Promise<number> {
+    if (options.mode === 'passphrase') {
+      const { EFF_LARGE_WORDLIST } = await import('./wordlist');
+      return EFF_LARGE_WORDLIST.length;
+    }
 
     const opts = {
       uppercase: true,

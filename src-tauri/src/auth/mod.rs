@@ -1,41 +1,34 @@
-pub mod types;
-pub mod crypto_utils;
-pub mod metadata;
 pub mod biometrics;
 pub mod commands;
+pub mod crypto_utils;
+pub mod metadata;
+pub mod types;
 
+use crate::auth::types::PasswordMetadata;
+use crate::error::{Error, Result};
+use crate::state::AppState;
+use sqlx::Row;
 use std::path::{Path, PathBuf};
 use tauri::State;
-use crate::state::AppState;
-use crate::error::{Error, Result};
-use sqlx::Row;
-use crate::auth::types::{PasswordMetadata};
 use zeroize::Zeroize;
 
-pub use types::*;
+pub use commands::*;
 pub use crypto_utils::*;
 pub use metadata::*;
-pub use commands::*;
+pub use types::*;
 
 pub async fn get_db_pool(_state: &State<'_, AppState>) -> Result<sqlx::SqlitePool> {
     let guard = _state.db.lock().await;
-    guard
-        .clone()
-        .ok_or(Error::VaultNotLoaded)
+    guard.clone().ok_or(Error::VaultNotLoaded)
 }
 
 pub async fn get_db_path(_state: &State<'_, AppState>) -> Result<PathBuf> {
-    _state
-        .db_path
-        .lock()
-        .await
-        .clone()
-        .ok_or(Error::Internal("Database path is not set. Select a vault first.".to_string()))
+    _state.db_path.lock().await.clone().ok_or(Error::Internal(
+        "Database path is not set. Select a vault first.".to_string(),
+    ))
 }
 
-pub async fn load_metadata_from_db(
-    db_pool: &sqlx::SqlitePool,
-) -> Result<Option<PasswordMetadata>> {
+pub async fn load_metadata_from_db(db_pool: &sqlx::SqlitePool) -> Result<Option<PasswordMetadata>> {
     let salt_b64: Option<String> = sqlx::query("SELECT value FROM configuration WHERE key = ?")
         .bind("password_salt")
         .fetch_optional(db_pool)
@@ -112,21 +105,28 @@ pub async fn load_existing_metadata(
         None => load_metadata_from_db(db_pool).await?,
     };
 
-    metadata.ok_or_else(|| Error::Internal("Vault is not initialised with a master password.".to_string()))
+    metadata.ok_or_else(|| {
+        Error::Internal("Vault is not initialised with a master password.".to_string())
+    })
 }
 
 pub async fn verify_master_password_internal(
     state: &State<'_, AppState>,
     password: &str,
 ) -> Result<bool> {
-    use zeroize::Zeroizing;
-    use chacha20poly1305::{aead::{Aead, KeyInit}, Key, XChaCha20Poly1305, XNonce};
+    use chacha20poly1305::{
+        aead::{Aead, KeyInit},
+        Key, XChaCha20Poly1305, XNonce,
+    };
     use subtle::ConstantTimeEq;
+    use zeroize::Zeroizing;
 
     const PASSWORD_CHECK_PLAINTEXT: &[u8] = b"pulsar-password-check";
 
     if password.trim().is_empty() {
-        return Err(Error::Validation("Master password is required.".to_string()));
+        return Err(Error::Validation(
+            "Master password is required.".to_string(),
+        ));
     }
 
     let db_path = get_db_path(state).await?;

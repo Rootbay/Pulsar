@@ -1,9 +1,9 @@
+use crate::db::utils::{get_db_pool, get_key, CryptoHelper};
+use crate::error::Result;
 use crate::state::AppState;
 use crate::types::Button;
-use crate::error::Result;
-use crate::db::utils::{get_key, get_db_pool, CryptoHelper};
-use tauri::State;
 use sqlx::Row;
+use tauri::State;
 
 #[tauri::command]
 pub async fn save_button(

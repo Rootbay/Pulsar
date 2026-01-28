@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
-use crate::state::{AppState, ClipboardPolicyState};
 use crate::error::{Error, Result};
+use crate::state::{AppState, ClipboardPolicyState};
 use tauri_plugin_clipboard_manager::ClipboardExt;
 
 #[cfg(target_os = "windows")]
@@ -45,9 +45,11 @@ pub async fn copy_to_clipboard(
     label: Option<String>,
 ) -> Result<()> {
     let mut policy = state.clipboard_policy.lock().await;
-    
+
     if !policy.integration_enabled {
-        return Err(Error::Internal("Clipboard integration is disabled in settings.".to_string()));
+        return Err(Error::Internal(
+            "Clipboard integration is disabled in settings.".to_string(),
+        ));
     }
 
     if policy.only_unlocked {
@@ -69,11 +71,14 @@ pub async fn copy_to_clipboard(
                 None,
                 None,
                 details.as_deref(),
-            ).await;
+            )
+            .await;
         }
     }
 
-    app.clipboard().write_text(text).map_err(|e| Error::Internal(e.to_string()))?;
+    app.clipboard()
+        .write_text(text)
+        .map_err(|e| Error::Internal(e.to_string()))?;
 
     if let Some(handle) = policy.clear_task_handle.take() {
         handle.abort();
@@ -99,7 +104,10 @@ fn history_blocking_supported() -> bool {
 fn wide_null(s: &str) -> Vec<u16> {
     use std::ffi::OsStr;
     use std::os::windows::prelude::OsStrExt;
-    OsStr::new(s).encode_wide().chain(std::iter::once(0)).collect()
+    OsStr::new(s)
+        .encode_wide()
+        .chain(std::iter::once(0))
+        .collect()
 }
 
 #[cfg(target_os = "windows")]
@@ -242,7 +250,9 @@ pub async fn apply_clipboard_policy(
     payload: ClipboardPolicyPayload,
 ) -> Result<ClipboardPolicyStatus> {
     if payload.block_history && !history_blocking_supported() {
-        return Err(Error::Internal("Clipboard history blocking is not supported on this platform.".to_string()));
+        return Err(Error::Internal(
+            "Clipboard history blocking is not supported on this platform.".to_string(),
+        ));
     }
 
     let mut policy = state.clipboard_policy.lock().await;
@@ -275,6 +285,7 @@ pub async fn apply_clipboard_policy(
 
 #[tauri::command]
 pub async fn clear_clipboard(app: tauri::AppHandle) -> Result<()> {
-    app.clipboard().clear().map_err(|error| Error::Internal(error.to_string()))
+    app.clipboard()
+        .clear()
+        .map_err(|error| Error::Internal(error.to_string()))
 }
-

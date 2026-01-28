@@ -1,9 +1,9 @@
-use std::path::{PathBuf, Path};
-use tauri::Window;
-use tokio::sync::oneshot;
-use tauri_plugin_dialog::DialogExt;
-use std::env;
 use crate::error::{Error, Result};
+use std::env;
+use std::path::{Path, PathBuf};
+use tauri::Window;
+use tauri_plugin_dialog::DialogExt;
+use tokio::sync::oneshot;
 
 #[tauri::command]
 pub async fn pick_save_file(window: Window) -> Result<String> {
@@ -51,11 +51,16 @@ pub async fn check_file_exists(path: String) -> Result<bool> {
 #[tauri::command]
 pub async fn open_app_data_folder(app_handle: tauri::AppHandle) -> Result<()> {
     use tauri::Manager;
-    let app_dir = app_handle.path().app_data_dir().map_err(|e| Error::Internal(e.to_string()))?;
+    let app_dir = app_handle
+        .path()
+        .app_data_dir()
+        .map_err(|e| Error::Internal(e.to_string()))?;
     if !app_dir.exists() {
-        tokio::fs::create_dir_all(&app_dir).await.map_err(|e| Error::Internal(e.to_string()))?;
+        tokio::fs::create_dir_all(&app_dir)
+            .await
+            .map_err(|e| Error::Internal(e.to_string()))?;
     }
-    
+
     #[cfg(target_os = "windows")]
     {
         std::process::Command::new("explorer")
@@ -77,34 +82,51 @@ pub async fn open_app_data_folder(app_handle: tauri::AppHandle) -> Result<()> {
             .spawn()
             .map_err(|e| Error::Internal(e.to_string()))?;
     }
-    
+
     Ok(())
 }
 
 #[tauri::command]
 pub async fn clear_app_logs(app_handle: tauri::AppHandle) -> Result<()> {
     use tauri::Manager;
-    let app_dir = app_handle.path().app_data_dir().map_err(|e| Error::Internal(e.to_string()))?;
+    let app_dir = app_handle
+        .path()
+        .app_data_dir()
+        .map_err(|e| Error::Internal(e.to_string()))?;
     let logs_dir = app_dir.join("logs");
-    
+
     if logs_dir.exists() {
-        tokio::fs::remove_dir_all(&logs_dir).await.map_err(|e| Error::Internal(e.to_string()))?;
-        tokio::fs::create_dir_all(&logs_dir).await.map_err(|e| Error::Internal(e.to_string()))?;
+        tokio::fs::remove_dir_all(&logs_dir)
+            .await
+            .map_err(|e| Error::Internal(e.to_string()))?;
+        tokio::fs::create_dir_all(&logs_dir)
+            .await
+            .map_err(|e| Error::Internal(e.to_string()))?;
     }
-    
+
     Ok(())
 }
 
 #[tauri::command]
 pub async fn elevated_copy(src: String) -> Result<String> {
-    let local_appdata = env::var("LOCALAPPDATA").map_err(|e| Error::Internal(format!("Failed to get LOCALAPPDATA: {}", e)))?;
+    let local_appdata = env::var("LOCALAPPDATA")
+        .map_err(|e| Error::Internal(format!("Failed to get LOCALAPPDATA: {}", e)))?;
     let app_dir = Path::new(&local_appdata).join("Pulsar");
     if !tokio::fs::try_exists(&app_dir).await.unwrap_or(false) {
-        tokio::fs::create_dir_all(&app_dir).await.map_err(|e| Error::Internal(format!("Failed to create app dir {}: {}", app_dir.display(), e)))?;
+        tokio::fs::create_dir_all(&app_dir).await.map_err(|e| {
+            Error::Internal(format!(
+                "Failed to create app dir {}: {}",
+                app_dir.display(),
+                e
+            ))
+        })?;
     }
 
     let src_path = Path::new(&src);
-    let file_name = src_path.file_name().and_then(|s| s.to_str()).ok_or_else(|| Error::Internal("Invalid source filename".to_string()))?;
+    let file_name = src_path
+        .file_name()
+        .and_then(|s| s.to_str())
+        .ok_or_else(|| Error::Internal("Invalid source filename".to_string()))?;
     let dest_path = app_dir.join(file_name);
 
     if tokio::fs::copy(&src, &dest_path).await.is_ok() {
@@ -115,8 +137,7 @@ pub async fn elevated_copy(src: String) -> Result<String> {
     let sanitized_dest = dest_path.to_string_lossy().replace("'", "''");
     let argument_list = format!(
         "-NoProfile -Command Copy-Item -LiteralPath '{}' -Destination '{}' -Force",
-        sanitized_src,
-        sanitized_dest
+        sanitized_src, sanitized_dest
     );
 
     let status = tokio::process::Command::new("powershell")
@@ -137,7 +158,12 @@ pub async fn elevated_copy(src: String) -> Result<String> {
     if status.success() {
         Ok(dest_path.to_string_lossy().into_owned())
     } else {
-        Err(Error::Internal(format!("Elevated copy failed with exit code: {}", status.code().map(|c| c.to_string()).unwrap_or_else(|| "unknown".to_string()))))
+        Err(Error::Internal(format!(
+            "Elevated copy failed with exit code: {}",
+            status
+                .code()
+                .map(|c| c.to_string())
+                .unwrap_or_else(|| "unknown".to_string())
+        )))
     }
 }
-

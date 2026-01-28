@@ -1,21 +1,22 @@
 use crate::auth::verify_master_password_internal;
+use crate::db::{get_buttons_impl, get_password_items_impl, get_recipient_keys_impl};
 use crate::encryption::{decrypt, decrypt_bytes, encrypt, encrypt_bytes};
+use crate::error::{Error, Result};
 use crate::state::AppState;
 use crate::types::{ExportPayload, VaultBackupAttachment, VaultBackupSnapshot};
-use crate::db::{get_password_items_impl, get_buttons_impl, get_recipient_keys_impl};
-use crate::error::{Error, Result};
-use chrono::Utc;
+use crate::utils::write_sensitive_bytes;
 use argon2::{Algorithm, Argon2, Params, Version};
 use base64::{engine::general_purpose, Engine as _};
 use chacha20poly1305::{
     aead::{Aead, KeyInit},
     Key, XChaCha20Poly1305, XNonce,
 };
+use chrono::Utc;
 use rand::rngs::OsRng;
 use rand::RngCore;
 use serde_json::{self, Value};
 use sqlx::{Error as SqlxError, Row, SqlitePool};
-use std::path::Path;
+
 use std::path::PathBuf;
 use tauri::command;
 use tauri::AppHandle;
@@ -34,7 +35,10 @@ async fn get_db_pool(state: &State<'_, AppState>) -> Result<SqlitePool> {
     guard.clone().ok_or(Error::VaultNotLoaded)
 }
 
-async fn get_attachments_snapshot(db_pool: &SqlitePool, key: &[u8]) -> Result<Vec<VaultBackupAttachment>> {
+async fn get_attachments_snapshot(
+    db_pool: &SqlitePool,
+    key: &[u8],
+) -> Result<Vec<VaultBackupAttachment>> {
     let rows = sqlx::query(
         "SELECT id, item_id, file_name, file_size, mime_type, data, created_at FROM attachments",
     )
@@ -64,58 +68,6 @@ async fn get_attachments_snapshot(db_pool: &SqlitePool, key: &[u8]) -> Result<Ve
     Ok(attachments)
 }
 
-async fn write_sensitive_bytes(path: &Path, bytes: &[u8]) -> Result<()> {
-    let tmp_path = path.with_extension("tmp");
-    if tokio::fs::try_exists(&tmp_path).await.unwrap_or(false) {
-        let _ = tokio::fs::remove_file(&tmp_path).await;
-    }
-
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::OpenOptionsExt;
-        let mut file = tokio::fs::OpenOptions::new()
-            .create(true)
-            .write(true)
-            .truncate(true)
-            .mode(0o600)
-            .open(&tmp_path).await?;
-        tokio::io::AsyncWriteExt::write_all(&mut file, bytes).await?;
-        file.sync_all().await?;
-    }
-
-    #[cfg(windows)]
-    {
-        let mut file = tokio::fs::OpenOptions::new()
-            .create(true)
-            .write(true)
-            .truncate(true)
-            .open(&tmp_path).await?;
-        tokio::io::AsyncWriteExt::write_all(&mut file, bytes).await?;
-        file.sync_all().await?;
-    }
-    
-    #[cfg(not(any(unix, windows)))]
-    {
-         let mut file = tokio::fs::OpenOptions::new()
-            .create(true)
-            .write(true)
-            .truncate(true)
-            .open(&tmp_path).await?;
-        tokio::io::AsyncWriteExt::write_all(&mut file, bytes).await?;
-        file.sync_all().await?;
-    }
-
-    if let Err(err) = tokio::fs::rename(&tmp_path, path).await {
-        if err.kind() == std::io::ErrorKind::Other || err.raw_os_error() == Some(17) || err.raw_os_error() == Some(18) {
-            tokio::fs::copy(&tmp_path, path).await?;
-            let _ = tokio::fs::remove_file(&tmp_path).await;
-        } else {
-            return Err(Error::Io(err));
-        }
-    }
-    Ok(())
-}
-
 #[command]
 pub async fn export_vault_backend(
     app_handle: AppHandle,
@@ -139,7 +91,9 @@ pub async fn export_vault_backend(
     let passphrase_value = Zeroizing::new(passphrase.unwrap_or_default());
 
     if !is_plaintext && passphrase_value.is_empty() {
-        return Err(Error::Validation("A passphrase is required to export the vault.".to_string()));
+        return Err(Error::Validation(
+            "A passphrase is required to export the vault.".to_string(),
+        ));
     }
 
     let key = get_key(&state).await?;
@@ -194,9 +148,10 @@ pub async fn export_vault_backend(
 
     let salt_clone = salt.to_vec();
     let passphrase_clone = passphrase_value.clone();
-    
+
     let export_key = tauri::async_runtime::spawn_blocking(move || {
-        let params = Params::new(64 * 1024, 3, 1, None).map_err(|e| Error::Internal(e.to_string()))?;
+        let params =
+            Params::new(64 * 1024, 3, 1, None).map_err(|e| Error::Internal(e.to_string()))?;
         let argon2 = Argon2::new(Algorithm::Argon2id, Version::V0x13, params);
         let mut key = [0u8; 32];
         argon2
@@ -233,7 +188,8 @@ pub async fn export_vault_backend(
         None,
         None,
         Some(&format!("Vault exported to {}", path.display())),
-    ).await;
+    )
+    .await;
 
     Ok(format!("Vault exported successfully to {}", path.display()))
 }
@@ -255,7 +211,9 @@ pub async fn export_vault(
     let passphrase_value = Zeroizing::new(passphrase.unwrap_or_default());
 
     if !is_plaintext && passphrase_value.is_empty() {
-        return Err(Error::Validation("A passphrase is required to export the vault.".to_string()));
+        return Err(Error::Validation(
+            "A passphrase is required to export the vault.".to_string(),
+        ));
     }
 
     let file_extension = if is_plaintext { "json" } else { "pulsar" };
@@ -300,7 +258,8 @@ pub async fn export_vault(
     let passphrase_clone = passphrase_value.clone();
 
     let mut key = tauri::async_runtime::spawn_blocking(move || {
-        let params = Params::new(64 * 1024, 3, 1, None).map_err(|e| Error::Internal(e.to_string()))?;
+        let params =
+            Params::new(64 * 1024, 3, 1, None).map_err(|e| Error::Internal(e.to_string()))?;
         let argon2 = Argon2::new(Algorithm::Argon2id, Version::V0x13, params);
         let mut key = [0u8; 32];
         argon2
@@ -342,7 +301,9 @@ pub async fn import_vault(
 ) -> Result<String> {
     let passphrase_value = Zeroizing::new(passphrase.unwrap_or_default());
     if passphrase_value.is_empty() {
-        return Err(Error::Validation("A passphrase is required to import the vault.".to_string()));
+        return Err(Error::Validation(
+            "A passphrase is required to import the vault.".to_string(),
+        ));
     }
 
     let path = if let Some(path) = path {
@@ -374,7 +335,9 @@ pub async fn import_vault(
     let file_content_bytes = tokio::fs::read(&path).await?;
 
     let payload: ExportPayload = serde_json::from_slice(&file_content_bytes).map_err(|_| {
-        Error::Validation("Failed to parse backup file. It might be invalid or not a Pulsar backup.".to_string())
+        Error::Validation(
+            "Failed to parse backup file. It might be invalid or not a Pulsar backup.".to_string(),
+        )
     })?;
 
     let salt = general_purpose::STANDARD
@@ -391,7 +354,8 @@ pub async fn import_vault(
     let passphrase_clone = passphrase_value.clone();
 
     let mut key = tauri::async_runtime::spawn_blocking(move || {
-        let params = Params::new(64 * 1024, 3, 1, None).map_err(|e| Error::Internal(e.to_string()))?;
+        let params =
+            Params::new(64 * 1024, 3, 1, None).map_err(|e| Error::Internal(e.to_string()))?;
         let argon2 = Argon2::new(Algorithm::Argon2id, Version::V0x13, params);
         let mut key = [0u8; 32];
         argon2
@@ -406,12 +370,16 @@ pub async fn import_vault(
     let decrypted_bytes = cipher
         .decrypt(XNonce::from_slice(&nonce), ciphertext.as_ref())
         .map_err(|_| {
-            Error::Validation("Decryption failed. The password may be incorrect or the file is corrupt.".to_string())
+            Error::Validation(
+                "Decryption failed. The password may be incorrect or the file is corrupt."
+                    .to_string(),
+            )
         })?;
 
     key.zeroize();
 
-    String::from_utf8(decrypted_bytes).map_err(|e| Error::Internal(format!("UTF-8 conversion failed: {e}")))
+    String::from_utf8(decrypted_bytes)
+        .map_err(|e| Error::Internal(format!("UTF-8 conversion failed: {e}")))
 }
 
 #[command]
@@ -424,7 +392,9 @@ pub async fn restore_vault_backend(
 ) -> Result<VaultBackupSnapshot> {
     let passphrase_value = Zeroizing::new(passphrase.unwrap_or_default());
     if passphrase_value.is_empty() {
-        return Err(Error::Validation("A passphrase is required to import the vault.".to_string()));
+        return Err(Error::Validation(
+            "A passphrase is required to import the vault.".to_string(),
+        ));
     }
     let reauth_password = Zeroizing::new(reauth_password.unwrap_or_default());
     let reauth_ok = verify_master_password_internal(&state, reauth_password.as_str()).await?;
@@ -460,10 +430,14 @@ pub async fn restore_vault_backend(
                 "Plaintext backups are not supported in production builds.".to_string(),
             ));
         }
-        String::from_utf8(file_content_bytes).map_err(|e| Error::Internal(format!("UTF-8 conversion failed: {e}")))?
+        String::from_utf8(file_content_bytes)
+            .map_err(|e| Error::Internal(format!("UTF-8 conversion failed: {e}")))?
     } else {
         let payload: ExportPayload = serde_json::from_slice(&file_content_bytes).map_err(|_| {
-            Error::Validation("Failed to parse backup file. It might be invalid or not a Pulsar backup.".to_string())
+            Error::Validation(
+                "Failed to parse backup file. It might be invalid or not a Pulsar backup."
+                    .to_string(),
+            )
         })?;
 
         let salt = general_purpose::STANDARD
@@ -480,27 +454,31 @@ pub async fn restore_vault_backend(
         let passphrase_clone = passphrase_value.clone();
 
         let mut key = tauri::async_runtime::spawn_blocking(move || {
-            let params = Params::new(64 * 1024, 3, 1, None).map_err(|e| Error::Internal(e.to_string()))?;
+            let params =
+                Params::new(64 * 1024, 3, 1, None).map_err(|e| Error::Internal(e.to_string()))?;
             let argon2 = Argon2::new(Algorithm::Argon2id, Version::V0x13, params);
             let mut key = [0u8; 32];
-                    argon2
-                        .hash_password_into(passphrase_clone.as_bytes(), &salt_clone, &mut key)
-                        .map_err(|e| Error::Internal(format!("KDF failed: {e}")))?;
-                    Ok::<[u8; 32], Error>(key)
-                })
-                .await
-            
+            argon2
+                .hash_password_into(passphrase_clone.as_bytes(), &salt_clone, &mut key)
+                .map_err(|e| Error::Internal(format!("KDF failed: {e}")))?;
+            Ok::<[u8; 32], Error>(key)
+        })
+        .await
         .map_err(|e| Error::Internal(format!("Runtime error: {}", e)))??;
 
         let cipher = XChaCha20Poly1305::new(Key::from_slice(&key));
         let decrypted_bytes = cipher
             .decrypt(XNonce::from_slice(&nonce), ciphertext.as_ref())
             .map_err(|_| {
-                Error::Validation("Decryption failed. The password may be incorrect or the file is corrupt.".to_string())
+                Error::Validation(
+                    "Decryption failed. The password may be incorrect or the file is corrupt."
+                        .to_string(),
+                )
             })?;
 
         key.zeroize();
-        String::from_utf8(decrypted_bytes).map_err(|e| Error::Internal(format!("UTF-8 conversion failed: {e}")))?
+        String::from_utf8(decrypted_bytes)
+            .map_err(|e| Error::Internal(format!("UTF-8 conversion failed: {e}")))?
     };
 
     let snapshot: VaultBackupSnapshot = serde_json::from_str(&decrypted_json)?;
@@ -516,7 +494,8 @@ pub async fn restore_vault_backend(
         None,
         None,
         Some("Vault data was restored from a backup"),
-    ).await;
+    )
+    .await;
 
     Ok(snapshot)
 }
@@ -540,9 +519,7 @@ pub async fn restore_vault_snapshot(
     sqlx::query("DELETE FROM password_items")
         .execute(&mut *tx)
         .await?;
-    sqlx::query("DELETE FROM buttons")
-        .execute(&mut *tx)
-        .await?;
+    sqlx::query("DELETE FROM buttons").execute(&mut *tx).await?;
     sqlx::query("DELETE FROM recipient_keys")
         .execute(&mut *tx)
         .await?;
@@ -599,8 +576,7 @@ pub async fn restore_vault_snapshot(
             .as_ref()
             .map(|value| encrypt(value.as_str(), key.as_slice()))
             .transpose()?;
-        let custom_fields_json =
-            serde_json::to_string(&item.custom_fields)?;
+        let custom_fields_json = serde_json::to_string(&item.custom_fields)?;
         let custom_fields_enc = encrypt(&custom_fields_json, key.as_slice())?;
         let field_order_json = item
             .field_order
@@ -653,13 +629,15 @@ pub async fn restore_vault_snapshot(
         let public_key_enc = encrypt(&recipient.public_key, key.as_slice())?;
         let private_key_enc = encrypt(&recipient.private_key, key.as_slice())?;
 
-        sqlx::query("INSERT INTO recipient_keys (id, name, public_key, private_key) VALUES (?, ?, ?, ?)")
-            .bind(recipient.id)
-            .bind(name_enc)
-            .bind(public_key_enc)
-            .bind(private_key_enc)
-            .execute(&mut *tx)
-            .await?;
+        sqlx::query(
+            "INSERT INTO recipient_keys (id, name, public_key, private_key) VALUES (?, ?, ?, ?)",
+        )
+        .bind(recipient.id)
+        .bind(name_enc)
+        .bind(public_key_enc)
+        .bind(private_key_enc)
+        .execute(&mut *tx)
+        .await?;
     }
 
     for attachment in &snapshot.attachments {
@@ -685,4 +663,3 @@ pub async fn restore_vault_snapshot(
     tx.commit().await?;
     Ok(())
 }
-

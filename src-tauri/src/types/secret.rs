@@ -1,5 +1,5 @@
-use serde::{Deserialize, Serialize, Serializer, Deserializer};
-use zeroize::{Zeroizing};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use zeroize::Zeroizing;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SecretString(Zeroizing<String>);
@@ -11,6 +11,7 @@ impl std::hash::Hash for SecretString {
 }
 
 impl SecretString {
+    #[allow(dead_code)]
     pub fn new(s: String) -> Self {
         Self(Zeroizing::new(s))
     }
@@ -18,7 +19,7 @@ impl SecretString {
     pub fn from_zeroized(z: Zeroizing<String>) -> Self {
         Self(z)
     }
-    
+
     pub fn as_str(&self) -> &str {
         &self.0
     }

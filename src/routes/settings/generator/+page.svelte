@@ -136,16 +136,16 @@
   const wordCount = $derived(settings.state.generator.options.wordCount || 4);
   const separator = $derived(settings.state.generator.options.separator || '-');
 
-  function refreshPassword() {
+  async function refreshPassword() {
     if (mode === 'passphrase') {
-      handleGenerate();
+      await handleGenerate();
       return;
     }
-    const poolSize = GeneratorService.getPoolSize(options);
+    const poolSize = await GeneratorService.getPoolSize(options);
     hasCharacterPool = poolSize > 0;
 
     if (hasCharacterPool) {
-      handleGenerate();
+      await handleGenerate();
     } else {
       generatedPassword = '';
       strengthEntropy = 0;
@@ -153,13 +153,18 @@
     }
   }
 
-  function handleGenerate() {
-    const password = GeneratorService.generate(passwordLength, options);
-    if (!password) return;
+  async function handleGenerate() {
+    if (mode === 'passphrase') {
+      const pass = await GeneratorService.generatePassphrase(wordCount, separator);
+      if (pass) generatedPassword = pass;
+    } else {
+      const password = GeneratorService.generate(passwordLength, options);
+      if (!password) return;
+      generatedPassword = password;
+    }
 
-    generatedPassword = password;
-    const poolSize = GeneratorService.getPoolSize(options);
-    strengthEntropy = GeneratorService.calculateEntropy(
+    const poolSize = await GeneratorService.getPoolSize(options);
+    strengthEntropy = await GeneratorService.calculateEntropy(
       mode === 'passphrase' ? wordCount : passwordLength,
       poolSize,
       mode

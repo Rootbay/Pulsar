@@ -22,16 +22,6 @@ export const defaultProfileSettings: ProfileSettings = {
 class ProfileStore {
   state = $state<ProfileSettings>(defaultProfileSettings);
 
-  constructor() {
-    $effect.root(() => {
-      $effect(() => {
-        if (appState.isLocked) {
-          this.state = { ...defaultProfileSettings };
-        }
-      });
-    });
-  }
-
   async load() {
     try {
       const data = await callBackend<string | null>('get_profile_settings');

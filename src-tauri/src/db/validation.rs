@@ -1,6 +1,8 @@
 use crate::types::PasswordItem;
 
-pub fn validate_password_item_fields(item: &PasswordItem) -> std::result::Result<(), validator::ValidationError> {
+pub fn validate_password_item_fields(
+    item: &PasswordItem,
+) -> std::result::Result<(), validator::ValidationError> {
     if item.title.is_empty() {
         return Err(validator::ValidationError::new("title_empty"));
     }
@@ -14,7 +16,8 @@ pub fn validate_password_item_fields(item: &PasswordItem) -> std::result::Result
         }
     }
 
-    let is_placeholder_password = item.password.trim().is_empty() || item.password.as_str() == "N/A";
+    let is_placeholder_password =
+        item.password.trim().is_empty() || item.password.as_str() == "N/A";
     if !is_placeholder_password && item.password.len() < 8 {
         return Err(validator::ValidationError::new("password_too_short"));
     }

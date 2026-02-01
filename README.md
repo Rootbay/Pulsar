@@ -51,7 +51,7 @@ See [SECURITY.md](./docs/SECURITY.md) for full technical details, KDF parameters
 
 ## Tech Stack
 
-- **Frontend:** SvelteKit, Svelte 5, TypeScript 5, Vite 6, PNPM
+- **Frontend:** SvelteKit, Svelte 5 (Runes), TypeScript 5, Vite 6, Bun
 - **Backend / Storage:** Rust with SQLite database
 - **Security:** Argon2id, ChaCha20-Poly1305 / AES-256-GCM
 
@@ -62,13 +62,13 @@ See [SECURITY.md](./docs/SECURITY.md) for full technical details, KDF parameters
 ### Dev Mode
 
 ```bash
-pnpm tauri dev
+bun tauri dev
 ```
 
 ### Build for Release
 
 ```bash
-pnpm tauri build
+bun tauri build
 ```
 
 This will generate platform-specific binaries for distribution.

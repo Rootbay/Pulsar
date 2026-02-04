@@ -956,6 +956,48 @@ pub async fn add_custom_field(
 }
 
 #[tauri::command]
+pub async fn get_total_items_count(state: State<'_, AppState>) -> Result<i64> {
+    let _key = get_key(&state).await?;
+    let db_pool = get_db_pool(&state).await?;
+    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM password_items")
+        .fetch_one(&db_pool)
+        .await?;
+    Ok(count)
+}
+
+#[tauri::command]
+pub async fn get_favorites_count(state: State<'_, AppState>) -> Result<i64> {
+    let key = get_key(&state).await?;
+    let db_pool = get_db_pool(&state).await?;
+
+    let buttons = crate::db::buttons::get_buttons_impl(&db_pool, key.as_slice()).await?;
+    let target_names = vec!["favorite", "fav", "star"];
+    let tag_ids: Vec<i64> = buttons
+        .iter()
+        .filter(|b| target_names.contains(&b.text.as_str()))
+        .map(|b| b.id)
+        .collect();
+
+    if tag_ids.is_empty() {
+        return Ok(0);
+    }
+
+    let placeholders = tag_ids.iter().map(|_| "?").collect::<Vec<_>>().join(", ");
+    let sql = format!(
+        "SELECT COUNT(DISTINCT item_id) FROM item_tags WHERE tag_id IN ({})",
+        placeholders
+    );
+
+    let mut q = sqlx::query_scalar(&sql);
+    for id in tag_ids {
+        q = q.bind(id);
+    }
+
+    let count: i64 = q.fetch_one(&db_pool).await?;
+    Ok(count)
+}
+
+#[tauri::command]
 pub async fn remove_tag_from_password_items(
     state: State<'_, AppState>,
     tag: String,

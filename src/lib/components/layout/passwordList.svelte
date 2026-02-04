@@ -459,32 +459,10 @@
               role="tab"
               variant="ghost"
               size="sm"
-              aria-selected={appState.filterCategory === 'all'}
-              onclick={() => (appState.filterCategory = 'all')}
-            >
-              All <span class="count">({itemsCount})</span>
-            </Button>
-            <Button
-              type="button"
-              class="segBtn"
-              role="tab"
-              variant="ghost"
-              size="sm"
               aria-selected={appState.filterCategory === RECENT_FILTER}
               onclick={() => (appState.filterCategory = RECENT_FILTER)}
             >
               Recently
-            </Button>
-            <Button
-              type="button"
-              class="segBtn"
-              role="tab"
-              variant="ghost"
-              size="sm"
-              aria-selected={appState.filterCategory === 'favorites'}
-              onclick={() => (appState.filterCategory = 'favorites')}
-            >
-              Favorites
             </Button>
           </div>
         </div>
@@ -678,7 +656,7 @@
     flex-direction: column;
     align-items: flex-start;
     margin-top: 16px;
-    margin-bottom: 30px;
+    margin-bottom: 10px;
     width: 100%;
     gap: 25px;
     padding: 0 12px;

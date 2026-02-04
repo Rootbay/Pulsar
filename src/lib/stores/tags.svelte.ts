@@ -6,9 +6,10 @@ export interface TagButton {
   text: string;
   icon: string;
   color: string;
+  count?: number;
 }
 
-export type TagInput = Omit<TagButton, 'id'> & { id?: number };
+export type TagInput = Omit<TagButton, 'id' | 'count'> & { id?: number };
 
 class TagStore {
   #tags = $state<TagButton[]>([]);
@@ -32,8 +33,15 @@ class TagStore {
     if (this.#isRefreshing) return;
     this.#isRefreshing = true;
     try {
-      const tags = await callBackend<TagButton[]>('get_buttons');
-      this.#tags = tags || [];
+      const [tags, counts] = await Promise.all([
+        callBackend<TagButton[]>('get_buttons'),
+        callBackend<Record<number, number>>('get_tag_counts').catch(() => ({} as Record<number, number>))
+      ]);
+      
+      this.#tags = (tags || []).map(t => ({
+        ...t,
+        count: counts[t.id] || 0
+      }));
     } finally {
       this.#isRefreshing = false;
     }

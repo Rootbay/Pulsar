@@ -18,9 +18,6 @@
 
   let { children } = $props();
 
-  const SIDEBAR_WIDTH = '86px';
-  const SIDEBAR_STYLE = '--sidebar-width: ' + SIDEBAR_WIDTH + ';';
-
   let selectedPasswordItem = $state<PasswordItem | null>(null);
   let showCreatePasswordPopup = $state(false);
   let showPopup = $state(false);
@@ -280,10 +277,12 @@
 
 <div class="app-container-wrapper">
   <div class="main-app-view">
-    <div class="layout" style={SIDEBAR_STYLE}>
-      <SidebarProvider class="min-h-full w-auto" style={SIDEBAR_STYLE}>
+    <div class="layout">
+      <SidebarProvider class="min-h-full w-auto">
         <AppSidebar
           {buttons}
+          totalItemCount={vaultStore.totalItemCount}
+          favoritesCount={vaultStore.favoritesCount}
           onopenPopup={openPopup}
           ontagDeleteRequested={handleTagDeleteRequested}
         />

@@ -98,3 +98,22 @@ pub async fn delete_button(state: State<'_, AppState>, id: i64) -> Result<()> {
         .await?;
     Ok(())
 }
+
+#[tauri::command]
+pub async fn get_tag_counts(state: State<'_, AppState>) -> Result<std::collections::HashMap<i64, i64>> {
+    let _key = get_key(&state).await?;
+    let db_pool = get_db_pool(&state).await?;
+
+    let rows = sqlx::query("SELECT tag_id, COUNT(*) as count FROM item_tags GROUP BY tag_id")
+        .fetch_all(&db_pool)
+        .await?;
+
+    let mut counts = std::collections::HashMap::new();
+    for row in rows {
+        let tag_id: i64 = row.get("tag_id");
+        let count: i64 = row.get("count");
+        counts.insert(tag_id, count);
+    }
+
+    Ok(counts)
+}

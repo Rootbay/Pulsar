@@ -27,23 +27,25 @@ export const defaultAdvancedSettings: AdvancedSettings = {
 };
 
 export interface AppearanceSettings {
-  theme: 'system' | 'light' | 'dark';
-  compactMode: boolean;
+  theme: AppTheme;
+  pageDensity: 'comfortable' | 'compact' | 'dense';
   fontSize: number;
   highContrast: boolean;
   reducedMotion: boolean;
-  pageDensity: 'comfortable' | 'compact' | 'dense';
+  compactMode: boolean;
   passwordListWidth: number;
+  sidebarWidth: number;
 }
 
 export const defaultAppearanceSettings: AppearanceSettings = {
-  theme: 'dark',
-  compactMode: false,
+  theme: 'system',
+  pageDensity: 'comfortable',
   fontSize: 14,
   highContrast: false,
   reducedMotion: false,
-  pageDensity: 'comfortable',
-  passwordListWidth: 300
+  compactMode: false,
+  passwordListWidth: 300,
+  sidebarWidth: 240
 };
 
 export interface AutofillSettings {

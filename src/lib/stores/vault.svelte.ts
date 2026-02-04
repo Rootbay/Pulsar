@@ -14,6 +14,9 @@ class VaultStore {
   #limit = 50;
   #offset = 0;
   #hasMore = $state(true);
+  #totalItemCount = $state(0);
+  #favoritesCount = $state(0);
+  #currentRequestId = 0;
 
   constructor() {
     $effect.root(() => {
@@ -24,6 +27,9 @@ class VaultStore {
           this.#searchTerm = '';
           this.#offset = 0;
           this.#hasMore = true;
+          this.#totalItemCount = 0;
+          this.#favoritesCount = 0;
+          this.#currentRequestId++;
         }
       });
 
@@ -42,6 +48,14 @@ class VaultStore {
 
   get items() {
     return this.#items;
+  }
+
+  get totalItemCount() {
+    return this.#totalItemCount;
+  }
+
+  get favoritesCount() {
+    return this.#favoritesCount;
   }
 
   get isLoading() {
@@ -85,33 +99,54 @@ class VaultStore {
     });
   }
 
+  async refreshCounts() {
+    if (appState.isLocked) return;
+    try {
+      const [total, favorites] = await Promise.all([
+        callBackend<number>('get_total_items_count'),
+        callBackend<number>('get_favorites_count').catch(() => 0)
+      ]);
+      this.#totalItemCount = total;
+      this.#favoritesCount = favorites;
+    } catch (error) {
+      console.error('Failed to get counts:', error);
+    }
+  }
+
   async loadItems() {
     if (appState.isLocked) {
       this.#items = [];
       return;
     }
 
+    const requestId = ++this.#currentRequestId;
     this.#isLoading = true;
     this.#offset = 0;
     this.#hasMore = true;
     try {
       const results = await this.#fetchItems();
+      if (this.#currentRequestId !== requestId) return;
       this.#items = results;
       this.#hasMore = results.length === this.#limit;
       this.#offset = results.length;
+      await this.refreshCounts();
     } catch (error) {
       console.error('Failed to load vault items:', error);
     } finally {
-      this.#isLoading = false;
+      if (this.#currentRequestId === requestId) {
+        this.#isLoading = false;
+      }
     }
   }
 
   async loadMore() {
     if (this.#isLoading || !this.#hasMore || appState.isLocked) return;
 
+    const requestId = this.#currentRequestId;
     this.#isLoading = true;
     try {
       const results = await this.#fetchItems();
+      if (this.#currentRequestId !== requestId) return;
       if (results.length > 0) {
         this.#items = [...this.#items, ...results];
         this.#offset += results.length;
@@ -120,7 +155,9 @@ class VaultStore {
     } catch (error) {
       console.error('Failed to load more vault items:', error);
     } finally {
-      this.#isLoading = false;
+      if (this.#currentRequestId === requestId) {
+        this.#isLoading = false;
+      }
     }
   }
 

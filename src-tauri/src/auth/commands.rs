@@ -534,6 +534,17 @@ pub async fn set_master_password(state: State<'_, AppState>, password: String) -
 
             conn.close().await?;
 
+            {
+                let pool = crate::db::init_db_lazy(&temp_db_path, Some(key_z.as_slice()), false)
+                    .await
+                    .map_err(Error::Internal)?;
+                if let Err(e) = sqlx::migrate!().run(&pool).await {
+                    pool.close().await;
+                    return Err(Error::Database(e.into()));
+                }
+                pool.close().await;
+            }
+
             write_password_metadata_to_db(&temp_db_path, key_z.as_slice(), &metadata).await?;
 
             tokio::time::sleep(Duration::from_millis(50)).await;

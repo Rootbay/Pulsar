@@ -2,6 +2,6 @@
 target-dir = "target"
 
 [env]
-OPENSSL_DIR = "C:\\Program Files\\OpenSSL-Win64"
-OPENSSL_LIB_DIR = "C:\\Program Files\\OpenSSL-Win64\\lib\\VC\\x64\\MD"
-OPENSSL_INCLUDE_DIR = "C:\\Program Files\\OpenSSL-Win64\\include"
+OPENSSL_DIR = "C:/Users/devver/openssl"
+OPENSSL_LIB_DIR = "C:/Users/devver/openssl/lib"
+OPENSSL_INCLUDE_DIR = "C:/Users/devver/openssl/include"

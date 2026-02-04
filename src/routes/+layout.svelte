@@ -67,6 +67,11 @@
         `${appearance.passwordListWidth || 300}px`
       );
 
+      htmlElement.style.setProperty(
+        '--sidebar-width',
+        `${appearance.sidebarWidth || 240}px`
+      );
+
       if (appearance.compactMode) {
         htmlElement.classList.add('compact-mode');
       } else {

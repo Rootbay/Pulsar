@@ -744,6 +744,16 @@ pub async fn delete_password_item(state: State<'_, AppState>, id: i64) -> Result
         .execute(&mut *tx)
         .await?;
 
+    sqlx::query("DELETE FROM item_tags WHERE item_id = ?")
+        .bind(id)
+        .execute(&mut *tx)
+        .await?;
+
+    sqlx::query("DELETE FROM search_trigrams WHERE item_id = ?")
+        .bind(id)
+        .execute(&mut *tx)
+        .await?;
+
     sqlx::query("DELETE FROM password_items WHERE id = ?")
         .bind(id)
         .execute(tx.as_mut())

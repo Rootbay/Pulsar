@@ -128,7 +128,7 @@
               </div>
               <span class="ml-0 font-medium">All items</span>
               {#if totalItemCount > 0}
-                <span class="ml-auto mr-[8px] flex h-[20px] w-[20px] items-center justify-center rounded-full bg-sidebar-foreground/10 text-[inherit]">
+                <span class="ml-auto mr-[8px] flex h-[20px] items-center justify-center rounded-full bg-sidebar-foreground/10 px-3 text-sm">
                   {totalItemCount}
                 </span>
               {/if}
@@ -149,7 +149,7 @@
               </div>
               <span class="ml-0 font-medium">Favorites</span>
               {#if favoritesCount > 0}
-                <span class="ml-auto mr-[8px] flex h-[20px] w-[20px] items-center justify-center rounded-full bg-sidebar-foreground/10 text-[inherit]">
+                <span class="ml-auto mr-[8px] flex h-[20px] items-center justify-center rounded-full bg-sidebar-foreground/10 px-3 text-sm">
                   {favoritesCount}
                 </span>
               {/if}
@@ -196,7 +196,7 @@
                     </div>
                     <span class="ml-0 font-medium truncate">{button.text}</span>
                     {#if button.count && button.count > 0}
-                      <span class="ml-auto mr-[8px] flex h-[20px] w-[20px] items-center justify-center rounded-full bg-sidebar-foreground/10 text-[inherit]">
+                      <span class="ml-auto mr-[8px] flex h-[20px] items-center justify-center rounded-full bg-sidebar-foreground/10 px-3 text-sm">
                         {button.count}
                       </span>
                     {/if}

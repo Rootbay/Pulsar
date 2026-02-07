@@ -39,7 +39,7 @@
       out:fade={{ duration: 180 }}
     >
       <div class="tag-bg"></div>
-      <Icon path={tag.icon} color={tag.color} size="17" />
+      <Icon path={tag.icon} color={tag.color} size="17" viewBox="0 0 48 48" />
     </div>
   {/if}
 {/each}

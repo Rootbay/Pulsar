@@ -6,6 +6,8 @@
   import PasswordDetail from '$lib/components/layout/passwordDetail.svelte';
   import CreatePasswordPopup from '$lib/components/CreatePasswordPopup.svelte';
   import Popup from '$lib/components/ui/Popup.svelte';
+  import DeleteTagPopup from '$lib/components/DeleteTagPopup.svelte';
+  import DeletePasswordPopup from '$lib/components/DeletePasswordPopup.svelte';
   import { SidebarProvider } from '$lib/components/ui/sidebar';
   import Settings from '../settings/general/+page.svelte';
   import { callBackend } from '$lib/utils/backend';
@@ -21,6 +23,10 @@
   let selectedPasswordItem = $state<PasswordItem | null>(null);
   let showCreatePasswordPopup = $state(false);
   let showPopup = $state(false);
+  let showDeleteTagPopup = $state(false);
+  let showDeletePasswordPopup = $state(false);
+  let tagToDelete = $state<TagButton | null>(null);
+  let itemToDelete = $state<PasswordItemOverview | null>(null);
   let popupMode = $state<'create' | 'edit'>('create');
   let popupTag = $state<Button | null>(null);
   const buttons = $derived(tagStore.tags);
@@ -32,9 +38,13 @@
 
   $effect(() => {
     if (selectedPasswordItem && selectedPasswordItem.tags) {
-      const firstTag = selectedPasswordItem.tags.split(',')[0].trim();
-      const button = buttons.find((b) => b.text === firstTag);
-      displayColor = button ? button.color : '#94a3b8';
+      const tags = selectedPasswordItem.tags.split(',').map((t) => t.trim()).filter(Boolean);
+      if (tags.length > 0) {
+        const button = buttons.find((b) => b.text === tags[0]);
+        displayColor = button ? button.color : '#94a3b8';
+      } else {
+        displayColor = '#94a3b8';
+      }
     } else {
       displayColor = '#94a3b8';
     }
@@ -157,14 +167,19 @@
     }
   }
 
-  async function handleTagDeleteRequested(detail: Button) {
+  function handleTagDeleteRequested(detail: Button) {
     if (!detail.id) {
       return;
     }
+    tagToDelete = detail as TagButton;
+    showDeleteTagPopup = true;
+  }
+
+  async function confirmDeleteTag() {
+    if (!tagToDelete || !tagToDelete.id) return;
 
     try {
-      await tagStore.remove(detail.id);
-      await tagStore.removeTagAcrossItems(detail.text);
+      await tagStore.remove(tagToDelete.id);
       toast.success('Tag deleted.');
     } catch (error) {
       console.error('Failed to delete tag:', error);
@@ -172,11 +187,16 @@
       return;
     }
 
-    if (appState.selectedTag === detail.text) {
+    if (appState.selectedTag === tagToDelete.text) {
       appState.selectedTag = null;
     }
 
+    showDeleteTagPopup = false;
+    tagToDelete = null;
+
+    await tick();
     await vaultStore.loadItems();
+    await tagStore.refresh();
 
     if (selectedPasswordItem) {
       const refreshedItem = vaultStore.items.find((item) => item.id === selectedPasswordItem?.id);
@@ -261,16 +281,27 @@
 
   async function handleRemoveEntry(itemToRemove: PasswordItemOverview) {
     if (!itemToRemove) return;
+    itemToDelete = itemToRemove;
+    showDeletePasswordPopup = true;
+  }
 
+  async function confirmDeleteEntry() {
+    if (!itemToDelete) return;
+    
     try {
-      await callBackend('delete_password_item', { id: itemToRemove.id });
-      vaultStore.removeItem(itemToRemove.id);
+      await callBackend('delete_password_item', { id: itemToDelete.id });
+      vaultStore.removeItem(itemToDelete.id);
 
-      if (selectedPasswordItem && selectedPasswordItem.id === itemToRemove.id) {
+      if (selectedPasswordItem && selectedPasswordItem.id === itemToDelete.id) {
         selectedPasswordItem = null;
       }
+      toast.success('Password entry deleted.');
     } catch (error) {
       console.error('Failed to remove password entry:', error);
+      toast.error('Failed to delete password entry.');
+    } finally {
+      showDeletePasswordPopup = false;
+      itemToDelete = null;
     }
   }
 </script>
@@ -332,6 +363,22 @@
 
 {#if showPopup}
   <Popup onclose={closePopup} onsave={handleSave} mode={popupMode} tag={popupTag} />
+{/if}
+
+{#if showDeleteTagPopup && tagToDelete}
+  <DeleteTagPopup
+    tag={tagToDelete}
+    onclose={() => (showDeleteTagPopup = false)}
+    onconfirm={confirmDeleteTag}
+  />
+{/if}
+
+{#if showDeletePasswordPopup && itemToDelete}
+  <DeletePasswordPopup
+    item={itemToDelete}
+    onclose={() => (showDeletePasswordPopup = false)}
+    onconfirm={confirmDeleteEntry}
+  />
 {/if}
 
 {#if showCreatePasswordPopup}

@@ -9,9 +9,10 @@
   import { callBackend } from '$lib/utils/backend';
   import { appState, vaultStore } from '$lib/stores';
   import type { PasswordItemOverview } from '$lib/types/password';
-  import { Search, X } from '@lucide/svelte';
+  import { Search, X, Plus } from '@lucide/svelte';
   import { Button } from '$lib/components/ui/button';
   import { Input } from '$lib/components/ui/input';
+  import { Separator } from '$lib/components/ui/separator';
   import { ScrollArea } from '$lib/components/ui/scroll-area';
   import { Skeleton } from '$lib/components/ui/skeleton';
   import {
@@ -23,13 +24,7 @@
   } from '$lib/components/ui/context-menu';
   import { createResizeController } from './password-list/resizeController';
   import { settings } from '$lib/stores/appSettings.svelte';
-
-  type TagButton = {
-    id?: number;
-    text: string;
-    color: string;
-    icon: string;
-  };
+  import type { TagButton } from '$lib/stores/tags.svelte';
 
   type TagMeta = {
     icon: string;
@@ -66,8 +61,8 @@
   }: Props = $props();
 
   const defaultFallback: TagMeta = {
-    icon: iconPaths.default,
-    color: 'var(--sidebar-border)'
+    icon: iconPaths.globe,
+    color: '#94a3b8'
   };
 
   const sectionOrder: SectionTitle[] = ['Pinned', 'Today', 'Yesterday', 'Earlier'];
@@ -82,6 +77,26 @@
   let highlightTimer: ReturnType<typeof setTimeout> | null = null;
 
   const itemsCount = $derived(vaultStore.items.length);
+
+  const headerInfo = $derived.by(() => {
+    if (appState.selectedTag) {
+      const tagButton = buttons.find((b) => b.text === appState.selectedTag);
+      return {
+        title: appState.selectedTag,
+        count: tagButton?.count ?? 0
+      };
+    }
+    if (appState.filterCategory === 'favorites') {
+      return {
+        title: 'Favorites',
+        count: vaultStore.favoritesCount
+      };
+    }
+    return {
+      title: 'All Items',
+      count: vaultStore.totalItemCount
+    };
+  });
 
   const tagMap = $derived.by(
     () =>
@@ -421,6 +436,13 @@
         tabindex="-1"
       >
         <div class="topControls" role="region" aria-label="Navigation controls">
+          <div class="mb-4 flex w-full items-center justify-between px-1">
+            <h2 class="text-lg font-semibold">{headerInfo.title}</h2>
+            <span class="flex h-6 items-center justify-center rounded-full bg-secondary px-2.5 text-base text-secondary-foreground">
+              {headerInfo.count}
+            </span>
+          </div>
+
           <div class="searchContainer">
             <Button
               type="button"
@@ -452,19 +474,17 @@
             {/if}
           </div>
 
-          <div class="segButtons" role="tablist" aria-label="Filter tabs">
-            <Button
-              type="button"
-              class="segBtn"
-              role="tab"
-              variant="ghost"
-              size="sm"
-              aria-selected={appState.filterCategory === RECENT_FILTER}
-              onclick={() => (appState.filterCategory = RECENT_FILTER)}
-            >
-              Recently
-            </Button>
-          </div>
+          <Separator class="my-4" />
+
+          <Button
+            type="button"
+            class="w-full justify-center gap-2 h-10 text-base border-0 bg-secondary/50 hover:bg-secondary/80"
+            variant="outline"
+            onclick={handleCreateEntry}
+          >
+            <Plus class="h-5 w-5" />
+            <span>Add Password</span>
+          </Button>
         </div>
 
         <ScrollArea class="navScroll">
@@ -658,7 +678,7 @@
     margin-top: 16px;
     margin-bottom: 10px;
     width: 100%;
-    gap: 25px;
+    gap: 0;
     padding: 0 12px;
     box-sizing: border-box;
   }

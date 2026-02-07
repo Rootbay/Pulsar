@@ -1,6 +1,8 @@
 <svelte:options runes />
 
 <script lang="ts">
+  import { tick } from 'svelte';
+  import { SvelteSet } from 'svelte/reactivity';
   import type { PasswordItem } from '$lib/types/password';
   import { iconPaths } from '$lib/icons';
   import { dndzone } from 'svelte-dnd-action';
@@ -19,7 +21,7 @@
   }
 
   let {
-    selectedPasswordItem = $bindable<PasswordItem | null>(),
+    selectedPasswordItem,
     isEditing = $bindable(false),
     buttons,
     onReorderPending,
@@ -32,50 +34,31 @@
   const REMOVE_ANIM_MS = 140;
   const ADD_ANIM_MS = 140;
 
-  let removingTags = $state(new Set<string>());
-  let recentlyAdded = $state(new Set<string>());
-  let dndTags = $state<{ id: string; text: string }[]>([]);
-  let justDragged = $state(false);
-  let suppressSync = $state(false);
+  let removingTags = $state(new SvelteSet<string>());
+  let recentlyAdded = $state(new SvelteSet<string>());
+  
+  // Initialize dndTags once from props. parent handles reset via {#key}
+  const initialTags = (selectedPasswordItem?.tags || '')
+    .split(',')
+    .map(t => t.trim())
+    .filter(Boolean);
+  
+  // Use a Set to ensure uniqueness for dndzone IDs
+  const uniqueInitialTags = [...new Set(initialTags)];
+  let dndTags = $state<{ id: string; text: string }[]>(uniqueInitialTags.map(t => ({ id: t, text: t })));
+  
   let isDragging = $state(false);
-  let pendingReorder = $state<string | null>(null);
+  let justDragged = $state(false);
 
-  let workingTags = $state<string[]>([]);
+  // Derived state for what is actually currently "active"
+  const workingTags = $derived(dndTags.map((t) => t.text));
+  const remainingTags = $derived(buttons.filter((button) => !workingTags.includes(button.text)));
+  const hasRemainingTags = $derived(remainingTags.length > 0);
 
+  // Auto-close chooser logic - more defensive to avoid potential loops
   $effect(() => {
-    const base =
-      pendingReorder !== null
-        ? pendingReorder
-        : dndTags.length
-          ? dndTags.map((t) => t.text).join(',')
-          : (selectedPasswordItem?.tags ?? '');
-
-    workingTags = base
-      .split(',')
-      .map((t) => t.trim())
-      .filter((value) => value.length > 0);
-  });
-
-  $effect(() => {
-    if (suppressSync || pendingReorder !== null) {
-      return;
-    }
-    const list =
-      selectedPasswordItem?.tags
-        ?.split(',')
-        .map((t: string) => t.trim())
-        .filter((value: string) => value.length > 0) ?? [];
-
-    const needsSync = dndTags.length !== list.length || dndTags.some((t, i) => t.text !== list[i]);
-
-    if (needsSync) {
-      dndTags = list.map((t: string) => ({ id: t, text: t }));
-    }
-  });
-
-  $effect(() => {
-    if (!isEditing) {
-      pendingReorder = null;
+    if ((!hasRemainingTags || !isEditing) && showChooser) {
+      showChooser = false;
     }
   });
 
@@ -89,71 +72,56 @@
     return btn?.icon || iconPaths.default;
   }
 
-  function addExistingTag(tagToAdd: string) {
-    if (!selectedPasswordItem) return;
-    const tags = [...workingTags];
-    const next = tagToAdd.trim();
-    if (!next) return;
-    if (!buttons.some((button) => button.text === next)) {
-      alert('Only existing tags can be added.');
-      return;
-    }
-    if (tags.includes(next)) {
-      return;
-    }
+  async function addExistingTag(tagToAdd: string) {
+    if (!selectedPasswordItem || workingTags.includes(tagToAdd)) return;
 
-    recentlyAdded.add(next);
-    const updatedTags = [...tags, next].join(',');
-    pendingReorder = updatedTags;
+    recentlyAdded.add(tagToAdd);
+    
+    dndTags = [...dndTags, { id: tagToAdd, text: tagToAdd }];
+    
+    await tick();
+    onReorderPending?.({ tags: dndTags.map(t => t.text).join(',') });
 
-    if (!dndTags.some((tag) => tag.text === next)) {
-      dndTags = [...dndTags, { id: next, text: next }];
-    }
-
-    onReorderPending?.({ tags: updatedTags });
     setTimeout(() => {
-      recentlyAdded.delete(next);
+      recentlyAdded.delete(tagToAdd);
     }, ADD_ANIM_MS + 60);
 
     onTagAdded?.();
   }
 
-  function removeTag(tagToRemove: string) {
-    if (!selectedPasswordItem) return;
-    if (isDragging) return;
+  async function removeTag(tagToRemove: string) {
+    if (!selectedPasswordItem || isDragging || removingTags.has(tagToRemove)) return;
+
     if (justDragged) {
       justDragged = false;
       return;
     }
-    if (removingTags.has(tagToRemove)) return;
-
-    const tags = [...workingTags];
-    const updatedTags = tags.filter((tag) => tag !== tagToRemove).join(',');
-    pendingReorder = updatedTags;
-    onReorderPending?.({ tags: updatedTags });
 
     removingTags.add(tagToRemove);
-    setTimeout(() => {
-      dndTags = dndTags.filter((tag) => tag.text !== tagToRemove);
-      onTagRemoved?.();
+
+    setTimeout(async () => {
+      // Check if tag is still in dndTags (it might have been removed by re-keying or other means)
+      if (dndTags.some(t => t.text === tagToRemove)) {
+        dndTags = dndTags.filter((tag) => tag.text !== tagToRemove);
+        await tick();
+        onReorderPending?.({ tags: dndTags.map(t => t.text).join(',') });
+      }
       removingTags.delete(tagToRemove);
+      onTagRemoved?.();
     }, REMOVE_ANIM_MS);
   }
 
   function handleConsider(e: CustomEvent<{ items: { id: string; text: string }[] }>) {
     isDragging = true;
-    suppressSync = true;
     dndTags = e.detail.items;
   }
 
-  function handleFinalize(e: CustomEvent<{ items: { id: string; text: string }[] }>) {
+  async function handleFinalize(e: CustomEvent<{ items: { id: string; text: string }[] }>) {
     dndTags = e.detail.items;
     justDragged = true;
     setTimeout(() => (justDragged = false), 50);
-    const newOrder = dndTags.map((t) => t.text).join(',');
-    pendingReorder = newOrder;
-    onReorderPending?.({ tags: newOrder });
-    suppressSync = false;
+    await tick();
+    onReorderPending?.({ tags: dndTags.map(t => t.text).join(',') });
     isDragging = false;
   }
 </script>
@@ -191,14 +159,14 @@
         >
           <div class="tag-bg"></div>
           <span class="tag-content">
-            <Icon path={getTagIcon(item.text)} size="14" color="currentColor" />
+            <Icon path={getTagIcon(item.text)} size="14" color="currentColor" viewBox="0 0 48 48" />
             {item.text}
           </span>
         </div>
       {/each}
     </div>
 
-    {#if isEditing}
+    {#if isEditing && hasRemainingTags}
       <button
         type="button"
         class="add-toggle-btn"
@@ -211,14 +179,14 @@
       {#if showChooser}
         <div class="available-tags">
           <div class="chips chips-available">
-            {#each buttons.filter((button) => !workingTags.includes(button.text)) as tag (tag.id)}
+            {#each remainingTags as tag (tag.id)}
               <button
                 type="button"
                 class="chooserChip"
                 style="--tag-color: {tag.color};"
                 onclick={() => addExistingTag(tag.text)}
               >
-                <Icon path={tag.icon} size="14" color="currentColor" />
+                <Icon path={tag.icon} size="14" color="currentColor" viewBox="0 0 48 48" />
                 <span>{tag.text}</span>
               </button>
             {/each}
@@ -238,13 +206,6 @@
     align-items: center;
     outline: none;
     -webkit-tap-highlight-color: transparent;
-  }
-  .tags-container:focus,
-  .tags-container:focus-visible,
-  .tags-container:focus-within {
-    outline: none !important;
-    box-shadow: none !important;
-    border: none !important;
   }
 
   .selected-tags {
@@ -274,12 +235,8 @@
     font-size: 12px;
     font-weight: 500;
     overflow: hidden;
-    transition:
-      outline-color 120ms ease,
-      transform 120ms ease,
-      box-shadow 120ms ease;
+    transition: transform 120ms ease, box-shadow 120ms ease;
     touch-action: none;
-    -webkit-tap-highlight-color: transparent;
     transform-origin: center;
     will-change: transform, box-shadow;
   }
@@ -306,90 +263,31 @@
     fill: currentColor;
   }
 
-  .tag-item {
-    user-select: none;
-  }
   .tag-item.editing {
     cursor: pointer;
   }
 
   .tag-item.editing:hover {
     outline: 1px solid #ef4444;
-    box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.15) inset;
   }
 
-  .selected-tags.dragging .tag-item.editing:hover {
-    animation: none;
-    box-shadow: none;
-    outline: none;
-  }
-  .selected-tags.dragging .tag-item.editing:hover::after {
-    display: none;
-  }
-  .selected-tags.dragging .tag-item {
-    transition: none;
-  }
-  .selected-tags:focus,
-  .selected-tags:focus-visible,
-  .selected-tags:focus-within {
-    outline: none !important;
-    box-shadow: none !important;
-  }
   .tag-item.removing {
     animation: tagRemoveSlide 140ms ease-in-out forwards;
     pointer-events: none;
   }
-  .tag-item.removing::before {
-    content: '';
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    width: 16px;
-    height: 16px;
-    border-radius: 999px;
-    background: rgba(239, 68, 68, 0.2);
-    border: 1px solid #ef4444;
-    transform: translate(-50%, -50%) scale(0.2);
-    z-index: 1;
-    animation: tagRemoveCircle 140ms ease-out forwards;
-    pointer-events: none;
-  }
+  
   .tag-item.added {
     animation: tagAddSlide 140ms ease-out;
   }
-  .tag-item.editing:hover::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: rgba(239, 68, 68, 0.08);
-    pointer-events: none;
-  }
 
-  .tag-item.editing:active {
-    outline: none !important;
-    box-shadow: none !important;
+  @keyframes tagRemoveSlide {
+    0% { transform: translateX(0); opacity: 1; }
+    100% { transform: translateX(6px); opacity: 0; }
   }
-  .tag-item:focus,
-  .tag-item:focus-visible {
-    outline: none !important;
-    box-shadow: none !important;
-  }
-  .selected-tags.dragging .tag-item,
-  .selected-tags.dragging .tag-item:hover,
-  .selected-tags.dragging .tag-item:active,
-  .selected-tags.dragging .tag-item:focus {
-    outline: none !important;
-    box-shadow: none !important;
-  }
-
-  :global(.svelte-dnd-action-ghost),
-  :global(.svelte-dnd-action-dragged),
-  :global(.svelte-dnd-action-placeholder),
-  :global(.svelte-dnd-action-dropzone),
-  :global(.dnd-shadow) {
-    outline: none !important;
-    box-shadow: none !important;
-    border: none !important;
+  
+  @keyframes tagAddSlide {
+    0% { transform: translateX(6px); opacity: 0; }
+    100% { transform: translateX(0); opacity: 1; }
   }
 
   .add-toggle-btn {
@@ -399,7 +297,7 @@
     padding: 4px 8px;
     border-radius: 10px;
     border: 1px solid var(--btn-nav-border);
-    background: var(--near-black);
+    background: #111;
     color: #c9ceda;
     cursor: pointer;
     font-size: 12px;
@@ -423,6 +321,7 @@
     gap: 8px;
     align-items: center;
   }
+  
   .chooserChip {
     display: inline-flex;
     align-items: center;
@@ -430,67 +329,15 @@
     padding: 4px 8px;
     border-radius: 10px;
     border: 1px solid var(--btn-nav-border);
-    background: var(--near-black);
+    background: #111;
     color: var(--tag-color);
     cursor: pointer;
-    user-select: none;
-    transition:
-      outline-color 120ms ease,
-      transform 120ms ease,
-      box-shadow 120ms ease;
     font-size: 12px;
+    transition: transform 120ms ease;
   }
 
   .chooserChip:hover {
     filter: brightness(1.05);
     outline: 1px solid #22c55e;
-    box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.15) inset;
-    animation: chipHoverSlide 260ms ease-in-out 1;
-  }
-  @keyframes chipHoverSlide {
-    0% {
-      transform: translateX(0);
-    }
-    50% {
-      transform: translateX(3px);
-    }
-    100% {
-      transform: translateX(0);
-    }
-  }
-  @keyframes tagRemoveSlide {
-    0% {
-      transform: translateX(0);
-      opacity: 1;
-    }
-    100% {
-      transform: translateX(6px);
-      opacity: 0;
-    }
-  }
-  @keyframes tagRemoveCircle {
-    0% {
-      transform: translate(-50%, -50%) scale(0.2);
-      opacity: 0.8;
-    }
-    100% {
-      transform: translate(-50%, -50%) scale(1.05);
-      opacity: 0;
-    }
-  }
-  @keyframes tagAddSlide {
-    0% {
-      transform: translateX(6px);
-      opacity: 0;
-    }
-    100% {
-      transform: translateX(0);
-      opacity: 1;
-    }
-  }
-  .chooserChip :global(svg) {
-    width: 14px;
-    height: 14px;
-    display: block;
   }
 </style>

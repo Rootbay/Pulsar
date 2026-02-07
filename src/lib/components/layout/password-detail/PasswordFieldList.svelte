@@ -13,8 +13,23 @@
     ShieldAlert,
     ShieldCheck,
     Shield,
-    WandSparkles
+    WandSparkles,
+    Trash2
   } from '@lucide/svelte';
+  import {
+    ContextMenu,
+    ContextMenuContent,
+    ContextMenuItem,
+    ContextMenuTrigger
+  } from '$lib/components/ui/context-menu';
+  import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle
+  } from '$lib/components/ui/dialog';
   import Input from '$lib/components/ui/FieldInput.svelte';
   import { Button } from '$lib/components/ui/button';
   import { Badge } from '$lib/components/ui/badge';
@@ -58,6 +73,42 @@
 
   let breachCheckTimeout: ReturnType<typeof setTimeout> | null = null;
   let showGeneratorPopup = $state(false);
+  let activeGeneratorFieldId = $state<string | null>(null);
+  let isDeleteDialogOpen = $state(false);
+  let fieldToDelete = $state<DisplayField | null>(null);
+  let localBreachData = $state<Record<string, { isBreached: boolean; count: number }>>({});
+
+  $effect(() => {
+    const fields = isEditing ? editingFields : displayFields;
+    const passwordValues = fields
+      .filter((f) => f.id === 'password' || f.type === 'password')
+      .map((f) => f.value)
+      .filter((v): v is string => !!v && v !== 'N/A');
+
+    const uniquePasswords = [...new Set(passwordValues)];
+    const timers: ReturnType<typeof setTimeout>[] = [];
+
+    uniquePasswords.forEach((pwd) => {
+      if (localBreachData[pwd] !== undefined) return;
+
+      const timer = setTimeout(async () => {
+        try {
+          const count = await SecurityService.checkBreach(pwd);
+          // Only update if not already set (to avoid racing with other effects)
+          if (localBreachData[pwd] === undefined) {
+            localBreachData[pwd] = { isBreached: count > 0, count };
+          }
+        } catch (e) {
+          console.error('Breach check failed', e);
+        }
+      }, 800);
+      timers.push(timer);
+    });
+
+    return () => {
+      timers.forEach(t => clearTimeout(t));
+    };
+  });
 
   $effect(() => {
     const item = passwordItem;
@@ -88,11 +139,18 @@
   });
 
   function handlePasswordGenerated(newPass: string) {
-    const passField = editingFields.find((f) => f.id === 'password');
+    const targetId = activeGeneratorFieldId || 'password';
+    const passField = editingFields.find((f) => f.id === targetId);
     if (passField) {
       passField.value = newPass;
       showPassword = true;
     }
+    activeGeneratorFieldId = null;
+  }
+
+  function openGenerator(fieldId: string) {
+    activeGeneratorFieldId = fieldId;
+    showGeneratorPopup = true;
   }
 
   function handleConsider(event: CustomEvent<{ items: DisplayField[] }>) {
@@ -110,45 +168,33 @@
   }
 
   function getIconName(field: DisplayField): string {
-    switch (field.id) {
-      case 'username':
-        return 'user';
-      case 'password':
-        return 'key';
-      case 'url':
-        return 'link';
-      case 'notes':
-        return 'notes';
-      default:
-        return field.id;
-    }
+    if (field.id === 'username') return 'user';
+    if (field.id === 'password') return 'key';
+    return field.type;
   }
 
   function getDisplayValue(field: DisplayField): string {
     if (field.id === 'password') {
       return field.value && field.value.length ? field.value : 'N/A';
     }
-    if (field.id === 'username' || field.id === 'url' || field.id === 'notes') {
-      return field.value ?? 'N/A';
-    }
-    return field.value ?? '';
+    return field.value && field.value.length > 0 ? field.value : 'N/A';
   }
 
   function getInputType(field: DisplayField, isViewMode: boolean): 'text' | 'password' | 'url' {
-    if (field.id === 'url') {
-      return 'url';
-    }
-    if (field.id === 'password') {
+    const isPassword = field.id === 'password' || field.type === 'password';
+    const isUrl = field.id === 'url' || field.type === 'url';
+
+    if (isUrl) return 'url';
+
+    if (isPassword) {
       if (isViewMode) {
-        return field.value && field.value.length && field.value !== 'N/A'
-          ? showPassword
-            ? 'text'
-            : 'password'
-          : 'text';
+        const hasValue = field.value && field.value.length > 0 && field.value !== 'N/A';
+        if (!hasValue) return 'text';
       }
       return showPassword ? 'text' : 'password';
     }
-    return field.type === 'password' ? 'password' : 'text';
+
+    return 'text';
   }
 
   function canCopyField(field: DisplayField): boolean {
@@ -221,6 +267,26 @@
       toast.error(getCopyErrorMessage(field));
     }
   }
+
+  function handleDeleteField(field: DisplayField) {
+    const staticFields = ['username', 'password', 'url', 'notes'];
+    if (staticFields.includes(field.id)) {
+      toast.error(`Default field "${field.name}" cannot be deleted.`);
+      return;
+    }
+
+    fieldToDelete = field;
+    isDeleteDialogOpen = true;
+  }
+
+  function confirmDeleteField() {
+    if (fieldToDelete) {
+      editingFields = editingFields.filter((f) => f.id !== fieldToDelete!.id);
+      toast.success(`Field "${fieldToDelete.name}" removed.`);
+      isDeleteDialogOpen = false;
+      fieldToDelete = null;
+    }
+  }
 </script>
 
 <div
@@ -240,81 +306,103 @@
       {/each}
     {:else}
       {#each displayFields as field (field.id)}
-        <Input
-          title={field.name}
-          inputValue={getDisplayValue(field)}
-          readOnly
-          selectedIconPath={field.icon}
-          selectedIconName={getIconName(field)}
-          selectedColor={displayColor}
-          isMultiline={field.type === 'multiline'}
-          type={getInputType(field, true)}
-          isExpandable
-        >
-          {#snippet rightIcon()}
-            {@const hasCopy = canCopyField(field)}
-            {@const canToggle =
-              field.id === 'password' && field.value && field.value.length && field.value !== 'N/A'}
+                          <Input
+                            title={field.name}
+                            inputValue={getDisplayValue(field)}
+                            readOnly
+                            selectedIconPath={field.icon}
+                            selectedIconName={getIconName(field)}
+                            iconComponent={field.iconComponent}
+                            selectedColor={displayColor}
+                            isMultiline={field.type === 'multiline'}
+                            type={getInputType(field, true)}
+                            isExpandable
+                          >            {#snippet rightIcon()}
+              {@const hasCopy = canCopyField(field)}
+              {@const isPassword = field.id === 'password' || field.type === 'password'}
+              {@const canToggle =
+                isPassword && field.value && field.value.length && field.value !== 'N/A'}
 
-            <div class="flex items-center gap-2">
-              {#if field.id === 'password' && passwordItem}
-                {@const health = securityDashboard.items[passwordItem.id]}
-                {#if health}
-                  <Badge
-                    variant="outline"
-                    class={`h-6 gap-1.5 px-2 transition-colors ${SecurityService.getStrengthBadgeClass(health.score, health.isBreached)}`}
-                  >
-                    {#if health.isBreached}
-                      <ShieldAlert class="h-3.5 w-3.5" />
-                    {:else if health.score === 4}
-                      <ShieldCheck class="h-3.5 w-3.5" />
-                    {:else}
-                      <Shield class="h-3.5 w-3.5" />
-                    {/if}
-                    <span class="text-[10px] font-semibold tracking-wider uppercase"
-                      >{SecurityService.getStrengthLabel(
-                        health.score,
-                        health.isBreached,
-                        health.breachCount
-                      )}</span
+              <div class="flex items-center gap-2">
+                {#if isPassword && field.value && field.value !== 'N/A'}
+                  {@const localBreach = localBreachData[field.value]}
+                  {@const health =
+                    field.id === 'password' && passwordItem
+                      ? securityDashboard.items[passwordItem.id]
+                      : SecurityService.checkStrength(field.value)}
+                  {#if health}
+                    {@const isBreached = localBreach?.isBreached ?? (health.isBreached || false)}
+                    {@const breachCount = localBreach?.count ?? (health.breachCount || 0)}
+                    <Badge
+                      variant="outline"
+                      class={`h-6 gap-1.5 px-2 transition-colors ${SecurityService.getStrengthBadgeClass(health.score, isBreached)}`}
                     >
-                  </Badge>
-                {/if}
-              {/if}
-
-              {#if hasCopy}
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  class="text-muted-foreground hover:text-foreground h-6 w-6 p-0"
-                  aria-label={`Copy ${field.name}`}
-                  title={`Copy ${field.name}`}
-                  onclick={() => handleCopyField(field)}
-                >
-                  <Copy class="h-5 w-5" />
-                </Button>
-              {/if}
-              {#if canToggle}
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  class="text-muted-foreground hover:text-foreground h-6 w-6 p-0"
-                  aria-pressed={showPassword}
-                  aria-label={showPassword ? 'Hide password' : 'Show password'}
-                  onclick={togglePasswordVisibility}
-                >
-                  {#if showPassword}
-                    <Eye class="h-5 w-5" />
-                  {:else}
-                    <EyeOff class="h-5 w-5" />
+                      {#if isBreached}
+                        <ShieldAlert class="h-3.5 w-3.5" />
+                      {:else if health.score === 4}
+                        <ShieldCheck class="h-3.5 w-3.5" />
+                      {:else}
+                        <Shield class="h-3.5 w-3.5" />
+                      {/if}
+                      <span class="text-[10px] font-semibold tracking-wider uppercase"
+                        >{SecurityService.getStrengthLabel(
+                          health.score,
+                          isBreached,
+                          breachCount
+                        )}</span
+                      >
+                    </Badge>
                   {/if}
-                </Button>
-              {/if}
+                {/if}
+
+                {#if hasCopy}
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    class="text-muted-foreground hover:text-foreground h-6 w-6 p-0"
+                    aria-label={`Copy ${field.name}`}
+                    title={`Copy ${field.name}`}
+                    onclick={() => handleCopyField(field)}
+                  >
+                    <Copy class="h-5 w-5" />
+                  </Button>
+                {/if}
+                {#if canToggle}
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    class="text-muted-foreground hover:text-foreground h-6 w-6 p-0"
+                    aria-pressed={showPassword}
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                    onclick={togglePasswordVisibility}
+                  >
+                    {#if showPassword}
+                      <Eye class="h-5 w-5" />
+                    {:else}
+                      <EyeOff class="h-5 w-5" />
+                    {/if}
+                  </Button>
+                {/if}
+              </div>
+            {/snippet}
+          </Input>
+          {#if (field.id === 'password' || field.type === 'password') && field.value && field.value !== 'N/A'}
+            {@const localBreach = localBreachData[field.value]}
+            {@const health =
+              field.id === 'password' && passwordItem
+                ? securityDashboard.items[passwordItem.id]
+                : null}
+            {@const isBreached = localBreach?.isBreached ?? (health?.isBreached || false)}
+            <div class="mt-2 px-3 pb-2">
+              <PasswordStrength
+                password={field.value ?? ''}
+                showDetails={false}
+                {isBreached}
+              />
             </div>
-          {/snippet}
-        </Input>
+          {/if}
       {/each}
     {/if}
   {:else if showSkeleton}
@@ -343,104 +431,135 @@
           animate:flip={{ duration: 300, easing: cubicOut }}
           class="touch-none will-change-transform"
         >
-          <Input
-            title={field.name}
-            bind:inputValue={field.value}
-            readOnly={!isEditing}
-            selectedColor={displayColor}
-            selectedIconPath={field.icon}
-            selectedIconName={field.id}
-            isMultiline={field.type === 'multiline'}
-            type={getInputType(field, false)}
-          >
-            {#snippet rightIcon()}
-              {@const hasCopy = canCopyField(field)}
-              {@const showToggle = field.id === 'password'}
-              {@const showControls = hasCopy || showToggle || isEditing}
+          <ContextMenu>
+            <ContextMenuTrigger class="block w-full">
+              <Input
+                title={field.name}
+                bind:inputValue={field.value}
+                readOnly={!isEditing}
+                selectedColor={displayColor}
+                selectedIconPath={field.icon}
+                selectedIconName={getIconName(field)}
+                iconComponent={field.iconComponent}
+                isMultiline={field.type === 'multiline'}
+                type={getInputType(field, false)}
+              >
+                {#snippet rightIcon()}
+                  {@const hasCopy = canCopyField(field)}
+                  {@const isPassword = field.id === 'password' || field.type === 'password'}
+                  {@const showToggle = isPassword}
+                  {@const showControls = hasCopy || showToggle || isEditing}
 
-              {#if showControls}
-                <div class="flex items-center gap-2">
-                  {#if field.id === 'password'}
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      class="text-muted-foreground hover:text-foreground h-6 w-6 p-0"
-                      aria-label="Generate password"
-                      title="Generate password"
-                      onclick={() => (showGeneratorPopup = true)}
-                    >
-                      <WandSparkles class="h-4.5 w-4.5" />
-                    </Button>
-                  {/if}
-
-                  {#if field.id === 'password' && passwordItem}
-                    {@const health = securityDashboard.items[passwordItem.id]}
-                    {#if health}
-                      <Badge
-                        variant="outline"
-                        class={`h-6 gap-1.5 px-2 transition-colors ${SecurityService.getStrengthBadgeClass(health.score, health.isBreached)}`}
-                      >
-                        {#if health.isBreached}
-                          <ShieldAlert class="h-3.5 w-3.5" />
-                        {:else if health.score === 4}
-                          <ShieldCheck class="h-3.5 w-3.5" />
-                        {:else}
-                          <Shield class="h-3.5 w-3.5" />
-                        {/if}
-                        <span class="text-[10px] font-semibold tracking-wider uppercase"
-                          >{SecurityService.getStrengthLabel(
-                            health.score,
-                            health.isBreached,
-                            health.breachCount
-                          )}</span
+                  {#if showControls}
+                    <div class="flex items-center gap-2">
+                      {#if isPassword}
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          class="text-muted-foreground hover:text-foreground h-6 w-6 p-0"
+                          aria-label="Generate password"
+                          title="Generate password"
+                          onclick={() => openGenerator(field.id)}
                         >
-                      </Badge>
-                    {/if}
-                  {/if}
-
-                  {#if hasCopy}
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      class="text-muted-foreground hover:text-foreground h-6 w-6 p-0"
-                      aria-label={`Copy ${field.name}`}
-                      title={`Copy ${field.name}`}
-                      onclick={() => handleCopyField(field)}
-                    >
-                      <Copy class="h-5 w-5" />
-                    </Button>
-                  {/if}
-                  {#if showToggle}
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      class="text-muted-foreground hover:text-foreground h-6 w-6 p-0"
-                      aria-pressed={showPassword}
-                      aria-label={showPassword ? 'Hide password' : 'Show password'}
-                      onclick={togglePasswordVisibility}
-                    >
-                      {#if showPassword}
-                        <Eye class="h-5 w-5" />
-                      {:else}
-                        <EyeOff class="h-5 w-5" />
+                          <WandSparkles class="h-4.5 w-4.5" />
+                        </Button>
                       {/if}
-                    </Button>
-                  {/if}
-                  {#if isEditing}
-                    <div class="ml-2 cursor-grab" data-dnd-handle>
-                      <ArrowDownUp class="h-6 w-6" />
+
+                      {#if isPassword && field.value && field.value !== 'N/A'}
+                        {@const localBreach = localBreachData[field.value]}
+                        {@const health =
+                          field.id === 'password' && passwordItem
+                            ? securityDashboard.items[passwordItem.id]
+                            : SecurityService.checkStrength(field.value)}
+                        {#if health}
+                          {@const isBreached = localBreach?.isBreached ?? (health.isBreached || false)}
+                          {@const breachCount = localBreach?.count ?? (health.breachCount || 0)}
+                          <Badge
+                            variant="outline"
+                            class={`h-6 gap-1.5 px-2 transition-colors ${SecurityService.getStrengthBadgeClass(health.score, isBreached)}`}
+                          >
+                            {#if isBreached}
+                              <ShieldAlert class="h-3.5 w-3.5" />
+                            {:else if health.score === 4}
+                              <ShieldCheck class="h-3.5 w-3.5" />
+                            {:else}
+                              <Shield class="h-3.5 w-3.5" />
+                            {/if}
+                            <span class="text-[10px] font-semibold tracking-wider uppercase"
+                              >{SecurityService.getStrengthLabel(
+                                health.score,
+                                isBreached,
+                                breachCount
+                              )}</span
+                            >
+                          </Badge>
+                        {/if}
+                      {/if}
+
+                      {#if hasCopy}
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          class="text-muted-foreground hover:text-foreground h-6 w-6 p-0"
+                          aria-label={`Copy ${field.name}`}
+                          title={`Copy ${field.name}`}
+                          onclick={() => handleCopyField(field)}
+                        >
+                          <Copy class="h-5 w-5" />
+                        </Button>
+                      {/if}
+                      {#if showToggle}
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          class="text-muted-foreground hover:text-foreground h-6 w-6 p-0"
+                          aria-pressed={showPassword}
+                          aria-label={showPassword ? 'Hide password' : 'Show password'}
+                          onclick={togglePasswordVisibility}
+                        >
+                          {#if showPassword}
+                            <Eye class="h-5 w-5" />
+                          {:else}
+                            <EyeOff class="h-5 w-5" />
+                          {/if}
+                        </Button>
+                      {/if}
+                      {#if isEditing}
+                        <div class="ml-2 cursor-grab" data-dnd-handle>
+                          <ArrowDownUp class="h-6 w-6" />
+                        </div>
+                      {/if}
                     </div>
                   {/if}
-                </div>
-              {/if}
-            {/snippet}
-          </Input>
-          {#if isEditing && field.id === 'password'}
+                {/snippet}
+              </Input>
+            </ContextMenuTrigger>
+            <ContextMenuContent class="w-48">
+              <ContextMenuItem
+                onclick={() => handleDeleteField(field)}
+                class="text-destructive focus:bg-destructive/10 focus:text-destructive gap-2"
+              >
+                <Trash2 class="size-4" />
+                <span>Delete Field</span>
+              </ContextMenuItem>
+            </ContextMenuContent>
+          </ContextMenu>
+          {#if (field.id === 'password' || field.type === 'password') && field.value !== 'N/A'}
+            {@const localBreach = localBreachData[field.value ?? '']}
+            {@const health =
+              field.id === 'password' && passwordItem
+                ? securityDashboard.items[passwordItem.id]
+                : null}
+            {@const isBreached = localBreach?.isBreached ?? (health?.isBreached || false)}
             <div class="mt-2 px-3 pb-2">
-              <PasswordStrength password={field.value ?? ''} showDetails={true} />
+              <PasswordStrength
+                password={field.value ?? ''}
+                showDetails={true}
+                {isBreached}
+              />
             </div>
           {/if}
         </div>
@@ -455,3 +574,46 @@
     onclose={() => (showGeneratorPopup = false)}
   />
 {/if}
+
+<Dialog open={isDeleteDialogOpen} onOpenChange={(open) => (isDeleteDialogOpen = open)}>
+  <DialogContent class="sm:max-w-md">
+    <DialogHeader>
+      <DialogTitle class="flex items-center gap-2 text-destructive">
+        <Trash2 class="size-5" />
+        Delete Field
+      </DialogTitle>
+      <DialogDescription>
+        Are you sure you want to remove this field? This action can be undone by clicking "Reset"
+        before saving.
+      </DialogDescription>
+    </DialogHeader>
+
+    {#if fieldToDelete}
+      <div class="bg-muted/30 border-border/50 mt-2 space-y-3 rounded-lg border p-4">
+        <div>
+          <span class="text-muted-foreground text-[10px] font-bold tracking-wider uppercase"
+            >Field Name</span
+          >
+          <p class="text-sm font-medium">{fieldToDelete.name}</p>
+        </div>
+        <div>
+          <span class="text-muted-foreground text-[10px] font-bold tracking-wider uppercase"
+            >Current Content</span
+          >
+          <p class="mt-0.5 font-mono text-sm break-all">
+            {#if fieldToDelete.type === 'password' || fieldToDelete.id === 'password'}
+              ••••••••••••
+            {:else}
+              {fieldToDelete.value || 'Empty'}
+            {/if}
+          </p>
+        </div>
+      </div>
+    {/if}
+
+    <DialogFooter class="mt-6">
+      <Button variant="outline" onclick={() => (isDeleteDialogOpen = false)}>Cancel</Button>
+      <Button variant="destructive" onclick={confirmDeleteField}>Delete Field</Button>
+    </DialogFooter>
+  </DialogContent>
+</Dialog>

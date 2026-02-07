@@ -7,8 +7,12 @@
   import { iconPaths } from '$lib/icons';
   import { callBackend } from '$lib/utils/backend';
   import Input from '../ui/FieldInput.svelte';
+  import { Input as StandardInput } from '$lib/components/ui/input';
   import { Button } from '../ui/button';
-  import { Select, SelectContent, SelectItem, SelectTrigger } from '../ui/select';
+  import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '$lib/components/ui/dialog';
+  import { Label } from '$lib/components/ui/label';
+  import { cn } from '$lib/utils';
+  import Icon from '$lib/components/ui/Icon.svelte';
   import { Skeleton } from '../ui/skeleton';
   import { tick, onDestroy } from 'svelte';
   import UnsavedChangesPopup from '../UnsavedChangesPopup.svelte';
@@ -25,7 +29,18 @@
     Trash2,
     FileText,
     Download,
-    Paperclip
+    Paperclip,
+    Mail,
+    Phone,
+    Calendar,
+    MapPin,
+    Link,
+    Type,
+    Key,
+    User,
+    MessageSquare,
+    Edit,
+    Pencil
   } from '@lucide/svelte';
   import { buildDisplayFields } from '$lib/utils/passwordFields';
   import { copyText } from '$lib/utils/copyHelper';
@@ -79,13 +94,18 @@
   }: Props = $props();
 
   const fieldTypeOptions = [
-    { value: 'text', label: 'Text' },
-    { value: 'password', label: 'Password' },
-    { value: 'file', label: 'File' }
+    { value: 'text', label: 'Text', icon: 'edit', component: Pencil },
+    { value: 'password', label: 'Password', icon: 'key' },
+    { value: 'username', label: 'Username', icon: 'user', component: User },
+    { value: 'email', label: 'Email', icon: 'mail', component: Mail },
+    { value: 'phone', label: 'Phone', icon: 'phone', component: Phone },
+    { value: 'url', label: 'URL', icon: 'link', component: Link },
+    { value: 'date', label: 'Date', icon: 'calendar', component: Calendar },
+    { value: 'address', label: 'Address', icon: 'mapPin', component: MapPin },
+    { value: 'file', label: 'File', icon: 'paper', component: FileText },
+    { value: 'multiline', label: 'Notes', icon: 'notes', component: FileText }
   ] as const;
   type FieldType = (typeof fieldTypeOptions)[number]['value'];
-  const getFieldTypeLabel = (value: FieldType) =>
-    fieldTypeOptions.find((option) => option.value === value)?.label ?? value;
 
   const MIN_FIELD_SKELETONS = 6;
   const MIN_TAG_SKELETONS = 3;
@@ -127,7 +147,7 @@
   let hasUnsavedChanges = $state(false);
   let showTimestamps = $state(false);
   let showPassword = $state(false);
-  let addingField = $state(false);
+  let isAddFieldDialogOpen = $state(false);
   let newFieldType = $state<FieldType>('text');
   let newFieldName = $state('');
   let pendingTagOrder = $state<string | null>(null);
@@ -155,7 +175,13 @@
   let attachments = $state<Attachment[]>([]);
   let isAttachmentLoading = $state(false);
 
-  const displayFields = $derived(buildDisplayFields(selectedPasswordItem, iconPaths));
+  const displayFields = $derived(buildDisplayFields(selectedPasswordItem, iconPaths).map(field => {
+    const option = fieldTypeOptions.find(o => o.value === field.type);
+    if (option) {
+      return { ...field, iconComponent: option.component };
+    }
+    return field;
+  }));
   const filteredDisplayFields = $derived(
     displayFields.filter((field) => !isTotpDisplayField(field))
   );
@@ -462,15 +488,12 @@
       }
       if (normalizedCurrent.url === '') normalizedCurrent.url = null;
 
-      hasUnsavedChanges = JSON.stringify(normalizedCurrent) !== JSON.stringify(normalizedOriginal);
+      const nextHasUnsavedChanges = JSON.stringify(normalizedCurrent) !== JSON.stringify(normalizedOriginal) || (pendingTagOrder !== null && pendingTagOrder !== (originalPasswordItem?.tags ?? ''));
 
-      if (!hasUnsavedChanges) {
-        const origTags = (originalPasswordItem?.tags ?? '') as string;
-        if (pendingTagOrder !== null && pendingTagOrder !== origTags) {
-          hasUnsavedChanges = true;
-        }
+      if (hasUnsavedChanges !== nextHasUnsavedChanges) {
+        hasUnsavedChanges = nextHasUnsavedChanges;
       }
-    } else {
+    } else if (hasUnsavedChanges) {
       hasUnsavedChanges = false;
     }
   });
@@ -587,7 +610,7 @@
   }
 
   function handleCancelAddField() {
-    addingField = false;
+    isAddFieldDialogOpen = false;
     newFieldName = '';
     newFieldType = 'text';
   }
@@ -599,9 +622,17 @@
       return;
     }
 
+    if (dndItems.some((item) => item.name.toLowerCase() === trimmedName.toLowerCase())) {
+      alert('A field with this name already exists.');
+      return;
+    }
+
     if (!selectedPasswordItem) {
       return;
     }
+
+    const option = fieldTypeOptions.find((o) => o.value === newFieldType);
+    const iconPath = option ? iconPaths[option.icon] : iconPaths.tag;
 
     try {
       await callBackend('add_custom_field', {
@@ -628,7 +659,8 @@
           name: trimmedName,
           value: '',
           type: newFieldType,
-          icon: iconPaths.plus
+          icon: iconPath,
+          iconComponent: option?.component
         }
       ];
 
@@ -848,59 +880,15 @@
           onfinalize={handleDndFinalize}
         />
         {#if isEditing}
-          {#if !addingField}
-            <Button
-              type="button"
-              variant="outline"
-              class="border-border/60 bg-muted/20 text-muted-foreground hover:border-primary/50 hover:text-primary mt-3 flex h-14 w-full items-center justify-center rounded-lg border transition-colors"
-              onclick={() => (addingField = true)}
-            >
-              <Plus class="h-5 w-5" />
-            </Button>
-          {:else}
-            <div class="mt-3 flex items-center gap-3">
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                class="text-muted-foreground h-9 w-9"
-                disabled
-                aria-hidden="true"
-              >
-                <Plus class="h-5 w-5" />
-              </Button>
-              <Input
-                title="New Field"
-                placeholder="New Field"
-                bind:inputValue={newFieldName}
-                readOnly={false}
-                selectedColor={displayColor}
-                showTitle={false}
-                selectedIconPath={iconPaths.plus}
-                selectedIconName="plus"
-              />
-              <Select
-                type="single"
-                value={newFieldType}
-                onValueChange={(value) => (newFieldType = value as FieldType)}
-              >
-                <SelectTrigger class="w-40">
-                  <span data-slot="select-value" class="flex items-center gap-2 truncate text-sm">
-                    {getFieldTypeLabel(newFieldType)}
-                  </span>
-                </SelectTrigger>
-                <SelectContent>
-                  {#each fieldTypeOptions as option (option.value)}
-                    <SelectItem value={option.value}>{option.label}</SelectItem>
-                  {/each}
-                </SelectContent>
-              </Select>
-            </div>
-            <div class="mt-3 flex justify-end gap-2">
-              <Button type="button" variant="ghost" onclick={handleCancelAddField}>Cancel</Button>
-              <Button type="button" onclick={handleConfirmAddField}>Confirm</Button>
-            </div>
-          {/if}
+          <Button
+            type="button"
+            variant="outline"
+            class="border-border/60 bg-muted/20 text-muted-foreground hover:border-primary/50 hover:text-primary mt-3 flex h-14 w-full items-center justify-center rounded-lg border transition-colors"
+            onclick={() => (isAddFieldDialogOpen = true)}
+          >
+            <Plus class="h-5 w-5" />
+            <span class="ml-2 font-medium">Add Field</span>
+          </Button>
         {/if}
 
         <section
@@ -1203,6 +1191,57 @@
       </div>
     </div>
   {/if}
+  <Dialog open={isAddFieldDialogOpen} onOpenChange={(open) => isAddFieldDialogOpen = open}>
+    <DialogContent class="sm:max-w-md">
+      <DialogHeader>
+        <DialogTitle>Add Custom Field</DialogTitle>
+        <DialogDescription>
+          Choose a type and name for your new field.
+        </DialogDescription>
+      </DialogHeader>
+      <div class="grid gap-4 py-4">
+        <div class="grid gap-2">
+          <Label for="new-field-name">Field Name</Label>
+          <StandardInput 
+            id="new-field-name" 
+            placeholder="e.g. Security Question" 
+            bind:value={newFieldName}
+          />
+        </div>
+        <div class="grid gap-2">
+          <Label>Type</Label>
+          <div class="grid grid-cols-5 gap-2">
+            {#each fieldTypeOptions as option}
+              <button
+                type="button"
+                class={cn(
+                  "flex flex-col items-center justify-center gap-1.5 rounded-md border p-2 text-[10px] transition-all hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
+                  newFieldType === option.value 
+                    ? "border-primary bg-primary/10 ring-1 ring-primary text-primary" 
+                    : "border-transparent bg-transparent text-muted-foreground opacity-70 hover:opacity-100 hover:bg-muted"
+                )}
+                onclick={() => newFieldType = option.value}
+                title={option.label}
+              >
+                {#if option.component}
+                  {@const IconComp = option.component}
+                  <IconComp class="size-5" />
+                {:else}
+                  <Icon path={iconPaths[option.icon]} size="20" viewBox="0 0 48 48" color="currentColor" />
+                {/if}
+                <span class="font-medium truncate w-full text-center">{option.label}</span>
+              </button>
+            {/each}
+          </div>
+        </div>
+      </div>
+      <DialogFooter>
+        <Button variant="outline" onclick={handleCancelAddField}>Cancel</Button>
+        <Button onclick={handleConfirmAddField} disabled={!newFieldName.trim()}>Add Field</Button>
+      </DialogFooter>
+    </DialogContent>
+  </Dialog>
+
   {#if hasUnsavedChanges}
     <UnsavedChangesPopup onsave={handleSave} onreset={handleReset} />
   {/if}

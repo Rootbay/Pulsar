@@ -6,13 +6,14 @@
   interface Props {
     password: string;
     showDetails?: boolean;
+    isBreached?: boolean;
     className?: string;
   }
 
-  let { password, showDetails = false, className }: Props = $props();
+  let { password, showDetails = false, isBreached = false, className }: Props = $props();
 
   let result = $derived(SecurityService.checkStrength(password));
-  let score = $derived(password ? result.score : -1);
+  let score = $derived(password ? (isBreached ? 0 : result.score) : -1);
 
   const STRENGTH_LABELS = ['Very Weak', 'Weak', 'Fair', 'Strong', 'Very Strong'];
   const STRENGTH_COLORS = [
@@ -20,12 +21,16 @@
     'bg-orange-500',
     'bg-yellow-500',
     'bg-emerald-500',
-    'bg-chart-success'
+    'bg-emerald-500'
   ];
 
-  const label = $derived(score >= 0 ? STRENGTH_LABELS[score] : 'No Password');
-  const colorClass = $derived(score >= 0 ? STRENGTH_COLORS[score] : 'bg-muted');
-  const progressValue = $derived(score >= 0 ? (score + 1) * 20 : 0);
+  const label = $derived(
+    isBreached ? 'Breached' : score >= 0 ? STRENGTH_LABELS[score] : 'No Password'
+  );
+  const colorClass = $derived(
+    isBreached ? 'bg-destructive' : score >= 0 ? STRENGTH_COLORS[score] : 'bg-muted'
+  );
+  const progressValue = $derived(isBreached ? 10 : score >= 0 ? (score + 1) * 20 : 0);
 </script>
 
 <div class={cn('space-y-1.5', className)}>

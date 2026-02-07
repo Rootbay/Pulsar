@@ -2,6 +2,7 @@ use crate::db::utils::{get_db_pool, get_key, CryptoHelper};
 use crate::error::Result;
 use crate::state::AppState;
 use crate::types::Button;
+use chrono::Utc;
 use sqlx::Row;
 use tauri::State;
 
@@ -90,12 +91,84 @@ pub async fn update_button(
 
 #[tauri::command]
 pub async fn delete_button(state: State<'_, AppState>, id: i64) -> Result<()> {
-    get_key(&state).await?;
+    let key = get_key(&state).await?;
     let db_pool = get_db_pool(&state).await?;
+    let helper = CryptoHelper::new(key.as_slice())?;
+    
+    let mut tx = db_pool.begin().await?;
+
+    // 1. Get the tag text
+    let row: Option<(String,)> = sqlx::query_as("SELECT text FROM buttons WHERE id = ?")
+        .bind(id)
+        .fetch_optional(&mut *tx)
+        .await?;
+        
+    let tag_text = if let Some((text_enc,)) = row {
+        Some(helper.decrypt(&text_enc)?)
+    } else {
+        None
+    };
+
+    // 2. Get affected item IDs
+    let item_ids: Vec<i64> = sqlx::query_scalar("SELECT item_id FROM item_tags WHERE tag_id = ?")
+        .bind(id)
+        .fetch_all(&mut *tx)
+        .await?;
+
+    // 3. Remove associations from item_tags
+    sqlx::query("DELETE FROM item_tags WHERE tag_id = ?")
+        .bind(id)
+        .execute(&mut *tx)
+        .await?;
+
+    // 4. Delete the button itself
     sqlx::query("DELETE FROM buttons WHERE id = ?")
         .bind(id)
-        .execute(&db_pool)
+        .execute(&mut *tx)
         .await?;
+
+    // 5. Update password_items tags text
+    if let Some(tag_trimmed) = tag_text {
+        let tag_trimmed = tag_trimmed.trim();
+        let now = Utc::now().to_rfc3339();
+        
+        for item_id in item_ids {
+            let tags_enc: Option<String> =
+                sqlx::query_scalar("SELECT tags FROM password_items WHERE id = ?")
+                    .bind(item_id)
+                    .fetch_one(&mut *tx)
+                    .await?;
+
+            if let Some(t_enc) = tags_enc {
+                let tags_str = helper.decrypt(&t_enc)?;
+                let mut parts: Vec<String> = tags_str
+                    .split(',')
+                    .map(|s| s.trim())
+                    .filter(|s| !s.is_empty())
+                    .map(|s| s.to_string())
+                    .collect();
+                
+                // Remove the specific tag
+                parts.retain(|t| t != tag_trimmed);
+
+                let new_tags = parts.join(", ");
+                let tags_enc_opt = if new_tags.trim().is_empty() {
+                    None
+                } else {
+                    Some(helper.encrypt(&new_tags)?)
+                };
+
+                sqlx::query("UPDATE password_items SET tags = ?, updated_at = ? WHERE id = ?")
+                    .bind(tags_enc_opt)
+                    .bind(&now)
+                    .bind(item_id)
+                    .execute(&mut *tx)
+                    .await?;
+            }
+        }
+    }
+
+    tx.commit().await?;
     Ok(())
 }
 

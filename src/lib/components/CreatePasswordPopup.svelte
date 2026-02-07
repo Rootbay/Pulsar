@@ -39,10 +39,10 @@
   let { onclose, onpasswordSaved }: Props = $props();
 
   const categories = [
-    { id: 'login', label: 'Login', icon: Key },
-    { id: 'card', label: 'Credit Card', icon: CreditCard },
-    { id: 'identity', label: 'Identity', icon: User },
-    { id: 'note', label: 'Secure Note', icon: StickyNote }
+    { id: 'login', label: 'Login', icon: Key, color: '#8aa0ff' },
+    { id: 'card', label: 'Credit Card', icon: CreditCard, color: '#f472b6' },
+    { id: 'identity', label: 'Identity', icon: User, color: '#4ade80' },
+    { id: 'note', label: 'Secure Note', icon: StickyNote, color: '#fbbf24' }
   ] as const;
 
   type CategoryId = (typeof categories)[number]['id'];
@@ -154,9 +154,10 @@
                 onclick={() => (selectedCategory = category.id)}
               >
                 <div
-                  class="bg-background flex size-8 items-center justify-center rounded-lg shadow-xs"
+                  class="flex size-9 items-center justify-center rounded-full shadow-xs"
+                  style="background-color: {category.color}25; color: {category.color}"
                 >
-                  <category.icon class="size-4.5 text-current" />
+                  <category.icon class="size-5 text-current" />
                 </div>
                 <span class="text-[10px] font-bold tracking-wider uppercase">{category.label}</span>
               </button>

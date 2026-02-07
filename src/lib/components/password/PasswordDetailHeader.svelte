@@ -6,6 +6,7 @@
   import { Ellipsis } from '@lucide/svelte';
   import { iconPaths } from '$lib/icons';
   import Favicon from '../ui/Favicon.svelte';
+  import { Button } from '$lib/components/ui/button';
 
   interface TagOption {
     id: number;
@@ -25,9 +26,9 @@
 
   const primaryTagIconPath = $derived.by(() => {
     const name = primaryTagName;
-    if (!name) return iconPaths.default;
+    if (!name) return iconPaths.globe;
     const btn = (buttons || []).find((b: TagOption) => b.text === name);
-    return btn?.icon || iconPaths.default;
+    return btn?.icon || iconPaths.globe;
   });
 
   interface Props {
@@ -60,12 +61,15 @@
 
   $effect(() => {
     if (selectedPasswordItem && prevColor !== displayColor) {
-      if (prevColor !== null) {
-        pulse = true;
-        const timer = setTimeout(() => (pulse = false), 360);
-        return () => clearTimeout(timer);
-      }
+      const oldColor = prevColor;
       prevColor = displayColor;
+      
+      if (oldColor !== null && !pulse) {
+        pulse = true;
+        setTimeout(() => {
+          pulse = false;
+        }, 600); // Match animation duration
+      }
     }
   });
 
@@ -84,7 +88,6 @@
           fallbackIcon={primaryTagIconPath}
           fallbackColor={displayColor}
           size={30}
-          useStroke={true}
         />
         <h2 class="header-title">
           {selectedPasswordItem.title}
@@ -92,25 +95,54 @@
         <span class="color-pulse-bg" aria-hidden="true" class:pulsing={pulse}></span>
       </div>
 
-      <TagList
-        bind:selectedPasswordItem
-        bind:isEditing
-        {buttons}
-        onReorderPending={onTagsReorderedPending}
-      />
+      {#key selectedPasswordItem ? `${selectedPasswordItem.id}-${selectedPasswordItem.tags}` : 'none'}
+        <TagList
+          {selectedPasswordItem}
+          bind:isEditing
+          {buttons}
+          onReorderPending={onTagsReorderedPending}
+        />
+      {/key}
     </div>
 
-    <div class="detail-actions">
-      <button class="edit-button" onclick={isEditing ? () => onSave?.() : enterEditMode}>
-        {isEditing ? 'Save' : 'Modify'}
-      </button>
-      <div class="more-dropdown-container">
-        <button class="more-button" onclick={() => (showMoreDropdown = !showMoreDropdown)}>
+    <div class="flex items-center gap-2">
+      {#if isEditing}
+        <Button size="sm" onclick={() => onSave?.()}>Save</Button>
+      {/if}
+      
+      <div class="relative">
+        <Button 
+          variant="ghost" 
+          size="icon" 
+          class="h-10 w-10 text-muted-foreground hover:text-foreground"
+          onclick={() => (showMoreDropdown = !showMoreDropdown)}
+        >
           <Ellipsis class="size-6" />
-        </button>
+        </Button>
+        
         {#if showMoreDropdown}
-          <div class="more-dropdown-menu">
-            <button onclick={() => onRemoveEntry?.(selectedPasswordItem?.id)}>
+          <div 
+            class="fixed inset-0 z-40" 
+            role="presentation"
+            onclick={() => showMoreDropdown = false} 
+          ></div>
+          <div class="absolute right-0 top-full mt-1 z-50 min-w-[140px] overflow-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-md">
+            <button
+              class="relative flex w-full cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors hover:bg-accent hover:text-accent-foreground"
+              onclick={() => {
+                enterEditMode();
+                showMoreDropdown = false;
+              }}
+            >
+              Edit Entry
+            </button>
+            <button
+              class="relative flex w-full cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors hover:bg-destructive/10 hover:text-destructive text-destructive"
+              onclick={() => {
+                onRemoveEntry?.(selectedPasswordItem?.id);
+                showMoreDropdown = false;
+              }}
+            >
               Delete Entry
             </button>
           </div>
@@ -158,97 +190,25 @@
 
   .color-pulse-bg {
     position: absolute;
-    left: -6px;
-    top: -6px;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%) scale(0.85);
     width: 30px;
     height: 30px;
-    border-radius: 12px;
+    border-radius: 50%;
     background: var(--display-color);
     filter: blur(8px);
     opacity: 0;
     pointer-events: none;
-    transform: scale(0.85);
-    transition:
-      opacity 360ms ease,
-      transform 360ms ease,
-      background-color 260ms ease;
     z-index: 0;
   }
   .color-pulse-bg.pulsing {
-    opacity: 0.25;
-    transform: scale(1.05);
+    animation: smoothGlowPulse 600ms ease-in-out forwards;
   }
 
-  .detail-actions {
-    display: flex;
-    align-items: center;
-  }
-
-  .edit-button {
-    background-color: var(--near-black);
-    border: 2px solid var(--btn-nav-border);
-    border-radius: 13.5px;
-    font-family: inherit;
-    font-style: normal;
-    font-weight: 500;
-    font-size: 0.8rem;
-    color: rgba(247, 219, 209, 0.5);
-    cursor: pointer;
-    width: 68px;
-    height: 27px;
-    margin-right: 10px;
-  }
-
-  .edit-button:hover {
-    background-color: #17171b;
-  }
-
-  .more-dropdown-container {
-    position: relative;
-    display: inline-block;
-  }
-
-  .more-button {
-    background: none;
-    border: none;
-    padding: 4px 0 0 0;
-    color: #f7dbd1;
-    width: 24px;
-    height: 24px;
-    cursor: pointer;
-  }
-
-  .more-button:hover {
-    color: #ffbfa8;
-  }
-
-  .more-dropdown-menu {
-    position: absolute;
-    top: 100%;
-    right: 0;
-    background-color: var(--near-black);
-    border: 2px solid var(--btn-nav-border);
-    border-radius: 8px;
-    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
-    z-index: 200;
-    display: flex;
-    flex-direction: column;
-    padding: 5px 0;
-    min-width: 150px;
-  }
-
-  .more-dropdown-menu button {
-    background: none;
-    border: none;
-    color: var(--white);
-    padding: 8px 15px;
-    text-align: left;
-    cursor: pointer;
-    width: 100%;
-    white-space: nowrap;
-  }
-
-  .more-dropdown-menu button:hover {
-    background-color: #3a3a3a;
+  @keyframes smoothGlowPulse {
+    0% { opacity: 0; transform: translateY(-50%) scale(0.85); }
+    30% { opacity: 0.45; transform: translateY(-50%) scale(1.25); }
+    100% { opacity: 0; transform: translateY(-50%) scale(1.05); }
   }
 </style>

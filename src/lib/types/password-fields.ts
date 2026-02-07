@@ -4,6 +4,7 @@ export interface BaseDisplayField {
   value: string | null;
   type: string;
   icon: string;
+  iconComponent?: any;
 }
 
 export interface TotpFieldMeta {

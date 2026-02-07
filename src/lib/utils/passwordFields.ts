@@ -37,7 +37,7 @@ export function buildDisplayFields(
         id: 'username',
         name: 'Username',
         value: item.username ?? null,
-        type: 'text',
+        type: 'username',
         icon: icons.user
       },
       {
@@ -52,7 +52,7 @@ export function buildDisplayFields(
         id: 'url',
         name: 'URL',
         value: item.url ?? null,
-        type: 'text',
+        type: 'url',
         icon: icons.link
       }
     ];
@@ -62,7 +62,7 @@ export function buildDisplayFields(
         id: 'username',
         name: 'Cardholder Name',
         value: item.username ?? null,
-        type: 'text',
+        type: 'username',
         icon: icons.user
       },
       {
@@ -79,15 +79,15 @@ export function buildDisplayFields(
         id: 'password',
         name: 'Full Name',
         value: item.password ?? null,
-        type: 'text',
+        type: 'username',
         icon: icons.user
       },
       {
         id: 'username',
         name: 'Email',
         value: item.username ?? null,
-        type: 'text',
-        icon: icons.user
+        type: 'email',
+        icon: icons.mail
       }
     ];
   }
@@ -100,13 +100,44 @@ export function buildDisplayFields(
     icon: icons.notes
   });
 
-  const customFields: DisplayField[] = (item.custom_fields ?? []).map((field) => ({
-    id: field.name,
-    name: field.name,
-    value: field.value ?? null,
-    type: field.field_type,
-    icon: icons.plus
-  }));
+  const customFields: DisplayField[] = (item.custom_fields ?? []).map((field) => {
+    let icon = icons.edit;
+    switch (field.field_type) {
+      case 'email':
+        icon = icons.mail;
+        break;
+      case 'phone':
+        icon = icons.phone;
+        break;
+      case 'date':
+        icon = icons.calendar;
+        break;
+      case 'address':
+        icon = icons.mapPin;
+        break;
+      case 'url':
+        icon = icons.link;
+        break;
+      case 'password':
+        icon = icons.key;
+        break;
+      case 'file':
+        icon = icons.paper;
+        break;
+      case 'text':
+      default:
+        icon = icons.edit;
+        break;
+    }
+
+    return {
+      id: field.name,
+      name: field.name,
+      value: field.value ?? null,
+      type: field.field_type,
+      icon
+    };
+  });
 
   let allFields = [...staticFields, ...customFields];
 

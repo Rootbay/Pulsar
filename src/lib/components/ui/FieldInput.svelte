@@ -18,6 +18,7 @@
     type?: string;
     isExpandable?: boolean;
     rightIcon?: Snippet;
+    showBackground?: boolean;
     children?: Snippet;
     [key: string]: any;
   }
@@ -37,6 +38,8 @@
     type = 'text',
     isExpandable = false,
     rightIcon,
+    iconComponent,
+    showBackground = false,
     ...rest
   }: Props = $props();
 
@@ -108,8 +111,21 @@
     }
   }}
 >
-  <span class="titleIcon" style="color: {selectedColor || '#fff'}" title={selectedIconName || ''}>
-    <Icon path={selectedIconPath || ''} color="currentColor" size="24" viewBox="0 0 48 48" />
+  <span
+    class="titleIcon {selectedIconName}"
+    class:has-background={showBackground}
+    style="--icon-bg: {selectedColor || '#fff'}; color: {selectedColor || '#fff'}"
+    title={selectedIconName || ''}
+  >
+    {#if showBackground}
+      <div class="iconBackground"></div>
+    {/if}
+    {#if iconComponent}
+      {@const IconComp = iconComponent}
+      <IconComp size="24" />
+    {:else}
+      <Icon path={selectedIconPath || ''} color="currentColor" size="24" viewBox="0 0 48 48" />
+    {/if}
   </span>
   <div class="titleAndInputContainer">
     {#if showTitle}
@@ -249,16 +265,47 @@
     height: 19px;
     display: block;
     transition: fill 220ms ease;
+    position: relative;
+    z-index: 1;
+  }
+
+  .titleIcon.user :global(svg),
+  .titleIcon.key :global(svg),
+  .titleIcon.username :global(svg),
+  .titleIcon.password :global(svg) {
+    width: 21px;
+    height: 21px;
   }
 
   .titleIcon {
     align-self: center;
     margin-top: 0;
     margin-left: 2px;
-    margin-right: 3px;
+    margin-right: 6px;
     display: flex;
     align-items: center;
+    justify-content: center;
     transition: color 260ms ease;
+    position: relative;
+    width: 24px;
+    height: 24px;
+    flex-shrink: 0;
+  }
+
+  .titleIcon.has-background {
+    width: 34px;
+    height: 34px;
+    margin-right: 14px;
+  }
+
+  .iconBackground {
+    position: absolute;
+    inset: 0;
+    background: var(--icon-bg);
+    opacity: 0.25;
+    border-radius: 50%;
+    z-index: 0;
+    transition: background-color 260ms ease;
   }
 
   .inputContainer.multiline-expanded .titleIcon,

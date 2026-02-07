@@ -19,7 +19,7 @@
     url = undefined,
     fallbackIcon,
     fallbackColor,
-    size = 29,
+    size = 30,
     title,
     variant = 'default',
     useStroke = false,
@@ -27,12 +27,13 @@
   }: Props = $props();
 
   let prevColor: string | null = null;
-  let colorChangeKey = 0;
 
   let iconSrc = $state<string | null>(null);
   let hasError = $state(false);
   let pulseActive = $state(false);
-  const innerIconSize = $derived(() => (variant === 'list' ? 18 : 17));
+  
+  // Standardize size for all variants to ensure perfect centering
+  const innerIconSize = 19;
 
   let faviconCache: Map<string, string>;
   if (typeof window !== 'undefined' && !(window as any).faviconCache) {
@@ -50,10 +51,10 @@
       const urlObject = new URL(fullUrl);
       return urlObject.hostname;
     } catch (e) {
-      console.error(`Invalid URL: ${fullUrl}`, e);
       return null;
     }
   }
+
   $effect(() => {
     iconSrc = null;
     hasError = false;
@@ -67,7 +68,6 @@
     if (domain) {
       if (faviconCache.has(domain)) {
         iconSrc = faviconCache.get(domain)!;
-        tick();
       } else {
         const faviconUrl = `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=128`;
         const img = new Image();
@@ -94,42 +94,38 @@
       if (prevColor === null) {
         prevColor = fallbackColor;
       } else if (prevColor !== fallbackColor) {
-        pulseActive = false;
-        tick();
-        pulseActive = true;
         prevColor = fallbackColor;
-        setTimeout(() => (pulseActive = false), 320);
+        
+        if (!pulseActive) {
+          pulseActive = true;
+          setTimeout(() => {
+            pulseActive = false;
+          }, 500);
+        }
       }
     }
   });
 </script>
 
 <div
-  class="itemImgContainer {variant === 'list' ? 'list-variant' : ''}"
-  style="--favicon-size: {size}px;"
+  class="itemImgContainer"
+  class:list-variant={variant === 'list'}
+  class:has-icon={!hasError && iconSrc}
+  class:color-pulse={pulseActive}
+  style="--favicon-size: {size}px; --tag-color: {fallbackColor}; --bg-color: {fallbackColor === '#94a3b8' ? '#ffffff' : fallbackColor};"
 >
   {#if hasError || !iconSrc}
-    <div
-      class="tag-icon-container"
-      class:color-pulse={pulseActive}
-      style="--tag-color: {fallbackColor};"
-    >
-      <div class="tag-icon-bg"></div>
-      <div class="tag-icon-plate {variant === 'list' ? 'list' : 'default'}">
-        <div class="tag-icon-content">
-          {#if fallbackIcon}
-            <Icon
-              path={fallbackIcon}
-              size={String(innerIconSize)}
-              color={fallbackColor}
-              stroke={useStroke ? fallbackColor : undefined}
-              strokeWidth={useStroke ? strokeWidth : undefined}
-              viewBox="0 0 44 44"
-            />
-          {/if}
-        </div>
-      </div>
-    </div>
+    <div class="tag-icon-bg"></div>
+    {#if fallbackIcon}
+      <Icon
+        path={fallbackIcon}
+        size={String(innerIconSize)}
+        color={fallbackColor === '#94a3b8' ? '#ffffff' : fallbackColor}
+        stroke={useStroke ? fallbackColor : undefined}
+        strokeWidth={useStroke ? strokeWidth : undefined}
+        viewBox="0 0 48 48"
+      />
+    {/if}
   {:else}
     <img
       src={iconSrc}
@@ -143,126 +139,59 @@
 
 <style>
   .itemImgContainer {
-    width: var(--favicon-size, 29px);
-    height: var(--favicon-size, 29px);
-    min-width: var(--favicon-size, 29px);
-    max-width: var(--favicon-size, 29px);
-    min-height: var(--favicon-size, 29px);
-    max-height: var(--favicon-size, 29px);
-    flex: 0 0 auto;
-    border-radius: calc(var(--favicon-size, 29px) / 2);
-    background: #ffffff;
+    width: var(--favicon-size, 30px);
+    height: var(--favicon-size, 30px);
+    min-width: var(--favicon-size, 30px);
+    max-width: var(--favicon-size, 30px);
+    min-height: var(--favicon-size, 30px);
+    max-height: var(--favicon-size, 30px);
+    aspect-ratio: 1 / 1;
+    border-radius: 50%;
     display: grid;
     place-items: center;
     overflow: hidden;
-    line-height: 0;
+    position: relative;
+    transition: background-color 200ms ease;
     box-sizing: border-box;
+    flex-shrink: 0;
   }
 
-  .itemImgContainer.list-variant {
-    width: 30px;
-    height: 30px;
-    min-width: 30px;
-    max-width: 30px;
-    min-height: 30px;
-    max-height: 30px;
-    flex: 0 0 auto;
+  .itemImgContainer.has-icon {
+    background: #ffffff;
   }
 
   .itemImg.raster {
-    width: calc(var(--favicon-size, 29px) * 0.586);
-    height: calc(var(--favicon-size, 29px) * 0.586);
-    border-radius: calc(var(--favicon-size, 29px) * 0.293);
-    object-fit: cover;
-    object-position: center;
+    width: 19px;
+    height: 19px;
+    border-radius: 50%;
+    object-fit: contain;
     display: block;
     user-select: none;
-    -webkit-user-select: none;
-    -moz-user-select: none;
-    -ms-user-select: none;
-  }
-
-  .itemImgContainer:not(.list-variant) .itemImg.raster {
-    width: 18px;
-    height: 18px;
-    border-radius: 9px;
-    margin-top: 0;
-    margin-left: 0;
-  }
-
-  .itemImgContainer.list-variant .itemImg.raster {
-    width: 18px;
-    height: 18px;
-    border-radius: 9px;
-    margin-top: 0;
-    margin-left: 0;
-  }
-
-  .tag-icon-container {
-    width: 100%;
-    height: 100%;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    position: relative;
-    color: var(--tag-color, #000);
+    z-index: 1;
   }
 
   .tag-icon-bg {
     position: absolute;
     inset: 0;
-    background: var(--tag-color, #ccc);
-    opacity: 0.3;
+    background: var(--bg-color);
+    opacity: 0.25;
     transition: background-color 260ms ease;
     z-index: 0;
   }
 
-  .tag-icon-plate.default {
-    width: 17px;
-    height: 17px;
-    border-radius: 8.5px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    position: relative;
-    z-index: 1;
-  }
-
-  .tag-icon-plate.list {
-    width: 18px;
-    height: 18px;
-    border-radius: 9px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    position: relative;
-    z-index: 1;
-  }
-
-  .tag-icon-content :global(svg) {
+  .itemImgContainer :global(svg) {
     display: block;
+    position: relative;
+    z-index: 1;
   }
 
-  .list-variant .tag-icon-content :global(svg) {
-    margin-top: -1px;
-    margin-left: -1px;
+  .color-pulse :global(svg) {
+    animation: smoothIconPulse 500ms ease-in-out;
   }
 
-  .tag-icon-container:global(.color-pulse) .tag-icon-content {
-    animation: colorPulse 280ms ease-out;
-  }
-  @keyframes colorPulse {
-    0% {
-      transform: scale(0.92);
-      opacity: 0.85;
-    }
-    60% {
-      transform: scale(1.04);
-      opacity: 1;
-    }
-    100% {
-      transform: scale(1);
-      opacity: 1;
-    }
+  @keyframes smoothIconPulse {
+    0% { transform: scale(1); }
+    30% { transform: scale(1.18); }
+    100% { transform: scale(1); }
   }
 </style>

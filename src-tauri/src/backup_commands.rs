@@ -663,3 +663,202 @@ pub async fn restore_vault_snapshot(
     tx.commit().await?;
     Ok(())
 }
+
+#[command]
+pub async fn get_vault_snapshot(
+    state: State<'_, AppState>,
+) -> Result<VaultBackupSnapshot> {
+    let key = get_key(&state).await?;
+    let db_pool = get_db_pool(&state).await?;
+
+    let password_items = get_password_items_impl(&db_pool, key.as_slice()).await?;
+    let buttons = get_buttons_impl(&db_pool, key.as_slice()).await?;
+    let recipient_keys = get_recipient_keys_impl(&db_pool, key.as_slice()).await?;
+    let attachments = get_attachments_snapshot(&db_pool, key.as_slice()).await?;
+
+    Ok(VaultBackupSnapshot {
+        version: 1,
+        exported_at: Utc::now().to_rfc3339(),
+        password_items,
+        buttons,
+        recipient_keys,
+        attachments,
+    })
+}
+
+#[command]
+pub async fn encrypt_sync_payload(
+    snapshot: VaultBackupSnapshot,
+    passphrase: String,
+) -> Result<String> {
+    let vault_data = serde_json::to_string(&snapshot)?;
+    let passphrase_value = Zeroizing::new(passphrase);
+
+    if passphrase_value.is_empty() {
+        return Err(Error::Validation(
+            "A passphrase is required to encrypt the sync payload.".to_string(),
+        ));
+    }
+
+    let mut salt = [0u8; 16];
+    OsRng.fill_bytes(&mut salt);
+
+    let salt_clone = salt.to_vec();
+    let passphrase_clone = passphrase_value.clone();
+
+    let export_key = tauri::async_runtime::spawn_blocking(move || {
+        let params =
+            Params::new(64 * 1024, 3, 1, None).map_err(|e| Error::Internal(e.to_string()))?;
+        let argon2 = Argon2::new(Algorithm::Argon2id, Version::V0x13, params);
+        let mut key = [0u8; 32];
+        argon2
+            .hash_password_into(passphrase_clone.as_bytes(), &salt_clone, &mut key)
+            .map_err(|e| Error::Internal(format!("KDF failed: {}", e)))?;
+        Ok::<[u8; 32], Error>(key)
+    })
+    .await
+    .map_err(|e| Error::Internal(format!("Runtime error: {}", e)))??;
+
+    let cipher = XChaCha20Poly1305::new(Key::from_slice(&export_key));
+    let mut nonce = [0u8; 24];
+    OsRng.fill_bytes(&mut nonce);
+
+    let ciphertext = cipher
+        .encrypt(XNonce::from_slice(&nonce), vault_data.as_bytes())
+        .map_err(|e| Error::Encryption(format!("Encryption failed: {}", e)))?;
+
+    let export = ExportPayload {
+        version: 2,
+        salt_b64: general_purpose::STANDARD.encode(salt),
+        nonce_b64: general_purpose::STANDARD.encode(nonce),
+        ciphertext_b64: general_purpose::STANDARD.encode(&ciphertext),
+    };
+
+    let export_json = serde_json::to_string(&export)?;
+    Ok(export_json)
+}
+
+#[command]
+pub async fn decrypt_sync_payload(
+    payload: String,
+    passphrase: String,
+) -> Result<VaultBackupSnapshot> {
+    let passphrase_value = Zeroizing::new(passphrase);
+    if passphrase_value.is_empty() {
+        return Err(Error::Validation(
+            "A passphrase is required to decrypt the sync payload.".to_string(),
+        ));
+    }
+
+    let payload: ExportPayload = serde_json::from_str(&payload).map_err(|_| {
+        Error::Validation(
+            "Failed to parse sync payload.".to_string(),
+        )
+    })?;
+
+    let salt = general_purpose::STANDARD
+        .decode(payload.salt_b64)
+        .map_err(|e| Error::Internal(e.to_string()))?;
+    let nonce = general_purpose::STANDARD
+        .decode(payload.nonce_b64)
+        .map_err(|e| Error::Internal(e.to_string()))?;
+    let ciphertext = general_purpose::STANDARD
+        .decode(payload.ciphertext_b64)
+        .map_err(|e| Error::Internal(e.to_string()))?;
+
+    let salt_clone = salt.clone();
+    let passphrase_clone = passphrase_value.clone();
+
+    let mut key = tauri::async_runtime::spawn_blocking(move || {
+        let params =
+            Params::new(64 * 1024, 3, 1, None).map_err(|e| Error::Internal(e.to_string()))?;
+        let argon2 = Argon2::new(Algorithm::Argon2id, Version::V0x13, params);
+        let mut key = [0u8; 32];
+        argon2
+            .hash_password_into(passphrase_clone.as_bytes(), &salt_clone, &mut key)
+            .map_err(|e| Error::Internal(format!("KDF failed: {e}")))?;
+        Ok::<[u8; 32], Error>(key)
+    })
+    .await
+    .map_err(|e| Error::Internal(format!("Runtime error: {}", e)))??;
+
+    let cipher = XChaCha20Poly1305::new(Key::from_slice(&key));
+    let decrypted_bytes = cipher
+        .decrypt(XNonce::from_slice(&nonce), ciphertext.as_ref())
+        .map_err(|_| {
+            Error::Validation(
+                "Decryption failed. The sync passphrase may be incorrect or the sync data is corrupt."
+                    .to_string(),
+            )
+        })?;
+
+    key.zeroize();
+    let decrypted_json = String::from_utf8(decrypted_bytes)
+        .map_err(|e| Error::Internal(format!("UTF-8 conversion failed: {e}")))?;
+
+    let snapshot: VaultBackupSnapshot = serde_json::from_str(&decrypted_json)?;
+    Ok(snapshot)
+}
+
+#[command]
+pub fn merge_vault_snapshots(
+    local: VaultBackupSnapshot,
+    remote: VaultBackupSnapshot,
+) -> Result<VaultBackupSnapshot> {
+    use std::collections::HashMap;
+
+    // 1. Merge Password Items using Last-Write-Wins (LWW) based on updated_at
+    let mut password_items_map = HashMap::new();
+    for item in local.password_items {
+        password_items_map.insert(item.id, item);
+    }
+    for remote_item in remote.password_items {
+        if let Some(local_item) = password_items_map.get(&remote_item.id) {
+            if remote_item.updated_at > local_item.updated_at {
+                password_items_map.insert(remote_item.id, remote_item);
+            }
+        } else {
+            password_items_map.insert(remote_item.id, remote_item);
+        }
+    }
+    let password_items: Vec<_> = password_items_map.into_values().collect();
+
+    // 2. Merge Buttons (simple union by ID)
+    let mut buttons_map = HashMap::new();
+    for btn in local.buttons {
+        buttons_map.insert(btn.id, btn);
+    }
+    for remote_btn in remote.buttons {
+        buttons_map.entry(remote_btn.id).or_insert(remote_btn);
+    }
+    let buttons: Vec<_> = buttons_map.into_values().collect();
+
+    // 3. Merge Recipient Keys (simple union by ID)
+    let mut keys_map = HashMap::new();
+    for key in local.recipient_keys {
+        keys_map.insert(key.id, key);
+    }
+    for remote_key in remote.recipient_keys {
+        keys_map.entry(remote_key.id).or_insert(remote_key);
+    }
+    let recipient_keys: Vec<_> = keys_map.into_values().collect();
+
+    // 4. Merge Attachments (simple union by ID)
+    let mut attachments_map = HashMap::new();
+    for att in local.attachments {
+        attachments_map.insert(att.id, att);
+    }
+    for remote_att in remote.attachments {
+        attachments_map.entry(remote_att.id).or_insert(remote_att);
+    }
+    let attachments: Vec<_> = attachments_map.into_values().collect();
+
+    Ok(VaultBackupSnapshot {
+        version: 1,
+        exported_at: Utc::now().to_rfc3339(),
+        password_items,
+        buttons,
+        recipient_keys,
+        attachments,
+    })
+}

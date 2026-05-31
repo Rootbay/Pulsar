@@ -9,6 +9,7 @@
   import { initClipboardService } from '$lib/utils/clipboardService.svelte';
   import SecurityManager from '$lib/components/SecurityManager.svelte';
   import { Toaster, toast } from '$lib/components/ui/sonner';
+  import { syncStore } from '$lib/stores/sync.svelte';
 
   let { children } = $props();
 
@@ -129,6 +130,14 @@
         }
       } else if (AUTH_ROUTES.has(currentPath)) {
         goto('/', { replaceState: true });
+      }
+    }
+  });
+
+  $effect(() => {
+    if (browser && !appState.isLocked && appState.isDatabaseLoaded && settings.isInitialized) {
+      if (settings.state.backup.webdavSyncEnabled && settings.state.backup.syncMode === 'auto') {
+        void syncStore.performSync();
       }
     }
   });

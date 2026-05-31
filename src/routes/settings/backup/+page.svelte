@@ -36,6 +36,7 @@
   import { exportVaultBackup, importVaultBackup, notifyVaultRefresh } from '$lib/utils/backup';
   import type { ImportVaultProgressStage } from '$lib/utils/backup';
   import { i18n, t as translate, type I18nKey, type Locale } from '$lib/i18n.svelte';
+  import { syncStore } from '$lib/stores/sync.svelte';
 
   const locale = $derived(i18n.locale);
   const t = (key: string, vars = {}) => translate(locale, key as I18nKey, vars);
@@ -271,12 +272,27 @@
     settings.state.backup.selectedProvider = provider;
     settings.save();
 
-    openModal({
-      title: t('Configure {provider}', { provider }),
-      description: t('Provide credentials for your {provider} connection.', { provider }),
-      requiresMasterPassword: false,
-      onConfirm: () => {}
-    });
+    if (provider === 'webdav') {
+      openModal({
+        title: t('Configure WebDAV'),
+        description: t('Provide credentials for your WebDAV connection. All data is encrypted locally before upload.'),
+        requiresPassphrase: false,
+        requiresMasterPassword: false,
+        confirmLabel: t('Save & Sync'),
+        onConfirm: async () => {
+          settings.state.backup.webdavSyncEnabled = true;
+          settings.save();
+          await syncStore.performSync(true);
+        }
+      });
+    } else {
+      openModal({
+        title: t('Configure {provider}', { provider }),
+        description: t('Provide credentials for your {provider} connection.', { provider }),
+        requiresMasterPassword: false,
+        onConfirm: () => {}
+      });
+    }
   }
 </script>
 
@@ -509,6 +525,35 @@
 
       <Separator class="bg-border/60" />
 
+      {#if backupSettings.syncMode !== 'off' && backupSettings.selectedProvider === 'webdav'}
+        <div class="border-border/60 bg-muted/5 flex items-center justify-between rounded-xl border p-4">
+          <div>
+            <p class="text-foreground text-sm font-semibold">WebDAV Database Synchronization (E2EE)</p>
+            <p class="text-muted-foreground mt-0.5 text-xs">
+              Last Synced: {syncStore.lastSyncTime || backupSettings.webdavSyncLastTime || 'Never'}
+            </p>
+            {#if syncStore.syncError}
+              <p class="text-destructive mt-1 text-xs">{syncStore.syncError}</p>
+            {/if}
+          </div>
+          <Button
+            type="button"
+            size="sm"
+            class="gap-2"
+            onclick={() => syncStore.performSync(true)}
+            disabled={syncStore.isSyncing}
+          >
+            {#if syncStore.isSyncing}
+              <Spinner class="size-4" />
+              <span>Syncing…</span>
+            {:else}
+              <CloudUpload class="size-4" />
+              <span>Sync Now</span>
+            {/if}
+          </Button>
+        </div>
+      {/if}
+
       <div class="grid gap-4 md:grid-cols-2">
         {#each providers as provider (provider.id)}
           <button
@@ -603,6 +648,48 @@
           <p class="text-muted-foreground text-xs">
             {t('Confirm with your master password to proceed.')}
           </p>
+        </div>
+      {/if}
+
+      {#if backupSettings.selectedProvider === 'webdav' && !modalRequiresPassphrase && !modalRequiresMasterPassword}
+        <div class="mt-4 space-y-3">
+          <div class="space-y-1">
+            <Label for="webdav-url" class="text-sm font-medium">WebDAV Server URL</Label>
+            <Input
+              id="webdav-url"
+              placeholder="https://example.com/nextcloud/remote.php/dav/files/user/"
+              value={settings.state.backup.webdavUrl}
+              oninput={(e) => { settings.state.backup.webdavUrl = (e.target as HTMLInputElement).value; }}
+            />
+          </div>
+          <div class="space-y-1">
+            <Label for="webdav-username" class="text-sm font-medium">Username</Label>
+            <Input
+              id="webdav-username"
+              placeholder="Enter WebDAV username"
+              value={settings.state.backup.webdavUsername}
+              oninput={(e) => { settings.state.backup.webdavUsername = (e.target as HTMLInputElement).value; }}
+            />
+          </div>
+          <div class="space-y-1">
+            <Label for="webdav-password" class="text-sm font-medium">Password (App Password)</Label>
+            <Input
+              id="webdav-password"
+              type="password"
+              placeholder="Enter WebDAV app password"
+              value={settings.state.backup.webdavPassword}
+              oninput={(e) => { settings.state.backup.webdavPassword = (e.target as HTMLInputElement).value; }}
+            />
+          </div>
+          <div class="space-y-1">
+            <Label for="webdav-folder" class="text-sm font-medium">Sync Directory</Label>
+            <Input
+              id="webdav-folder"
+              placeholder="/PulsarSync"
+              value={settings.state.backup.webdavSyncFolder}
+              oninput={(e) => { settings.state.backup.webdavSyncFolder = (e.target as HTMLInputElement).value; }}
+            />
+          </div>
         </div>
       {/if}
 

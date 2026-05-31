@@ -71,6 +71,12 @@ export interface BackupSettings {
   enablePlaintextExport: boolean;
   syncMode: string;
   selectedProvider: string | null;
+  webdavUrl?: string;
+  webdavUsername?: string;
+  webdavPassword?: string;
+  webdavSyncFolder?: string;
+  webdavSyncEnabled?: boolean;
+  webdavSyncLastTime?: string;
 }
 
 export const defaultBackupSettings: BackupSettings = {
@@ -79,7 +85,13 @@ export const defaultBackupSettings: BackupSettings = {
   retentionCount: 7,
   enablePlaintextExport: false,
   syncMode: 'off',
-  selectedProvider: null
+  selectedProvider: null,
+  webdavUrl: '',
+  webdavUsername: '',
+  webdavPassword: '',
+  webdavSyncFolder: '/PulsarSync',
+  webdavSyncEnabled: false,
+  webdavSyncLastTime: ''
 };
 
 export interface ClipboardSettings {

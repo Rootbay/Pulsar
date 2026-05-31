@@ -67,7 +67,6 @@
 
   const sectionOrder: SectionTitle[] = ['Pinned', 'Today', 'Yesterday', 'Earlier'];
   const PIN_TAG_NAMES = new Set(['pinned', 'pin']);
-  const RECENT_FILTER = 'recent' as const;
 
   let selectedItemId = $state<number | null>(null);
   let showSkeleton = $state(false);
@@ -76,7 +75,7 @@
   let navInnerRef: HTMLElement | null = null;
   let highlightTimer: ReturnType<typeof setTimeout> | null = null;
 
-  const itemsCount = $derived(vaultStore.items.length);
+
 
   const headerInfo = $derived.by(() => {
     if (appState.selectedTag) {
@@ -694,11 +693,7 @@
     box-sizing: border-box;
   }
 
-  .segButtons {
-    display: flex;
-    gap: 12px;
-    width: 100%;
-  }
+
 
   .sectionTitle {
     margin-left: 0;

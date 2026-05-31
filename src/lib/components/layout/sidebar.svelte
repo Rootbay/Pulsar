@@ -67,9 +67,6 @@
     ontagDeleteRequested?.(button);
   }
 
-  function handleCreateVault() {
-    console.log('Create vault clicked');
-  }
 
   import { createResizeController } from './password-list/resizeController';
   import { settings } from '$lib/stores/appSettings.svelte';

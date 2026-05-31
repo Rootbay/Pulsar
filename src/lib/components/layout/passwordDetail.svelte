@@ -6,7 +6,6 @@
   import { isTotpDisplayField } from '$lib/types/password-fields';
   import { iconPaths } from '$lib/icons';
   import { callBackend } from '$lib/utils/backend';
-  import Input from '../ui/FieldInput.svelte';
   import { Input as StandardInput } from '$lib/components/ui/input';
   import { Button } from '../ui/button';
   import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '$lib/components/ui/dialog';
@@ -35,11 +34,8 @@
     Calendar,
     MapPin,
     Link,
-    Type,
     Key,
     User,
-    MessageSquare,
-    Edit,
     Pencil
   } from '@lucide/svelte';
   import { buildDisplayFields } from '$lib/utils/passwordFields';
@@ -95,7 +91,7 @@
 
   const fieldTypeOptions = [
     { value: 'text', label: 'Text', icon: 'edit', component: Pencil },
-    { value: 'password', label: 'Password', icon: 'key' },
+    { value: 'password', label: 'Password', icon: 'key', component: Key },
     { value: 'username', label: 'Username', icon: 'user', component: User },
     { value: 'email', label: 'Email', icon: 'mail', component: Mail },
     { value: 'phone', label: 'Phone', icon: 'phone', component: Phone },
@@ -1211,7 +1207,7 @@
         <div class="grid gap-2">
           <Label>Type</Label>
           <div class="grid grid-cols-5 gap-2">
-            {#each fieldTypeOptions as option}
+            {#each fieldTypeOptions as option (option.value)}
               <button
                 type="button"
                 class={cn(

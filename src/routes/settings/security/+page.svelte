@@ -211,9 +211,6 @@
     biometricError = '';
 
     try {
-      const { authenticate } = await import('@tauri-apps/plugin-biometric');
-      await authenticate('Verify identity to enable biometric unlock');
-
       await callBackend('enable_biometrics', { password: biometricPassword });
       isBiometricsEnabled = true;
       biometricModalOpen = false;

@@ -259,6 +259,7 @@ pub async fn enable_biometrics_impl(
     password: &str,
 ) -> Result<()> {
     ensure_biometric_available(app)?;
+    authenticate_biometric(app, "Confirm biometric credentials to enable biometric unlock")?;
     let db_path = crate::auth::get_db_path(state).await?;
 
     let mut bio_key_bytes = [0u8; 32];

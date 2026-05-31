@@ -48,6 +48,9 @@
   async function checkBiometrics() {
     try {
       isBiometricsAvailable = await callBackend<boolean>('is_biometrics_enabled');
+      if (isBiometricsAvailable) {
+        void handleBiometricUnlock();
+      }
     } catch (err) {
       console.error('Biometric check failed:', err);
     }
@@ -59,9 +62,6 @@
     loginError = null;
 
     try {
-      const { authenticate } = await import('@tauri-apps/plugin-biometric');
-      await authenticate(t('loginBiometricPrompt'));
-
       const result = await callBackend<{ totp_required: boolean }>('unlock_with_biometrics');
 
       if (result?.totp_required) {

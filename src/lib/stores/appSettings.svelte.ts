@@ -113,6 +113,7 @@ class SettingsStore {
   }
 
   async saveNow() {
+    this.isSaving = true;
     if (this.#saveTimeout) {
       clearTimeout(this.#saveTimeout);
       this.#saveTimeout = null;
@@ -130,6 +131,7 @@ class SettingsStore {
   }
 
   save() {
+    this.isSaving = true;
     if (this.#saveTimeout) clearTimeout(this.#saveTimeout);
 
     this.#saveTimeout = setTimeout(() => {

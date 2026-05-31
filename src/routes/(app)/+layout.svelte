@@ -476,7 +476,7 @@
   }
 
   :global(input[type='checkbox']:checked::before) {
-    content: '?';
+    content: '\2713';
     display: block;
     color: var(--accent-text-color);
     font-size: 12px;

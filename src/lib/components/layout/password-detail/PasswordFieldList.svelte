@@ -331,8 +331,8 @@
                       ? securityDashboard.items[passwordItem.id]
                       : SecurityService.checkStrength(field.value)}
                   {#if health}
-                    {@const isBreached = localBreach?.isBreached ?? (health.isBreached || false)}
-                    {@const breachCount = localBreach?.count ?? (health.breachCount || 0)}
+                    {@const isBreached = localBreach?.isBreached ?? (('isBreached' in health && health.isBreached) || false)}
+                    {@const breachCount = localBreach?.count ?? (('breachCount' in health && health.breachCount) || 0)}
                     <Badge
                       variant="outline"
                       class={`h-6 gap-1.5 px-2 transition-colors ${SecurityService.getStrengthBadgeClass(health.score, isBreached)}`}
@@ -473,8 +473,8 @@
                             ? securityDashboard.items[passwordItem.id]
                             : SecurityService.checkStrength(field.value)}
                         {#if health}
-                          {@const isBreached = localBreach?.isBreached ?? (health.isBreached || false)}
-                          {@const breachCount = localBreach?.count ?? (health.breachCount || 0)}
+                          {@const isBreached = localBreach?.isBreached ?? (('isBreached' in health && health.isBreached) || false)}
+                          {@const breachCount = localBreach?.count ?? (('breachCount' in health && health.breachCount) || 0)}
                           <Badge
                             variant="outline"
                             class={`h-6 gap-1.5 px-2 transition-colors ${SecurityService.getStrengthBadgeClass(health.score, isBreached)}`}

@@ -1,10 +1,12 @@
+import type { Component } from 'svelte';
+
 export interface BaseDisplayField {
   id: string;
   name: string;
   value: string | null;
   type: string;
   icon: string;
-  iconComponent?: any;
+  iconComponent?: Component;
 }
 
 export interface TotpFieldMeta {

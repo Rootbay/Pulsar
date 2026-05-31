@@ -1,6 +1,8 @@
 import type { Keybind } from './keybinds';
 import type { GeneratorOptions } from '../utils/generator';
 
+export type AppTheme = 'light' | 'dark' | 'system';
+
 export interface GeneratorSettings {
   passwordLength: number;
   options: GeneratorOptions;

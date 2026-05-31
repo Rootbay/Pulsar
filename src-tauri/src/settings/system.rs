@@ -6,12 +6,12 @@ use std::fs;
 
 #[cfg(target_os = "windows")]
 use windows::{
-    core::PCWSTR,
     Win32::Foundation::{ERROR_FILE_NOT_FOUND, ERROR_SUCCESS},
     Win32::System::Registry::{
-        RegCloseKey, RegDeleteValueW, RegOpenKeyExW, RegSetValueExW, HKEY, HKEY_CURRENT_USER,
-        KEY_QUERY_VALUE, KEY_SET_VALUE, REG_SZ,
+        HKEY, HKEY_CURRENT_USER, KEY_QUERY_VALUE, KEY_SET_VALUE, REG_SZ, RegCloseKey,
+        RegDeleteValueW, RegOpenKeyExW, RegSetValueExW,
     },
+    core::PCWSTR,
 };
 
 #[cfg(target_os = "macos")]
@@ -298,52 +298,58 @@ unsafe fn send_unicode_char(c: char) -> Result<()> {
     use windows::Win32::UI::Input::KeyboardAndMouse::*;
     let mut inputs = [INPUT::default(); 2];
 
-    inputs[0].r#type = INPUT_KEYBOARD;
-    inputs[0].Anonymous.ki = KEYBDINPUT {
-        wVk: VIRTUAL_KEY(0),
-        wScan: c as u16,
-        dwFlags: KEYEVENTF_UNICODE,
-        time: 0,
-        dwExtraInfo: 0,
-    };
+    unsafe {
+        inputs[0].r#type = INPUT_KEYBOARD;
+        inputs[0].Anonymous.ki = KEYBDINPUT {
+            wVk: VIRTUAL_KEY(0),
+            wScan: c as u16,
+            dwFlags: KEYEVENTF_UNICODE,
+            time: 0,
+            dwExtraInfo: 0,
+        };
 
-    inputs[1].r#type = INPUT_KEYBOARD;
-    inputs[1].Anonymous.ki = KEYBDINPUT {
-        wVk: VIRTUAL_KEY(0),
-        wScan: c as u16,
-        dwFlags: KEYEVENTF_UNICODE | KEYEVENTF_KEYUP,
-        time: 0,
-        dwExtraInfo: 0,
-    };
+        inputs[1].r#type = INPUT_KEYBOARD;
+        inputs[1].Anonymous.ki = KEYBDINPUT {
+            wVk: VIRTUAL_KEY(0),
+            wScan: c as u16,
+            dwFlags: KEYEVENTF_UNICODE | KEYEVENTF_KEYUP,
+            time: 0,
+            dwExtraInfo: 0,
+        };
 
-    if SendInput(&inputs, std::mem::size_of::<INPUT>() as i32) == 0 {
-        return Err(Error::Internal("Failed to send unicode char".to_string()));
+        if SendInput(&inputs, std::mem::size_of::<INPUT>() as i32) == 0 {
+            return Err(Error::Internal("Failed to send unicode char".to_string()));
+        }
     }
     Ok(())
 }
 
 #[cfg(target_os = "windows")]
-unsafe fn send_virtual_key(vk: windows::Win32::UI::Input::KeyboardAndMouse::VIRTUAL_KEY) -> Result<()> {
+unsafe fn send_virtual_key(
+    vk: windows::Win32::UI::Input::KeyboardAndMouse::VIRTUAL_KEY,
+) -> Result<()> {
     use windows::Win32::UI::Input::KeyboardAndMouse::*;
     let mut inputs = [INPUT::default(); 2];
-    inputs[0].r#type = INPUT_KEYBOARD;
-    inputs[0].Anonymous.ki = KEYBDINPUT {
-        wVk: vk,
-        wScan: 0,
-        dwFlags: KEYBD_EVENT_FLAGS(0),
-        time: 0,
-        dwExtraInfo: 0,
-    };
-    inputs[1].r#type = INPUT_KEYBOARD;
-    inputs[1].Anonymous.ki = KEYBDINPUT {
-        wVk: vk,
-        wScan: 0,
-        dwFlags: KEYEVENTF_KEYUP,
-        time: 0,
-        dwExtraInfo: 0,
-    };
-    if SendInput(&inputs, std::mem::size_of::<INPUT>() as i32) == 0 {
-        return Err(Error::Internal("Failed to send key stroke".to_string()));
+    unsafe {
+        inputs[0].r#type = INPUT_KEYBOARD;
+        inputs[0].Anonymous.ki = KEYBDINPUT {
+            wVk: vk,
+            wScan: 0,
+            dwFlags: KEYBD_EVENT_FLAGS(0),
+            time: 0,
+            dwExtraInfo: 0,
+        };
+        inputs[1].r#type = INPUT_KEYBOARD;
+        inputs[1].Anonymous.ki = KEYBDINPUT {
+            wVk: vk,
+            wScan: 0,
+            dwFlags: KEYEVENTF_KEYUP,
+            time: 0,
+            dwExtraInfo: 0,
+        };
+        if SendInput(&inputs, std::mem::size_of::<INPUT>() as i32) == 0 {
+            return Err(Error::Internal("Failed to send key stroke".to_string()));
+        }
     }
     Ok(())
 }
@@ -414,13 +420,17 @@ pub async fn perform_autotype(
                 let mut utf16 = [0u16; 2];
                 let encoded = c.encode_utf16(&mut utf16);
 
-                let event_down = CGEvent::new_keyboard_event(source.clone(), 0, true)
-                    .map_err(|_| Error::Internal("Failed to create keyboard event down".to_string()))?;
+                let event_down =
+                    CGEvent::new_keyboard_event(source.clone(), 0, true).map_err(|_| {
+                        Error::Internal("Failed to create keyboard event down".to_string())
+                    })?;
                 event_down.set_string(encoded);
                 event_down.post(CGEventTapLocation::HID);
 
-                let event_up = CGEvent::new_keyboard_event(source.clone(), 0, false)
-                    .map_err(|_| Error::Internal("Failed to create keyboard event up".to_string()))?;
+                let event_up =
+                    CGEvent::new_keyboard_event(source.clone(), 0, false).map_err(|_| {
+                        Error::Internal("Failed to create keyboard event up".to_string())
+                    })?;
                 event_up.set_string(encoded);
                 event_up.post(CGEventTapLocation::HID);
 
@@ -446,13 +456,17 @@ pub async fn perform_autotype(
                 let mut utf16 = [0u16; 2];
                 let encoded = c.encode_utf16(&mut utf16);
 
-                let event_down = CGEvent::new_keyboard_event(source.clone(), 0, true)
-                    .map_err(|_| Error::Internal("Failed to create keyboard event down".to_string()))?;
+                let event_down =
+                    CGEvent::new_keyboard_event(source.clone(), 0, true).map_err(|_| {
+                        Error::Internal("Failed to create keyboard event down".to_string())
+                    })?;
                 event_down.set_string(encoded);
                 event_down.post(CGEventTapLocation::HID);
 
-                let event_up = CGEvent::new_keyboard_event(source.clone(), 0, false)
-                    .map_err(|_| Error::Internal("Failed to create keyboard event up".to_string()))?;
+                let event_up =
+                    CGEvent::new_keyboard_event(source.clone(), 0, false).map_err(|_| {
+                        Error::Internal("Failed to create keyboard event up".to_string())
+                    })?;
                 event_up.set_string(encoded);
                 event_up.post(CGEventTapLocation::HID);
 
@@ -504,7 +518,11 @@ pub async fn perform_autotype(
                 .await;
 
             // Press Return/Enter
-            let _ = Command::new("xdotool").arg("key").arg("Return").status().await;
+            let _ = Command::new("xdotool")
+                .arg("key")
+                .arg("Return")
+                .status()
+                .await;
         }
 
         Ok(())
@@ -540,11 +558,11 @@ pub fn get_active_window_title() -> Option<String> {
 }
 
 pub async fn handle_global_autotype_trigger(app_handle: tauri::AppHandle) -> Result<()> {
-    use tauri::Manager;
-    use crate::state::AppState;
     use crate::db::passwords::get_password_items_impl;
-    use crate::db::utils::{get_key, get_db_pool};
+    use crate::db::utils::{get_db_pool, get_key};
+    use crate::state::AppState;
     use tauri::Emitter;
+    use tauri::Manager;
 
     // 1. Get the active window's title
     #[cfg(target_os = "windows")]
@@ -564,11 +582,14 @@ pub async fn handle_global_autotype_trigger(app_handle: tauri::AppHandle) -> Res
 
     // 2. Fetch keys and database pool from AppState
     let state = app_handle.state::<AppState>();
-    
+
     let key = match get_key(&state).await {
         Ok(k) => k,
         Err(_) => {
-            let _ = app_handle.emit("pulsar:autotype-error", "Vault is locked. Please unlock Pulsar first.");
+            let _ = app_handle.emit(
+                "pulsar:autotype-error",
+                "Vault is locked. Please unlock Pulsar first.",
+            );
             return Ok(());
         }
     };
@@ -613,7 +634,10 @@ pub async fn handle_global_autotype_trigger(app_handle: tauri::AppHandle) -> Res
 
     // 5. Trigger autotype sequence
     if matches.is_empty() {
-        let err_msg = format!("No matching credentials found for window title: \"{}\"", window_title);
+        let err_msg = format!(
+            "No matching credentials found for window title: \"{}\"",
+            window_title
+        );
         let _ = app_handle.emit("pulsar:autotype-error", err_msg);
     } else if matches.len() == 1 {
         let target = &matches[0];
@@ -660,11 +684,13 @@ pub async fn handle_global_autotype_trigger(app_handle: tauri::AppHandle) -> Res
                         let mut utf16 = [0u16; 2];
                         let encoded = c.encode_utf16(&mut utf16);
 
-                        let event_down = CGEvent::new_keyboard_event(source.clone(), 0, true).unwrap();
+                        let event_down =
+                            CGEvent::new_keyboard_event(source.clone(), 0, true).unwrap();
                         event_down.set_string(encoded);
                         event_down.post(CGEventTapLocation::HID);
 
-                        let event_up = CGEvent::new_keyboard_event(source.clone(), 0, false).unwrap();
+                        let event_up =
+                            CGEvent::new_keyboard_event(source.clone(), 0, false).unwrap();
                         event_up.set_string(encoded);
                         event_up.post(CGEventTapLocation::HID);
 
@@ -727,7 +753,11 @@ pub async fn handle_global_autotype_trigger(app_handle: tauri::AppHandle) -> Res
                 .status()
                 .await;
 
-            let _ = Command::new("xdotool").arg("key").arg("Return").status().await;
+            let _ = Command::new("xdotool")
+                .arg("key")
+                .arg("Return")
+                .status()
+                .await;
         }
     } else {
         let err_msg = format!(
@@ -742,7 +772,7 @@ pub async fn handle_global_autotype_trigger(app_handle: tauri::AppHandle) -> Res
 
 #[cfg(target_os = "windows")]
 pub fn start_global_hotkey_listener(app_handle: tauri::AppHandle) {
-    use windows::Win32::UI::Input::KeyboardAndMouse::{RegisterHotKey, MOD_ALT, MOD_CONTROL};
+    use windows::Win32::UI::Input::KeyboardAndMouse::{MOD_ALT, MOD_CONTROL, RegisterHotKey};
     use windows::Win32::UI::WindowsAndMessaging::{GetMessageW, MSG, WM_HOTKEY};
 
     let handle = app_handle.clone();
@@ -777,5 +807,3 @@ pub fn start_global_hotkey_listener(app_handle: tauri::AppHandle) {
 
 #[cfg(not(target_os = "windows"))]
 pub fn start_global_hotkey_listener(_app_handle: tauri::AppHandle) {}
-
-

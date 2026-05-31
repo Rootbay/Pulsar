@@ -21,7 +21,7 @@ fn resolve_db_path(db_path: &Path) -> Result<PathBuf, String> {
 
 fn build_connect_options(
     db_path_abs: &Path,
-    password: Option<&[u8]>,
+    password: Option<&crate::secmem::LockedBuffer>,
     create_if_missing: bool,
 ) -> SqliteConnectOptions {
     let path_str = db_path_abs.to_string_lossy();
@@ -30,8 +30,8 @@ fn build_connect_options(
         .create_if_missing(create_if_missing)
         .busy_timeout(std::time::Duration::from_secs(30));
 
-    if let Some(key_bytes) = password {
-        let mut hex_key = hex::encode(key_bytes);
+    if let Some(locked_key) = password {
+        let mut hex_key = hex::encode(locked_key.as_slice());
         opts = opts.pragma("key", format!("\"x'{hex_key}'\""));
         hex_key.zeroize();
     }
@@ -90,7 +90,7 @@ fn build_pool_options() -> SqlitePoolOptions {
 
 pub async fn init_db_lazy(
     db_path: &Path,
-    password: Option<&[u8]>,
+    password: Option<&crate::secmem::LockedBuffer>,
     create_if_missing: bool,
 ) -> Result<SqlitePool, String> {
     let db_path_abs = resolve_db_path(db_path)?;

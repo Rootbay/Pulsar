@@ -106,7 +106,7 @@
     });
 
     return () => {
-      timers.forEach(t => clearTimeout(t));
+      timers.forEach((t) => clearTimeout(t));
     };
   });
 
@@ -306,103 +306,103 @@
       {/each}
     {:else}
       {#each displayFields as field (field.id)}
-                          <Input
-                            title={field.name}
-                            inputValue={getDisplayValue(field)}
-                            readOnly
-                            selectedIconPath={field.icon}
-                            selectedIconName={getIconName(field)}
-                            iconComponent={field.iconComponent}
-                            selectedColor={displayColor}
-                            isMultiline={field.type === 'multiline'}
-                            type={getInputType(field, true)}
-                            isExpandable
-                          >            {#snippet rightIcon()}
-              {@const hasCopy = canCopyField(field)}
-              {@const isPassword = field.id === 'password' || field.type === 'password'}
-              {@const canToggle =
-                isPassword && field.value && field.value.length && field.value !== 'N/A'}
+        <Input
+          title={field.name}
+          inputValue={getDisplayValue(field)}
+          readOnly
+          selectedIconPath={field.icon}
+          selectedIconName={getIconName(field)}
+          iconComponent={field.iconComponent}
+          selectedColor={displayColor}
+          isMultiline={field.type === 'multiline'}
+          type={getInputType(field, true)}
+          isExpandable
+        >
+          {#snippet rightIcon()}
+            {@const hasCopy = canCopyField(field)}
+            {@const isPassword = field.id === 'password' || field.type === 'password'}
+            {@const canToggle =
+              isPassword && field.value && field.value.length && field.value !== 'N/A'}
 
-              <div class="flex items-center gap-2">
-                {#if isPassword && field.value && field.value !== 'N/A'}
-                  {@const localBreach = localBreachData[field.value]}
-                  {@const health =
-                    field.id === 'password' && passwordItem
-                      ? securityDashboard.items[passwordItem.id]
-                      : SecurityService.checkStrength(field.value)}
-                  {#if health}
-                    {@const isBreached = localBreach?.isBreached ?? (('isBreached' in health && health.isBreached) || false)}
-                    {@const breachCount = localBreach?.count ?? (('breachCount' in health && health.breachCount) || 0)}
-                    <Badge
-                      variant="outline"
-                      class={`h-6 gap-1.5 px-2 transition-colors ${SecurityService.getStrengthBadgeClass(health.score, isBreached)}`}
-                    >
-                      {#if isBreached}
-                        <ShieldAlert class="h-3.5 w-3.5" />
-                      {:else if health.score === 4}
-                        <ShieldCheck class="h-3.5 w-3.5" />
-                      {:else}
-                        <Shield class="h-3.5 w-3.5" />
-                      {/if}
-                      <span class="text-[10px] font-semibold tracking-wider uppercase"
-                        >{SecurityService.getStrengthLabel(
-                          health.score,
-                          isBreached,
-                          breachCount
-                        )}</span
-                      >
-                    </Badge>
-                  {/if}
-                {/if}
-
-                {#if hasCopy}
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    class="text-muted-foreground hover:text-foreground h-6 w-6 p-0"
-                    aria-label={`Copy ${field.name}`}
-                    title={`Copy ${field.name}`}
-                    onclick={() => handleCopyField(field)}
+            <div class="flex items-center gap-2">
+              {#if isPassword && field.value && field.value !== 'N/A'}
+                {@const localBreach = localBreachData[field.value]}
+                {@const health =
+                  field.id === 'password' && passwordItem
+                    ? securityDashboard.items[passwordItem.id]
+                    : SecurityService.checkStrength(field.value)}
+                {#if health}
+                  {@const isBreached =
+                    localBreach?.isBreached ??
+                    (('isBreached' in health && health.isBreached) || false)}
+                  {@const breachCount =
+                    localBreach?.count ?? (('breachCount' in health && health.breachCount) || 0)}
+                  <Badge
+                    variant="outline"
+                    class={`h-6 gap-1.5 px-2 transition-colors ${SecurityService.getStrengthBadgeClass(health.score, isBreached)}`}
                   >
-                    <Copy class="h-5 w-5" />
-                  </Button>
-                {/if}
-                {#if canToggle}
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    class="text-muted-foreground hover:text-foreground h-6 w-6 p-0"
-                    aria-pressed={showPassword}
-                    aria-label={showPassword ? 'Hide password' : 'Show password'}
-                    onclick={togglePasswordVisibility}
-                  >
-                    {#if showPassword}
-                      <Eye class="h-5 w-5" />
+                    {#if isBreached}
+                      <ShieldAlert class="h-3.5 w-3.5" />
+                    {:else if health.score === 4}
+                      <ShieldCheck class="h-3.5 w-3.5" />
                     {:else}
-                      <EyeOff class="h-5 w-5" />
+                      <Shield class="h-3.5 w-3.5" />
                     {/if}
-                  </Button>
+                    <span class="text-[10px] font-semibold tracking-wider uppercase"
+                      >{SecurityService.getStrengthLabel(
+                        health.score,
+                        isBreached,
+                        breachCount
+                      )}</span
+                    >
+                  </Badge>
                 {/if}
-              </div>
-            {/snippet}
-          </Input>
-          {#if (field.id === 'password' || field.type === 'password') && field.value && field.value !== 'N/A'}
-            {@const localBreach = localBreachData[field.value]}
-            {@const health =
-              field.id === 'password' && passwordItem
-                ? securityDashboard.items[passwordItem.id]
-                : null}
-            {@const isBreached = localBreach?.isBreached ?? (health?.isBreached || false)}
-            <div class="mt-2 px-3 pb-2">
-              <PasswordStrength
-                password={field.value ?? ''}
-                showDetails={false}
-                {isBreached}
-              />
+              {/if}
+
+              {#if hasCopy}
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  class="text-muted-foreground hover:text-foreground h-6 w-6 p-0"
+                  aria-label={`Copy ${field.name}`}
+                  title={`Copy ${field.name}`}
+                  onclick={() => handleCopyField(field)}
+                >
+                  <Copy class="h-5 w-5" />
+                </Button>
+              {/if}
+              {#if canToggle}
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  class="text-muted-foreground hover:text-foreground h-6 w-6 p-0"
+                  aria-pressed={showPassword}
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  onclick={togglePasswordVisibility}
+                >
+                  {#if showPassword}
+                    <Eye class="h-5 w-5" />
+                  {:else}
+                    <EyeOff class="h-5 w-5" />
+                  {/if}
+                </Button>
+              {/if}
             </div>
-          {/if}
+          {/snippet}
+        </Input>
+        {#if (field.id === 'password' || field.type === 'password') && field.value && field.value !== 'N/A'}
+          {@const localBreach = localBreachData[field.value]}
+          {@const health =
+            field.id === 'password' && passwordItem
+              ? securityDashboard.items[passwordItem.id]
+              : null}
+          {@const isBreached = localBreach?.isBreached ?? (health?.isBreached || false)}
+          <div class="mt-2 px-3 pb-2">
+            <PasswordStrength password={field.value ?? ''} showDetails={false} {isBreached} />
+          </div>
+        {/if}
       {/each}
     {/if}
   {:else if showSkeleton}
@@ -473,8 +473,12 @@
                             ? securityDashboard.items[passwordItem.id]
                             : SecurityService.checkStrength(field.value)}
                         {#if health}
-                          {@const isBreached = localBreach?.isBreached ?? (('isBreached' in health && health.isBreached) || false)}
-                          {@const breachCount = localBreach?.count ?? (('breachCount' in health && health.breachCount) || 0)}
+                          {@const isBreached =
+                            localBreach?.isBreached ??
+                            (('isBreached' in health && health.isBreached) || false)}
+                          {@const breachCount =
+                            localBreach?.count ??
+                            (('breachCount' in health && health.breachCount) || 0)}
                           <Badge
                             variant="outline"
                             class={`h-6 gap-1.5 px-2 transition-colors ${SecurityService.getStrengthBadgeClass(health.score, isBreached)}`}
@@ -555,11 +559,7 @@
                 : null}
             {@const isBreached = localBreach?.isBreached ?? (health?.isBreached || false)}
             <div class="mt-2 px-3 pb-2">
-              <PasswordStrength
-                password={field.value ?? ''}
-                showDetails={true}
-                {isBreached}
-              />
+              <PasswordStrength password={field.value ?? ''} showDetails={true} {isBreached} />
             </div>
           {/if}
         </div>
@@ -578,7 +578,7 @@
 <Dialog open={isDeleteDialogOpen} onOpenChange={(open) => (isDeleteDialogOpen = open)}>
   <DialogContent class="sm:max-w-md">
     <DialogHeader>
-      <DialogTitle class="flex items-center gap-2 text-destructive">
+      <DialogTitle class="text-destructive flex items-center gap-2">
         <Trash2 class="size-5" />
         Delete Field
       </DialogTitle>

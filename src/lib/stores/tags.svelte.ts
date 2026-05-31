@@ -35,10 +35,12 @@ class TagStore {
     try {
       const [tags, counts] = await Promise.all([
         callBackend<TagButton[]>('get_buttons'),
-        callBackend<Record<number, number>>('get_tag_counts').catch(() => ({} as Record<number, number>))
+        callBackend<Record<number, number>>('get_tag_counts').catch(
+          () => ({}) as Record<number, number>
+        )
       ]);
-      
-      this.#tags = (tags || []).map(t => ({
+
+      this.#tags = (tags || []).map((t) => ({
         ...t,
         count: counts[t.id] || 0
       }));

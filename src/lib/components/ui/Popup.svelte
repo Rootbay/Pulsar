@@ -28,7 +28,7 @@
   let dialogOpen = $state(true);
   let inputValue = $state('');
   let selectedColor = $state('#F29292');
-  
+
   const colors = [
     '#F29292',
     '#F7D775',
@@ -108,7 +108,9 @@
     <DialogHeader>
       <DialogTitle>{mode === 'create' ? 'Create New Tag' : 'Edit Tag'}</DialogTitle>
       <DialogDescription>
-        {mode === 'create' ? 'Add a new tag to organize your vault items.' : 'Update the details of your tag.'}
+        {mode === 'create'
+          ? 'Add a new tag to organize your vault items.'
+          : 'Update the details of your tag.'}
       </DialogDescription>
     </DialogHeader>
 
@@ -131,11 +133,13 @@
             <button
               type="button"
               class={cn(
-                "h-8 w-8 rounded-full border transition-all hover:scale-110 focus:outline-none focus:ring-1 focus:ring-ring focus:ring-offset-2",
-                selectedColor === color ? "border-foreground/20 scale-110 ring-1 ring-ring ring-offset-2" : "border-transparent"
+                'focus:ring-ring h-8 w-8 rounded-full border transition-all hover:scale-110 focus:ring-1 focus:ring-offset-2 focus:outline-none',
+                selectedColor === color
+                  ? 'border-foreground/20 ring-ring scale-110 ring-1 ring-offset-2'
+                  : 'border-transparent'
               )}
               style="background-color: {color}"
-              onclick={() => selectedColor = color}
+              onclick={() => (selectedColor = color)}
               aria-label="Select color {color}"
             ></button>
           {/each}
@@ -149,21 +153,21 @@
             <button
               type="button"
               class={cn(
-                "flex h-9 w-full items-center justify-center rounded-md border transition-all hover:bg-muted",
-                selectedIcon.name === icon.name 
-                  ? "border-current bg-current/10" 
-                  : "border-transparent bg-transparent text-muted-foreground opacity-70 hover:opacity-100"
+                'hover:bg-muted flex h-9 w-full items-center justify-center rounded-md border transition-all',
+                selectedIcon.name === icon.name
+                  ? 'border-current bg-current/10'
+                  : 'text-muted-foreground border-transparent bg-transparent opacity-70 hover:opacity-100'
               )}
               style={selectedIcon.name === icon.name ? `color: ${selectedColor};` : ''}
-              onclick={() => selectedIcon = icon}
+              onclick={() => (selectedIcon = icon)}
               title={icon.name}
               aria-label="Select icon {icon.name}"
             >
-              <Icon 
-                path={icon.path} 
-                size="18" 
-                viewBox="0 0 48 48" 
-                color={selectedIcon.name === icon.name ? 'currentColor' : selectedColor} 
+              <Icon
+                path={icon.path}
+                size="18"
+                viewBox="0 0 48 48"
+                color={selectedIcon.name === icon.name ? 'currentColor' : selectedColor}
               />
             </button>
           {/each}

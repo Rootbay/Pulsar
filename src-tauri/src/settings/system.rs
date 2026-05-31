@@ -510,8 +510,6 @@ pub async fn perform_autotype(
         Ok(())
     }
 
-    }
-
     #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
     {
         Err(Error::Internal(
@@ -526,7 +524,7 @@ pub fn get_active_window_title() -> Option<String> {
 
     unsafe {
         let hwnd = GetForegroundWindow();
-        if hwnd.0 == 0 {
+        if hwnd.0.is_null() {
             return None;
         }
 

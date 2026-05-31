@@ -79,12 +79,12 @@ impl PreparedPasswordItem {
         Ok(Self {
             category: helper.encrypt(&item.category)?,
             title: helper.encrypt(&item.title)?,
-            description: helper.encrypt_opt(item.description.as_ref())?,
-            img: helper.encrypt_opt(item.img.as_ref())?,
-            tags: helper.encrypt_opt(item.tags.as_ref())?,
-            username: helper.encrypt_opt(item.username.as_ref())?,
-            url: helper.encrypt_opt(item.url.as_ref())?,
-            notes: helper.encrypt_opt(item.notes.as_ref().map(|v| &**v))?,
+            description: helper.encrypt_opt(item.description.as_deref())?,
+            img: helper.encrypt_opt(item.img.as_deref())?,
+            tags: helper.encrypt_opt(item.tags.as_deref())?,
+            username: helper.encrypt_opt(item.username.as_deref())?,
+            url: helper.encrypt_opt(item.url.as_deref())?,
+            notes: helper.encrypt_opt(item.notes.as_deref())?,
             password: helper.encrypt(item.password.as_str())?,
             totp_secret: item
                 .totp_secret

@@ -42,7 +42,7 @@
 <Dialog open={dialogOpen} onOpenChange={handleOpenChange}>
   <DialogContent class="sm:max-w-md">
     <DialogHeader>
-      <DialogTitle class="flex items-center gap-2 text-destructive">
+      <DialogTitle class="text-destructive flex items-center gap-2">
         <Trash2 class="size-5" />
         Delete Password
       </DialogTitle>
@@ -63,7 +63,7 @@
           <span class="text-muted-foreground text-[10px] font-bold tracking-wider uppercase"
             >Username</span
           >
-          <p class="mt-0.5 text-sm font-mono">{item.username}</p>
+          <p class="mt-0.5 font-mono text-sm">{item.username}</p>
         </div>
       {/if}
     </div>

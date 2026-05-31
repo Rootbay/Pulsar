@@ -132,7 +132,7 @@ pub fn compute_metadata_mac(
 ) -> Result<(String, String)> {
     let mac_key = derive_metadata_mac_key(master_key)?;
     let payload = metadata_mac_payload(meta, vault_id)?;
-    let cipher = XChaCha20Poly1305::new(Key::from_slice(&mac_key));
+    let cipher = XChaCha20Poly1305::new(Key::from_slice(mac_key.as_slice()));
 
     let mut nonce_bytes = [0u8; 24];
     OsRng.fill_bytes(&mut nonce_bytes);
@@ -186,7 +186,7 @@ pub fn verify_metadata_mac(
         .map_err(|e| Error::Validation(format!("Invalid metadata MAC tag: {}", e)))?;
 
     let payload = metadata_mac_payload(meta, vault_id)?;
-    let cipher = XChaCha20Poly1305::new(Key::from_slice(&mac_key));
+    let cipher = XChaCha20Poly1305::new(Key::from_slice(mac_key.as_slice()));
     let expected_tag = cipher
         .encrypt(
             XNonce::from_slice(&nonce_bytes),

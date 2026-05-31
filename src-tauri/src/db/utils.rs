@@ -4,9 +4,8 @@ use crate::state::AppState;
 use crate::types::SecretString;
 use sqlx::SqlitePool;
 use tauri::State;
-use zeroize::Zeroizing;
 
-pub async fn get_key(state: &State<'_, AppState>) -> Result<Zeroizing<Vec<u8>>> {
+pub async fn get_key(state: &State<'_, AppState>) -> Result<crate::secmem::LockedBuffer> {
     let guard = state.key.lock().await;
     let opt = guard.clone();
     drop(guard);
@@ -41,7 +40,7 @@ impl CryptoHelper {
         self.session.encrypt(text)
     }
 
-    pub fn encrypt_opt(&self, text: Option<&String>) -> Result<Option<String>> {
+    pub fn encrypt_opt(&self, text: Option<&str>) -> Result<Option<String>> {
         text.map(|t| self.encrypt(t)).transpose()
     }
 

@@ -41,7 +41,7 @@ class ClipboardService {
     $effect.root(() => {
       $effect(() => {
         if (appState.isLocked) {
-          this.clearNow().catch(() => { });
+          this.clearNow().catch(() => {});
         }
       });
     });

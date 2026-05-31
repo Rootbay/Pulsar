@@ -25,7 +25,7 @@ use tauri_plugin_dialog::DialogExt;
 use tokio::sync::oneshot;
 use zeroize::{Zeroize, Zeroizing};
 
-async fn get_key(state: &State<'_, AppState>) -> Result<Zeroizing<Vec<u8>>> {
+async fn get_key(state: &State<'_, AppState>) -> Result<crate::secmem::LockedBuffer> {
     let guard = state.key.lock().await;
     guard.clone().ok_or(Error::VaultLocked)
 }

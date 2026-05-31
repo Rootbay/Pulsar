@@ -8,7 +8,14 @@
   import { callBackend } from '$lib/utils/backend';
   import { Input as StandardInput } from '$lib/components/ui/input';
   import { Button } from '../ui/button';
-  import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '$lib/components/ui/dialog';
+  import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle
+  } from '$lib/components/ui/dialog';
   import { Label } from '$lib/components/ui/label';
   import { cn } from '$lib/utils';
   import Icon from '$lib/components/ui/Icon.svelte';
@@ -171,13 +178,15 @@
   let attachments = $state<Attachment[]>([]);
   let isAttachmentLoading = $state(false);
 
-  const displayFields = $derived(buildDisplayFields(selectedPasswordItem, iconPaths).map(field => {
-    const option = fieldTypeOptions.find(o => o.value === field.type);
-    if (option) {
-      return { ...field, iconComponent: option.component };
-    }
-    return field;
-  }));
+  const displayFields = $derived(
+    buildDisplayFields(selectedPasswordItem, iconPaths).map((field) => {
+      const option = fieldTypeOptions.find((o) => o.value === field.type);
+      if (option) {
+        return { ...field, iconComponent: option.component };
+      }
+      return field;
+    })
+  );
   const filteredDisplayFields = $derived(
     displayFields.filter((field) => !isTotpDisplayField(field))
   );
@@ -484,7 +493,9 @@
       }
       if (normalizedCurrent.url === '') normalizedCurrent.url = null;
 
-      const nextHasUnsavedChanges = JSON.stringify(normalizedCurrent) !== JSON.stringify(normalizedOriginal) || (pendingTagOrder !== null && pendingTagOrder !== (originalPasswordItem?.tags ?? ''));
+      const nextHasUnsavedChanges =
+        JSON.stringify(normalizedCurrent) !== JSON.stringify(normalizedOriginal) ||
+        (pendingTagOrder !== null && pendingTagOrder !== (originalPasswordItem?.tags ?? ''));
 
       if (hasUnsavedChanges !== nextHasUnsavedChanges) {
         hasUnsavedChanges = nextHasUnsavedChanges;
@@ -1187,20 +1198,18 @@
       </div>
     </div>
   {/if}
-  <Dialog open={isAddFieldDialogOpen} onOpenChange={(open) => isAddFieldDialogOpen = open}>
+  <Dialog open={isAddFieldDialogOpen} onOpenChange={(open) => (isAddFieldDialogOpen = open)}>
     <DialogContent class="sm:max-w-md">
       <DialogHeader>
         <DialogTitle>Add Custom Field</DialogTitle>
-        <DialogDescription>
-          Choose a type and name for your new field.
-        </DialogDescription>
+        <DialogDescription>Choose a type and name for your new field.</DialogDescription>
       </DialogHeader>
       <div class="grid gap-4 py-4">
         <div class="grid gap-2">
           <Label for="new-field-name">Field Name</Label>
-          <StandardInput 
-            id="new-field-name" 
-            placeholder="e.g. Security Question" 
+          <StandardInput
+            id="new-field-name"
+            placeholder="e.g. Security Question"
             bind:value={newFieldName}
           />
         </div>
@@ -1211,21 +1220,26 @@
               <button
                 type="button"
                 class={cn(
-                  "flex flex-col items-center justify-center gap-1.5 rounded-md border p-2 text-[10px] transition-all hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
-                  newFieldType === option.value 
-                    ? "border-primary bg-primary/10 ring-1 ring-primary text-primary" 
-                    : "border-transparent bg-transparent text-muted-foreground opacity-70 hover:opacity-100 hover:bg-muted"
+                  'hover:bg-muted focus:ring-ring flex flex-col items-center justify-center gap-1.5 rounded-md border p-2 text-[10px] transition-all focus:ring-2 focus:ring-offset-2 focus:outline-none',
+                  newFieldType === option.value
+                    ? 'border-primary bg-primary/10 ring-primary text-primary ring-1'
+                    : 'text-muted-foreground hover:bg-muted border-transparent bg-transparent opacity-70 hover:opacity-100'
                 )}
-                onclick={() => newFieldType = option.value}
+                onclick={() => (newFieldType = option.value)}
                 title={option.label}
               >
                 {#if option.component}
                   {@const IconComp = option.component}
                   <IconComp class="size-5" />
                 {:else}
-                  <Icon path={iconPaths[option.icon]} size="20" viewBox="0 0 48 48" color="currentColor" />
+                  <Icon
+                    path={iconPaths[option.icon]}
+                    size="20"
+                    viewBox="0 0 48 48"
+                    color="currentColor"
+                  />
                 {/if}
-                <span class="font-medium truncate w-full text-center">{option.label}</span>
+                <span class="w-full truncate text-center font-medium">{option.label}</span>
               </button>
             {/each}
           </div>

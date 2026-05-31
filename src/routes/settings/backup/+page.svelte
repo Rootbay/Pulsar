@@ -275,7 +275,9 @@
     if (provider === 'webdav') {
       openModal({
         title: t('Configure WebDAV'),
-        description: t('Provide credentials for your WebDAV connection. All data is encrypted locally before upload.'),
+        description: t(
+          'Provide credentials for your WebDAV connection. All data is encrypted locally before upload.'
+        ),
         requiresPassphrase: false,
         requiresMasterPassword: false,
         confirmLabel: t('Save & Sync'),
@@ -526,9 +528,13 @@
       <Separator class="bg-border/60" />
 
       {#if backupSettings.syncMode !== 'off' && backupSettings.selectedProvider === 'webdav'}
-        <div class="border-border/60 bg-muted/5 flex items-center justify-between rounded-xl border p-4">
+        <div
+          class="border-border/60 bg-muted/5 flex items-center justify-between rounded-xl border p-4"
+        >
           <div>
-            <p class="text-foreground text-sm font-semibold">WebDAV Database Synchronization (E2EE)</p>
+            <p class="text-foreground text-sm font-semibold">
+              WebDAV Database Synchronization (E2EE)
+            </p>
             <p class="text-muted-foreground mt-0.5 text-xs">
               Last Synced: {syncStore.lastSyncTime || backupSettings.webdavSyncLastTime || 'Never'}
             </p>
@@ -659,7 +665,9 @@
               id="webdav-url"
               placeholder="https://example.com/nextcloud/remote.php/dav/files/user/"
               value={settings.state.backup.webdavUrl}
-              oninput={(e) => { settings.state.backup.webdavUrl = (e.target as HTMLInputElement).value; }}
+              oninput={(e) => {
+                settings.state.backup.webdavUrl = (e.target as HTMLInputElement).value;
+              }}
             />
           </div>
           <div class="space-y-1">
@@ -668,7 +676,9 @@
               id="webdav-username"
               placeholder="Enter WebDAV username"
               value={settings.state.backup.webdavUsername}
-              oninput={(e) => { settings.state.backup.webdavUsername = (e.target as HTMLInputElement).value; }}
+              oninput={(e) => {
+                settings.state.backup.webdavUsername = (e.target as HTMLInputElement).value;
+              }}
             />
           </div>
           <div class="space-y-1">
@@ -678,7 +688,9 @@
               type="password"
               placeholder="Enter WebDAV app password"
               value={settings.state.backup.webdavPassword}
-              oninput={(e) => { settings.state.backup.webdavPassword = (e.target as HTMLInputElement).value; }}
+              oninput={(e) => {
+                settings.state.backup.webdavPassword = (e.target as HTMLInputElement).value;
+              }}
             />
           </div>
           <div class="space-y-1">
@@ -687,7 +699,9 @@
               id="webdav-folder"
               placeholder="/PulsarSync"
               value={settings.state.backup.webdavSyncFolder}
-              oninput={(e) => { settings.state.backup.webdavSyncFolder = (e.target as HTMLInputElement).value; }}
+              oninput={(e) => {
+                settings.state.backup.webdavSyncFolder = (e.target as HTMLInputElement).value;
+              }}
             />
           </div>
         </div>

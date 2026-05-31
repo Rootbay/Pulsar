@@ -3,7 +3,7 @@ use crate::auth::crypto_utils::*;
 use crate::auth::metadata::*;
 use crate::auth::types::*;
 use crate::auth::*;
-use crate::encryption::{decrypt, encrypt};
+use crate::encryption::{decrypt, decrypt_zeroized, encrypt};
 use crate::error::{Error, Result};
 use crate::security::register_device;
 use crate::state::{AppState, PendingUnlock};
@@ -400,7 +400,7 @@ async fn connect_with_timeout(
     }
 }
 
-async fn finalize_unlock(state: &State<'_, AppState>, key_z: Zeroizing<Vec<u8>>) -> Result<()> {
+async fn finalize_unlock(state: &State<'_, AppState>, key_z: crate::secmem::LockedBuffer) -> Result<()> {
     let db_path = get_db_path(state).await?;
 
     {
@@ -412,7 +412,7 @@ async fn finalize_unlock(state: &State<'_, AppState>, key_z: Zeroizing<Vec<u8>>)
 
     tokio::time::sleep(Duration::from_millis(50)).await;
 
-    let new_pool = crate::db::init_db_lazy(db_path.as_path(), Some(key_z.as_slice()), false)
+    let new_pool = crate::db::init_db_lazy(db_path.as_path(), Some(&key_z), false)
         .await
         .map_err(Error::Internal)?;
 
@@ -428,14 +428,12 @@ async fn finalize_unlock(state: &State<'_, AppState>, key_z: Zeroizing<Vec<u8>>)
 
     {
         let mut key_guard = state.key.lock().await;
-        *key_guard = Some(key_z.clone());
+        *key_guard = Some(key_z);
     }
 
     {
         let mut pending_guard = state.pending_key.lock().await;
-        if let Some(mut key) = pending_guard.take() {
-            key.key.zeroize();
-        }
+        let _ = pending_guard.take();
     }
 
     let state_clone = state.inner().clone();
@@ -451,8 +449,7 @@ async fn finalize_unlock(state: &State<'_, AppState>, key_z: Zeroizing<Vec<u8>>)
 }
 
 #[tauri::command]
-pub async fn set_master_password(state: State<'_, AppState>, password: String) -> Result<()> {
-    let password = Zeroizing::new(password);
+pub async fn set_master_password(state: State<'_, AppState>, password: crate::types::SecretString) -> Result<()> {
     validate_new_password(password.as_str())?;
     let _rekey_lock = tokio::time::timeout(Duration::from_secs(15), state.rekey.lock())
         .await
@@ -465,20 +462,16 @@ pub async fn set_master_password(state: State<'_, AppState>, password: String) -
     let argon_params = Argon2ParamsConfig::default();
 
     let salt_clone = salt.to_vec();
-    let password_clone = password.clone();
+    let password_clone = crate::secmem::LockedString::new(password.as_str());
     let argon_params_clone = argon_params.clone();
 
-    let mut derived_key = tauri::async_runtime::spawn_blocking(move || {
+    let key_z = tauri::async_runtime::spawn_blocking(move || {
         derive_key(password_clone.as_str(), &salt_clone, &argon_params_clone)
     })
     .await
     .map_err(|e| Error::Internal(format!("Runtime error: {}", e)))??;
 
-    drop(password);
-    let key_z = Zeroizing::new(derived_key.to_vec());
-    derived_key.zeroize();
-
-    let cipher = XChaCha20Poly1305::new(Key::from_slice(&key_z));
+    let cipher = XChaCha20Poly1305::new(Key::from_slice(key_z.as_slice()));
     let mut nonce = [0u8; 24];
     OsRng.fill_bytes(&mut nonce);
 
@@ -509,7 +502,7 @@ pub async fn set_master_password(state: State<'_, AppState>, password: String) -
 
     tokio::time::sleep(Duration::from_millis(50)).await;
 
-    let hex_key = hex::encode(key_z.as_slice());
+    let mut hex_key = hex::encode(key_z.as_slice());
 
     let temp_db_path = db_path.with_extension("tmp_psec");
     if temp_db_path.exists() {
@@ -525,6 +518,8 @@ pub async fn set_master_password(state: State<'_, AppState>, password: String) -
     match connect_with_timeout(&connect_options, Duration::from_secs(10)).await {
         Ok(mut conn) => {
             attach_encrypted_db(&mut conn, &temp_db_path, &hex_key).await?;
+            hex_key.zeroize();
+            
             sqlx::query("SELECT sqlcipher_export('encrypted')")
                 .execute(&mut conn)
                 .await?;
@@ -535,7 +530,7 @@ pub async fn set_master_password(state: State<'_, AppState>, password: String) -
             conn.close().await?;
 
             {
-                let pool = crate::db::init_db_lazy(&temp_db_path, Some(key_z.as_slice()), false)
+                let pool = crate::db::init_db_lazy(&temp_db_path, Some(&key_z), false)
                     .await
                     .map_err(Error::Internal)?;
                 if let Err(e) = sqlx::migrate!().run(&pool).await {
@@ -554,6 +549,7 @@ pub async fn set_master_password(state: State<'_, AppState>, password: String) -
             write_password_metadata(db_path.as_path(), &metadata, Some(key_z.as_slice())).await?;
         }
         Err(e) => {
+            hex_key.zeroize();
             last_err = Some(Error::Database(e));
         }
     }
@@ -570,8 +566,7 @@ pub async fn set_master_password(state: State<'_, AppState>, password: String) -
 }
 
 #[tauri::command]
-pub async fn unlock(state: State<'_, AppState>, password: String) -> Result<UnlockResponse> {
-    let password = Zeroizing::new(password);
+pub async fn unlock(state: State<'_, AppState>, password: crate::types::SecretString) -> Result<UnlockResponse> {
     let _unlock_permit = state
         .unlock_guard
         .acquire()
@@ -596,18 +591,16 @@ pub async fn unlock(state: State<'_, AppState>, password: String) -> Result<Unlo
     validate_argon_params(&argon_params)?;
 
     let salt_clone = salt.to_vec();
-    let password_clone = password.clone();
+    let password_clone = crate::secmem::LockedString::new(password.as_str());
     let argon_params_clone = argon_params.clone();
 
-    let derived_key = tauri::async_runtime::spawn_blocking(move || {
+    let key_z = tauri::async_runtime::spawn_blocking(move || {
         derive_key(password_clone.as_str(), &salt_clone, &argon_params_clone)
     })
     .await
     .map_err(|e| Error::Internal(format!("Runtime error: {}", e)))??;
 
-    drop(password);
-    let key_z = Zeroizing::new(derived_key.to_vec());
-    let cipher = XChaCha20Poly1305::new(Key::from_slice(&key_z));
+    let cipher = XChaCha20Poly1305::new(Key::from_slice(key_z.as_slice()));
 
     let mut decrypted = match cipher.decrypt(XNonce::from_slice(&nonce), ciphertext.as_ref()) {
         Ok(value) => value,
@@ -701,7 +694,7 @@ pub async fn unlock(state: State<'_, AppState>, password: String) -> Result<Unlo
         {
             let mut pending_guard = state.pending_key.lock().await;
             *pending_guard = Some(PendingUnlock {
-                key: key_z.clone(),
+                key: key_z,
                 created_at: Instant::now(),
                 attempts: 0,
             });
@@ -710,7 +703,7 @@ pub async fn unlock(state: State<'_, AppState>, password: String) -> Result<Unlo
             totp_required: true,
         })
     } else {
-        finalize_unlock(&state, key_z.clone()).await?;
+        finalize_unlock(&state, key_z).await?;
         Ok(UnlockResponse {
             totp_required: false,
         })
@@ -718,7 +711,7 @@ pub async fn unlock(state: State<'_, AppState>, password: String) -> Result<Unlo
 }
 
 #[tauri::command]
-pub async fn verify_login_totp(state: State<'_, AppState>, token: String) -> Result<()> {
+pub async fn verify_login_totp(state: State<'_, AppState>, token: crate::types::SecretString) -> Result<()> {
     let pending_key = {
         let mut guard = state.pending_key.lock().await;
         let pending = guard
@@ -726,18 +719,14 @@ pub async fn verify_login_totp(state: State<'_, AppState>, token: String) -> Res
             .ok_or_else(|| Error::Internal("No pending unlock operation".to_string()))?;
 
         if pending.created_at.elapsed() > PENDING_TOTP_TTL {
-            if let Some(mut expired) = guard.take() {
-                expired.key.zeroize();
-            }
+            let _ = guard.take();
             return Err(Error::Validation(
                 "TOTP session expired. Please unlock again.".to_string(),
             ));
         }
 
         if pending.attempts >= MAX_TOTP_ATTEMPTS {
-            if let Some(mut exhausted) = guard.take() {
-                exhausted.key.zeroize();
-            }
+            let _ = guard.take();
             return Err(Error::Validation(
                 "Too many invalid attempts. Please unlock again.".to_string(),
             ));
@@ -792,18 +781,16 @@ pub async fn verify_login_totp(state: State<'_, AppState>, token: String) -> Res
     }
 
     conn.close().await?;
-    finalize_unlock(&state, pending_key.clone()).await?;
+    finalize_unlock(&state, pending_key).await?;
     Ok(())
 }
 
 #[tauri::command]
 pub async fn rotate_master_password(
     state: State<'_, AppState>,
-    current_password: String,
-    new_password: String,
+    current_password: crate::types::SecretString,
+    new_password: crate::types::SecretString,
 ) -> Result<()> {
-    let current_password = Zeroizing::new(current_password);
-    let new_password = Zeroizing::new(new_password);
     validate_password_inputs(current_password.as_str(), new_password.as_str())?;
 
     let _rekey_lock = state.rekey.lock().await;
@@ -816,10 +803,10 @@ pub async fn rotate_master_password(
     validate_argon_params(&argon_params)?;
 
     let salt_clone = salt.to_vec();
-    let current_password_clone = current_password.clone();
+    let current_password_clone = crate::secmem::LockedString::new(current_password.as_str());
     let argon_params_clone = argon_params.clone();
 
-    let mut current_key_bytes = tauri::async_runtime::spawn_blocking(move || {
+    let current_key_z = tauri::async_runtime::spawn_blocking(move || {
         derive_key(
             current_password_clone.as_str(),
             &salt_clone,
@@ -829,10 +816,7 @@ pub async fn rotate_master_password(
     .await
     .map_err(|e| Error::Internal(format!("Runtime error: {}", e)))??;
 
-    let current_key_z = Zeroizing::new(current_key_bytes.to_vec());
-    current_key_bytes.zeroize();
-
-    let cipher = XChaCha20Poly1305::new(Key::from_slice(&current_key_z));
+    let cipher = XChaCha20Poly1305::new(Key::from_slice(current_key_z.as_slice()));
     let mut decrypted = cipher
         .decrypt(XNonce::from_slice(&nonce), ciphertext.as_ref())
         .map_err(|_| Error::Validation("Invalid current password".to_string()))?;
@@ -846,10 +830,10 @@ pub async fn rotate_master_password(
     OsRng.fill_bytes(&mut new_salt);
 
     let new_salt_clone = new_salt.to_vec();
-    let new_password_clone = new_password.clone();
+    let new_password_clone = crate::secmem::LockedString::new(new_password.as_str());
     let argon_params_new_clone = argon_params.clone();
 
-    let mut new_key_bytes = tauri::async_runtime::spawn_blocking(move || {
+    let new_key_z = tauri::async_runtime::spawn_blocking(move || {
         derive_key(
             new_password_clone.as_str(),
             &new_salt_clone,
@@ -859,13 +843,10 @@ pub async fn rotate_master_password(
     .await
     .map_err(|e| Error::Internal(format!("Runtime error: {}", e)))??;
 
-    let new_key_z = Zeroizing::new(new_key_bytes.to_vec());
-    new_key_bytes.zeroize();
-
     let mut new_nonce = [0u8; 24];
     OsRng.fill_bytes(&mut new_nonce);
 
-    let new_cipher = XChaCha20Poly1305::new(Key::from_slice(&new_key_z));
+    let new_cipher = XChaCha20Poly1305::new(Key::from_slice(new_key_z.as_slice()));
     let new_ciphertext = new_cipher
         .encrypt(XNonce::from_slice(&new_nonce), PASSWORD_CHECK_PLAINTEXT)
         .map_err(|e| Error::Encryption(format!("Encryption failed: {}", e)))?;
@@ -881,7 +862,7 @@ pub async fn rotate_master_password(
     tokio::time::sleep(Duration::from_millis(1000)).await;
 
     let hex_old_key = hex::encode(current_key_z.as_slice());
-    let hex_new_key = hex::encode(new_key_z.as_slice());
+    let mut hex_new_key = hex::encode(new_key_z.as_slice());
 
     let temp_db_path = db_path.with_extension("tmp_rotate_psec");
     if temp_db_path.exists() {
@@ -899,6 +880,8 @@ pub async fn rotate_master_password(
         match connect_with_timeout(&connect_options, Duration::from_secs(15)).await {
             Ok(mut conn) => {
                 attach_encrypted_db(&mut conn, &temp_db_path, &hex_new_key).await?;
+                hex_new_key.zeroize();
+                
                 sqlx::query("SELECT sqlcipher_export('encrypted')")
                     .execute(&mut conn)
                     .await?;
@@ -988,12 +971,11 @@ pub async fn get_argon2_params(state: State<'_, AppState>) -> Result<Argon2Param
 #[tauri::command]
 pub async fn update_argon2_params(
     state: State<'_, AppState>,
-    current_password: String,
+    current_password: crate::types::SecretString,
     memory_kib: u32,
     time_cost: u32,
     parallelism: u32,
 ) -> Result<()> {
-    let current_password = Zeroizing::new(current_password);
     if current_password.trim().is_empty() {
         return Err(Error::Validation(
             "Current password is required.".to_string(),
@@ -1016,10 +998,10 @@ pub async fn update_argon2_params(
     let current_params = metadata.argon2_params();
 
     let salt_clone = salt.to_vec();
-    let current_password_clone = current_password.clone();
+    let current_password_clone = crate::secmem::LockedString::new(current_password.as_str());
     let current_params_clone = current_params.clone();
 
-    let mut current_key_bytes = tauri::async_runtime::spawn_blocking(move || {
+    let current_key_z = tauri::async_runtime::spawn_blocking(move || {
         derive_key(
             current_password_clone.as_str(),
             &salt_clone,
@@ -1029,10 +1011,7 @@ pub async fn update_argon2_params(
     .await
     .map_err(|e| Error::Internal(format!("Runtime error: {}", e)))??;
 
-    let current_key_z = Zeroizing::new(current_key_bytes.to_vec());
-    current_key_bytes.zeroize();
-
-    let cipher = XChaCha20Poly1305::new(Key::from_slice(&current_key_z));
+    let cipher = XChaCha20Poly1305::new(Key::from_slice(current_key_z.as_slice()));
     let mut decrypted = cipher
         .decrypt(XNonce::from_slice(&nonce), ciphertext.as_ref())
         .map_err(|_| Error::Validation("Invalid current password".to_string()))?;
@@ -1046,10 +1025,10 @@ pub async fn update_argon2_params(
     OsRng.fill_bytes(&mut new_salt);
 
     let new_salt_clone = new_salt.to_vec();
-    let current_password_new_clone = current_password.clone();
+    let current_password_new_clone = crate::secmem::LockedString::new(current_password.as_str());
     let new_params_clone = new_params.clone();
 
-    let mut new_key_bytes = tauri::async_runtime::spawn_blocking(move || {
+    let new_key_z = tauri::async_runtime::spawn_blocking(move || {
         derive_key(
             current_password_new_clone.as_str(),
             &new_salt_clone,
@@ -1059,13 +1038,10 @@ pub async fn update_argon2_params(
     .await
     .map_err(|e| Error::Internal(format!("Runtime error: {}", e)))??;
 
-    let new_key_z = Zeroizing::new(new_key_bytes.to_vec());
-    new_key_bytes.zeroize();
-
     let mut new_nonce = [0u8; 24];
     OsRng.fill_bytes(&mut new_nonce);
 
-    let new_cipher = XChaCha20Poly1305::new(Key::from_slice(&new_key_z));
+    let new_cipher = XChaCha20Poly1305::new(Key::from_slice(new_key_z.as_slice()));
     let new_ciphertext = new_cipher
         .encrypt(XNonce::from_slice(&new_nonce), PASSWORD_CHECK_PLAINTEXT)
         .map_err(|e| Error::Encryption(format!("Encryption failed: {}", e)))?;
@@ -1150,13 +1126,12 @@ pub async fn update_argon2_params(
 }
 
 #[tauri::command]
-pub async fn verify_master_password(state: State<'_, AppState>, password: String) -> Result<bool> {
-    crate::auth::verify_master_password_internal(&state, &password).await
+pub async fn verify_master_password(state: State<'_, AppState>, password: crate::types::SecretString) -> Result<bool> {
+    crate::auth::verify_master_password_internal(&state, password.as_str()).await
 }
 
 #[tauri::command]
-pub async fn configure_login_totp(state: State<'_, AppState>, secret_b32: String) -> Result<()> {
-    let secret_b32 = Zeroizing::new(secret_b32);
+pub async fn configure_login_totp(state: State<'_, AppState>, secret_b32: crate::types::SecretString) -> Result<()> {
     let key_opt = {
         let guard = state.key.lock().await;
         guard.clone()
@@ -1164,7 +1139,7 @@ pub async fn configure_login_totp(state: State<'_, AppState>, secret_b32: String
 
     let key_z = key_opt.ok_or(Error::VaultLocked)?;
 
-    Secret::Encoded(secret_b32.to_string())
+    Secret::Encoded(secret_b32.as_str().to_string())
         .to_bytes()
         .map_err(|e| Error::Validation(format!("Invalid TOTP secret: {}", e)))?;
 
@@ -1201,7 +1176,7 @@ pub async fn is_login_totp_configured(state: State<'_, AppState>) -> Result<bool
 }
 
 #[tauri::command]
-pub async fn get_login_totp_secret(state: State<'_, AppState>) -> Result<Option<String>> {
+pub async fn get_login_totp_secret(state: State<'_, AppState>) -> Result<Option<crate::types::SecretString>> {
     let key_opt = {
         let guard = state.key.lock().await;
         guard.clone()
@@ -1215,8 +1190,8 @@ pub async fn get_login_totp_secret(state: State<'_, AppState>) -> Result<Option<
             .await?;
 
     if let Some(enc) = secret_enc {
-        let decrypted = decrypt(&enc, key_z.as_slice())?;
-        Ok(Some(decrypted))
+        let decrypted = decrypt_zeroized(&enc, key_z.as_slice())?;
+        Ok(Some(crate::types::SecretString::from_zeroized(decrypted)))
     } else {
         Ok(None)
     }
@@ -1276,9 +1251,8 @@ pub async fn is_master_password_configured(state: State<'_, AppState>) -> Result
 pub async fn enable_biometrics(
     app: AppHandle,
     state: State<'_, AppState>,
-    password: String,
+    password: crate::types::SecretString,
 ) -> Result<()> {
-    let password = Zeroizing::new(password);
     let db_path = get_db_path(&state).await?;
     let metadata = match read_password_metadata(db_path.as_path()).await? {
         Some(meta) => Some(meta),
@@ -1293,18 +1267,16 @@ pub async fn enable_biometrics(
     let argon_params = meta.argon2_params();
 
     let salt_clone = salt.to_vec();
-    let password_clone = password.clone();
+    let password_clone = crate::secmem::LockedString::new(password.as_str());
     let argon_params_clone = argon_params.clone();
 
-    let mut derived_key = tauri::async_runtime::spawn_blocking(move || {
+    let key_z = tauri::async_runtime::spawn_blocking(move || {
         derive_key(password_clone.as_str(), &salt_clone, &argon_params_clone)
     })
     .await
     .map_err(|e| Error::Internal(format!("Runtime error: {}", e)))??;
 
-    let key_z = Zeroizing::new(derived_key.to_vec());
-    derived_key.zeroize();
-    let cipher = XChaCha20Poly1305::new(Key::from_slice(&key_z));
+    let cipher = XChaCha20Poly1305::new(Key::from_slice(key_z.as_slice()));
 
     let mut decrypted = cipher
         .decrypt(XNonce::from_slice(&nonce), ciphertext.as_ref())
@@ -1335,5 +1307,6 @@ pub async fn unlock_with_biometrics(
     state: State<'_, AppState>,
 ) -> Result<UnlockResponse> {
     let master_password = get_biometric_master_password(&app, &state).await?;
-    unlock(state, master_password).await
+    let secret_password = crate::types::SecretString::new(master_password);
+    unlock(state, secret_password).await
 }

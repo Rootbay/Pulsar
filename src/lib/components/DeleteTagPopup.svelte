@@ -42,7 +42,7 @@
 <Dialog open={dialogOpen} onOpenChange={handleOpenChange}>
   <DialogContent class="sm:max-w-md">
     <DialogHeader>
-      <DialogTitle class="flex items-center gap-2 text-destructive">
+      <DialogTitle class="text-destructive flex items-center gap-2">
         <Trash2 class="size-5" />
         Delete Tag
       </DialogTitle>
@@ -64,15 +64,16 @@
         >
         <p class="mt-0.5 text-sm">
           {#if tag.count && tag.count > 0}
-            Used by <span class="font-bold text-foreground">{tag.count}</span> password{tag.count === 1 ? '' : 's'}.
+            Used by <span class="text-foreground font-bold">{tag.count}</span>
+            password{tag.count === 1 ? '' : 's'}.
           {:else}
             Not currently used.
           {/if}
         </p>
       </div>
       {#if tag.count && tag.count > 0}
-        <div class="rounded-md bg-destructive/10 p-2 text-xs text-destructive">
-            Deleting this tag will remove it from all associated passwords.
+        <div class="bg-destructive/10 text-destructive rounded-md p-2 text-xs">
+          Deleting this tag will remove it from all associated passwords.
         </div>
       {/if}
     </div>

@@ -75,8 +75,6 @@
   let navInnerRef: HTMLElement | null = null;
   let highlightTimer: ReturnType<typeof setTimeout> | null = null;
 
-
-
   const headerInfo = $derived.by(() => {
     if (appState.selectedTag) {
       const tagButton = buttons.find((b) => b.text === appState.selectedTag);
@@ -437,7 +435,9 @@
         <div class="topControls" role="region" aria-label="Navigation controls">
           <div class="mb-4 flex w-full items-center justify-between px-1">
             <h2 class="text-lg font-semibold">{headerInfo.title}</h2>
-            <span class="flex h-6 items-center justify-center rounded-full bg-secondary px-2.5 text-base text-secondary-foreground">
+            <span
+              class="bg-secondary text-secondary-foreground flex h-6 items-center justify-center rounded-full px-2.5 text-base"
+            >
               {headerInfo.count}
             </span>
           </div>
@@ -477,7 +477,7 @@
 
           <Button
             type="button"
-            class="w-full justify-center gap-2 h-10 text-base border-0 bg-secondary/50 hover:bg-secondary/80"
+            class="bg-secondary/50 hover:bg-secondary/80 h-10 w-full justify-center gap-2 border-0 text-base"
             variant="outline"
             onclick={handleCreateEntry}
           >
@@ -692,8 +692,6 @@
     padding: 0 5px;
     box-sizing: border-box;
   }
-
-
 
   .sectionTitle {
     margin-left: 0;

@@ -2,6 +2,6 @@
 target-dir = "target"
 
 [env]
-OPENSSL_DIR = "C:/Users/devver/openssl"
-OPENSSL_LIB_DIR = "C:/Users/devver/openssl/lib"
-OPENSSL_INCLUDE_DIR = "C:/Users/devver/openssl/include"
+OPENSSL_DIR = "C:/Users/hellich/scoop/apps/openssl/current"
+OPENSSL_LIB_DIR = "C:/Users/hellich/scoop/apps/openssl/current/lib"
+OPENSSL_INCLUDE_DIR = "C:/Users/hellich/scoop/apps/openssl/current/include"

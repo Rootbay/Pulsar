@@ -31,7 +31,7 @@
   let iconSrc = $state<string | null>(null);
   let hasError = $state(false);
   let pulseActive = $state(false);
-  
+
   // Standardize size for all variants to ensure perfect centering
   const innerIconSize = 19;
 
@@ -95,7 +95,7 @@
         prevColor = fallbackColor;
       } else if (prevColor !== fallbackColor) {
         prevColor = fallbackColor;
-        
+
         if (!pulseActive) {
           pulseActive = true;
           setTimeout(() => {
@@ -112,7 +112,10 @@
   class:list-variant={variant === 'list'}
   class:has-icon={!hasError && iconSrc}
   class:color-pulse={pulseActive}
-  style="--favicon-size: {size}px; --tag-color: {fallbackColor}; --bg-color: {fallbackColor === '#94a3b8' ? '#ffffff' : fallbackColor};"
+  style="--favicon-size: {size}px; --tag-color: {fallbackColor}; --bg-color: {fallbackColor ===
+  '#94a3b8'
+    ? '#ffffff'
+    : fallbackColor};"
 >
   {#if hasError || !iconSrc}
     <div class="tag-icon-bg"></div>
@@ -190,8 +193,14 @@
   }
 
   @keyframes smoothIconPulse {
-    0% { transform: scale(1); }
-    30% { transform: scale(1.18); }
-    100% { transform: scale(1); }
+    0% {
+      transform: scale(1);
+    }
+    30% {
+      transform: scale(1.18);
+    }
+    100% {
+      transform: scale(1);
+    }
   }
 </style>

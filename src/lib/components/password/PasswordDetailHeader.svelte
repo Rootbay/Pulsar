@@ -65,7 +65,7 @@
     if (selectedPasswordItem && prevColor !== displayColor) {
       const oldColor = prevColor;
       prevColor = displayColor;
-      
+
       if (oldColor !== null && !pulse) {
         pulse = true;
         setTimeout(() => {
@@ -135,36 +135,38 @@
       {/if}
 
       {#if !isEditing}
-        <Button 
-          variant="ghost" 
-          size="icon" 
-          class="h-10 w-10 text-muted-foreground hover:text-foreground"
+        <Button
+          variant="ghost"
+          size="icon"
+          class="text-muted-foreground hover:text-foreground h-10 w-10"
           onclick={handleAutoType}
           title="Auto-Type"
         >
           <Keyboard class="size-5" />
         </Button>
       {/if}
-      
+
       <div class="relative">
-        <Button 
-          variant="ghost" 
-          size="icon" 
-          class="h-10 w-10 text-muted-foreground hover:text-foreground"
+        <Button
+          variant="ghost"
+          size="icon"
+          class="text-muted-foreground hover:text-foreground h-10 w-10"
           onclick={() => (showMoreDropdown = !showMoreDropdown)}
         >
           <Ellipsis class="size-6" />
         </Button>
-        
+
         {#if showMoreDropdown}
-          <div 
-            class="fixed inset-0 z-40" 
+          <div
+            class="fixed inset-0 z-40"
             role="presentation"
-            onclick={() => showMoreDropdown = false} 
+            onclick={() => (showMoreDropdown = false)}
           ></div>
-          <div class="absolute right-0 top-full mt-1 z-50 min-w-[140px] overflow-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-md">
+          <div
+            class="bg-popover text-popover-foreground absolute top-full right-0 z-50 mt-1 min-w-[140px] overflow-hidden rounded-md border p-1 shadow-md"
+          >
             <button
-              class="relative flex w-full cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors hover:bg-accent hover:text-accent-foreground"
+              class="hover:bg-accent hover:text-accent-foreground relative flex w-full cursor-pointer items-center rounded-sm px-2 py-1.5 text-sm transition-colors outline-none select-none"
               onclick={() => {
                 enterEditMode();
                 showMoreDropdown = false;
@@ -173,7 +175,7 @@
               Edit Entry
             </button>
             <button
-              class="relative flex w-full cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors hover:bg-destructive/10 hover:text-destructive text-destructive"
+              class="hover:bg-destructive/10 hover:text-destructive text-destructive relative flex w-full cursor-pointer items-center rounded-sm px-2 py-1.5 text-sm transition-colors outline-none select-none"
               onclick={() => {
                 onRemoveEntry?.(selectedPasswordItem?.id);
                 showMoreDropdown = false;
@@ -243,8 +245,17 @@
   }
 
   @keyframes smoothGlowPulse {
-    0% { opacity: 0; transform: translateY(-50%) scale(0.85); }
-    30% { opacity: 0.45; transform: translateY(-50%) scale(1.25); }
-    100% { opacity: 0; transform: translateY(-50%) scale(1.05); }
+    0% {
+      opacity: 0;
+      transform: translateY(-50%) scale(0.85);
+    }
+    30% {
+      opacity: 0.45;
+      transform: translateY(-50%) scale(1.25);
+    }
+    100% {
+      opacity: 0;
+      transform: translateY(-50%) scale(1.05);
+    }
   }
 </style>

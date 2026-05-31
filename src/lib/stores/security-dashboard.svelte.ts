@@ -100,7 +100,7 @@ class SecurityDashboardStore {
     const result = SecurityService.checkStrength(item.password, userInputs);
 
     const currentHealth = this.#state.items[item.id] || { isBreached: null, breachCount: 0 };
-    
+
     // Guard against unnecessary updates that could cause infinite loops in Svelte 5 effects
     if (
       currentHealth.score === result.score &&
@@ -126,7 +126,7 @@ class SecurityDashboardStore {
     const count = await SecurityService.checkBreach(item.password);
 
     const current = this.#state.items[item.id];
-    if (current && (current.isBreached !== (count > 0) || current.breachCount !== count)) {
+    if (current && (current.isBreached !== count > 0 || current.breachCount !== count)) {
       this.#state.items[item.id] = {
         ...current,
         isBreached: count > 0,

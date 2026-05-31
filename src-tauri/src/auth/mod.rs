@@ -119,7 +119,6 @@ pub async fn verify_master_password_internal(
         Key, XChaCha20Poly1305, XNonce,
     };
     use subtle::ConstantTimeEq;
-    use zeroize::Zeroizing;
 
     const PASSWORD_CHECK_PLAINTEXT: &[u8] = b"pulsar-password-check";
 
@@ -135,11 +134,8 @@ pub async fn verify_master_password_internal(
     let (salt, nonce, ciphertext) = decode_metadata(&metadata)?;
     let argon_params = metadata.argon2_params();
 
-    let mut derived_key = derive_key(password, &salt, &argon_params)?;
-    let key_z = Zeroizing::new(derived_key.to_vec());
-    derived_key.zeroize();
-
-    let cipher = XChaCha20Poly1305::new(Key::from_slice(&key_z));
+    let derived_key = derive_key(password, &salt, &argon_params)?;
+    let cipher = XChaCha20Poly1305::new(Key::from_slice(derived_key.as_slice()));
     let mut decrypted = match cipher.decrypt(XNonce::from_slice(&nonce), ciphertext.as_ref()) {
         Ok(value) => value,
         Err(_) => return Ok(false),

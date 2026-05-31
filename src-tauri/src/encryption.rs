@@ -125,17 +125,17 @@ pub fn decrypt_bytes(encrypted_data: &[u8], key: &[u8]) -> Result<Vec<u8>> {
 
 pub struct CipherSession {
     cipher: XChaCha20Poly1305,
-    key: Vec<u8>,
+    key: crate::secmem::LockedBuffer,
 }
 
 impl CipherSession {
     pub fn new(key: &[u8]) -> Result<Self> {
         ensure_key_len(key, Error::Encryption)?;
-        let key_vec = key.to_vec();
-        let key_slice: &Key = Key::from_slice(key);
+        let locked_key = crate::secmem::LockedBuffer::from_slice(key);
+        let key_slice: &Key = Key::from_slice(locked_key.as_slice());
         Ok(Self {
             cipher: XChaCha20Poly1305::new(key_slice),
-            key: key_vec,
+            key: locked_key,
         })
     }
 
@@ -148,7 +148,7 @@ impl CipherSession {
             return Vec::new();
         }
 
-        let mut mac = <Hmac<Sha256> as Mac>::new_from_slice(&self.key)
+        let mut mac = <Hmac<Sha256> as Mac>::new_from_slice(self.key.as_slice())
             .expect("HMAC can take key of any size");
         mac.update(normalized.as_bytes());
         let result = mac.finalize().into_bytes();

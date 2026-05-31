@@ -38,7 +38,10 @@
 
   $effect(() => {
     if (selectedPasswordItem && selectedPasswordItem.tags) {
-      const tags = selectedPasswordItem.tags.split(',').map((t) => t.trim()).filter(Boolean);
+      const tags = selectedPasswordItem.tags
+        .split(',')
+        .map((t) => t.trim())
+        .filter(Boolean);
       if (tags.length > 0) {
         const button = buttons.find((b) => b.text === tags[0]);
         displayColor = button ? button.color : '#94a3b8';
@@ -287,7 +290,7 @@
 
   async function confirmDeleteEntry() {
     if (!itemToDelete) return;
-    
+
     try {
       await callBackend('delete_password_item', { id: itemToDelete.id });
       vaultStore.removeItem(itemToDelete.id);

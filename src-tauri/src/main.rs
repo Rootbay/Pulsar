@@ -8,6 +8,7 @@ mod db;
 mod encryption;
 mod error;
 mod file_dialog;
+mod secmem;
 mod security;
 mod settings;
 mod state;
@@ -25,6 +26,8 @@ use crate::state::AppState;
 use tauri::{Manager, RunEvent};
 
 fn main() {
+    secmem::lock_process_memory();
+
     let context = tauri::generate_context!();
     let mut builder = tauri::Builder::default()
         .manage(AppState {

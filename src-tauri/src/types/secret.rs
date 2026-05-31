@@ -1,8 +1,9 @@
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use zeroize::Zeroizing;
+use crate::secmem::LockedString;
+use zeroize::{Zeroize, Zeroizing};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SecretString(Zeroizing<String>);
+pub struct SecretString(LockedString);
 
 impl std::hash::Hash for SecretString {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
@@ -13,21 +14,27 @@ impl std::hash::Hash for SecretString {
 impl SecretString {
     #[allow(dead_code)]
     pub fn new(s: String) -> Self {
-        Self(Zeroizing::new(s))
+        let mut s = s;
+        let locked = LockedString::new(&s);
+        s.zeroize();
+        Self(locked)
     }
 
+    /// Upgrades a Zeroizing<String> into a page-locked SecretString
     pub fn from_zeroized(z: Zeroizing<String>) -> Self {
-        Self(z)
+        let locked = LockedString::new(&z);
+        Self(locked)
     }
 
+    /// Accesses the underlying locked string slice
     pub fn as_str(&self) -> &str {
-        &self.0
+        self.0.as_str()
     }
 }
 
 impl Default for SecretString {
     fn default() -> Self {
-        Self(Zeroizing::new(String::new()))
+        Self(LockedString::new(""))
     }
 }
 
@@ -36,7 +43,7 @@ impl Serialize for SecretString {
     where
         S: Serializer,
     {
-        serializer.serialize_str(&self.0)
+        serializer.serialize_str(self.0.as_str())
     }
 }
 
@@ -46,19 +53,22 @@ impl<'de> Deserialize<'de> for SecretString {
         D: Deserializer<'de>,
     {
         let s = String::deserialize(deserializer)?;
-        Ok(SecretString(Zeroizing::new(s)))
+        let mut s_mut = s;
+        let locked = LockedString::new(&s_mut);
+        s_mut.zeroize();
+        Ok(SecretString(locked))
     }
 }
 
 impl std::ops::Deref for SecretString {
-    type Target = String;
+    type Target = str;
     fn deref(&self) -> &Self::Target {
-        &self.0
+        self.0.as_str()
     }
 }
 
 impl AsRef<str> for SecretString {
     fn as_ref(&self) -> &str {
-        &self.0
+        self.0.as_str()
     }
 }

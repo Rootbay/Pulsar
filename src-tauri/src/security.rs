@@ -5,7 +5,7 @@ use crate::state::AppState;
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
 use tauri::State;
-use zeroize::{Zeroize, Zeroizing};
+use zeroize::Zeroize;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -20,7 +20,7 @@ pub struct DeviceRecord {
     pub is_current: bool,
 }
 
-async fn get_key_local(state: &AppState) -> Result<Zeroizing<Vec<u8>>> {
+async fn get_key_local(state: &AppState) -> Result<crate::secmem::LockedBuffer> {
     let guard = state.key.lock().await;
     let opt = guard.clone();
     drop(guard);

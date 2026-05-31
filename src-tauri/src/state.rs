@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Instant;
 use tokio::sync::{Mutex, Semaphore};
-use zeroize::Zeroizing;
+
 
 #[derive(Debug)]
 pub struct ClipboardPolicyState {
@@ -31,7 +31,7 @@ impl Default for ClipboardPolicyState {
 #[derive(Clone)]
 pub struct AppState {
     pub db: Arc<Mutex<Option<SqlitePool>>>,
-    pub key: Arc<Mutex<Option<Zeroizing<Vec<u8>>>>>,
+    pub key: Arc<Mutex<Option<crate::secmem::LockedBuffer>>>,
     pub pending_key: Arc<Mutex<Option<PendingUnlock>>>,
     pub db_path: Arc<Mutex<Option<PathBuf>>>,
     pub rekey: Arc<Mutex<()>>,
@@ -42,7 +42,7 @@ pub struct AppState {
 
 #[derive(Debug, Clone)]
 pub struct PendingUnlock {
-    pub key: Zeroizing<Vec<u8>>,
+    pub key: crate::secmem::LockedBuffer,
     pub created_at: Instant,
     pub attempts: u8,
 }

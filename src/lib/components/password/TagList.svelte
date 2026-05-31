@@ -36,17 +36,19 @@
 
   let removingTags = new SvelteSet<string>();
   let recentlyAdded = new SvelteSet<string>();
-  
+
   // Initialize dndTags once from props. parent handles reset via {#key}
   const initialTags = (untrack(() => selectedPasswordItem?.tags) || '')
     .split(',')
-    .map(t => t.trim())
+    .map((t) => t.trim())
     .filter(Boolean);
-  
+
   // Use a Set to ensure uniqueness for dndzone IDs
   const uniqueInitialTags = [...new Set(initialTags)];
-  let dndTags = $state<{ id: string; text: string }[]>(uniqueInitialTags.map(t => ({ id: t, text: t })));
-  
+  let dndTags = $state<{ id: string; text: string }[]>(
+    uniqueInitialTags.map((t) => ({ id: t, text: t }))
+  );
+
   let isDragging = $state(false);
   let justDragged = $state(false);
 
@@ -76,11 +78,11 @@
     if (!selectedPasswordItem || workingTags.includes(tagToAdd)) return;
 
     recentlyAdded.add(tagToAdd);
-    
+
     dndTags = [...dndTags, { id: tagToAdd, text: tagToAdd }];
-    
+
     await tick();
-    onReorderPending?.({ tags: dndTags.map(t => t.text).join(',') });
+    onReorderPending?.({ tags: dndTags.map((t) => t.text).join(',') });
 
     setTimeout(() => {
       recentlyAdded.delete(tagToAdd);
@@ -101,10 +103,10 @@
 
     setTimeout(async () => {
       // Check if tag is still in dndTags (it might have been removed by re-keying or other means)
-      if (dndTags.some(t => t.text === tagToRemove)) {
+      if (dndTags.some((t) => t.text === tagToRemove)) {
         dndTags = dndTags.filter((tag) => tag.text !== tagToRemove);
         await tick();
-        onReorderPending?.({ tags: dndTags.map(t => t.text).join(',') });
+        onReorderPending?.({ tags: dndTags.map((t) => t.text).join(',') });
       }
       removingTags.delete(tagToRemove);
       onTagRemoved?.();
@@ -121,7 +123,7 @@
     justDragged = true;
     setTimeout(() => (justDragged = false), 50);
     await tick();
-    onReorderPending?.({ tags: dndTags.map(t => t.text).join(',') });
+    onReorderPending?.({ tags: dndTags.map((t) => t.text).join(',') });
     isDragging = false;
   }
 </script>
@@ -235,7 +237,9 @@
     font-size: 12px;
     font-weight: 500;
     overflow: hidden;
-    transition: transform 120ms ease, box-shadow 120ms ease;
+    transition:
+      transform 120ms ease,
+      box-shadow 120ms ease;
     touch-action: none;
     transform-origin: center;
     will-change: transform, box-shadow;
@@ -275,19 +279,31 @@
     animation: tagRemoveSlide 140ms ease-in-out forwards;
     pointer-events: none;
   }
-  
+
   .tag-item.added {
     animation: tagAddSlide 140ms ease-out;
   }
 
   @keyframes tagRemoveSlide {
-    0% { transform: translateX(0); opacity: 1; }
-    100% { transform: translateX(6px); opacity: 0; }
+    0% {
+      transform: translateX(0);
+      opacity: 1;
+    }
+    100% {
+      transform: translateX(6px);
+      opacity: 0;
+    }
   }
-  
+
   @keyframes tagAddSlide {
-    0% { transform: translateX(6px); opacity: 0; }
-    100% { transform: translateX(0); opacity: 1; }
+    0% {
+      transform: translateX(6px);
+      opacity: 0;
+    }
+    100% {
+      transform: translateX(0);
+      opacity: 1;
+    }
   }
 
   .add-toggle-btn {
@@ -321,7 +337,7 @@
     gap: 8px;
     align-items: center;
   }
-  
+
   .chooserChip {
     display: inline-flex;
     align-items: center;

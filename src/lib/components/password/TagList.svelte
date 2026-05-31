@@ -1,7 +1,7 @@
 <svelte:options runes />
 
 <script lang="ts">
-  import { tick } from 'svelte';
+  import { tick, untrack } from 'svelte';
   import { SvelteSet } from 'svelte/reactivity';
   import type { PasswordItem } from '$lib/types/password';
   import { iconPaths } from '$lib/icons';
@@ -34,11 +34,11 @@
   const REMOVE_ANIM_MS = 140;
   const ADD_ANIM_MS = 140;
 
-  let removingTags = $state(new SvelteSet<string>());
-  let recentlyAdded = $state(new SvelteSet<string>());
+  let removingTags = new SvelteSet<string>();
+  let recentlyAdded = new SvelteSet<string>();
   
   // Initialize dndTags once from props. parent handles reset via {#key}
-  const initialTags = (selectedPasswordItem?.tags || '')
+  const initialTags = (untrack(() => selectedPasswordItem?.tags) || '')
     .split(',')
     .map(t => t.trim())
     .filter(Boolean);

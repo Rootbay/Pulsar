@@ -75,8 +75,13 @@
     return seconds * 1000;
   }
 
+  let lastActivityTime = 0;
   function handleActivity() {
-    resetInactivityTimer();
+    const now = Date.now();
+    if (now - lastActivityTime > 1000) {
+      lastActivityTime = now;
+      resetInactivityTimer();
+    }
   }
 
   onMount(() => {

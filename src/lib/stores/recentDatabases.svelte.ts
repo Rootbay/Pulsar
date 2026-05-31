@@ -2,21 +2,23 @@ import { callBackend } from '../utils/backend';
 import { settings } from './appSettings.svelte';
 
 async function filterNonExistentDatabases(paths: string[]): Promise<string[]> {
-  const existentPaths: string[] = [];
-  for (const path of paths) {
-    try {
-      const exists = await callBackend<boolean>('check_file_exists', { path });
-      if (exists) {
-        existentPaths.push(path);
-      } else {
-        console.warn(`Non-existent database path removed from recent list: ${path}`);
+  const results = await Promise.all(
+    paths.map(async (path) => {
+      try {
+        const exists = await callBackend<boolean>('check_file_exists', { path });
+        if (exists) {
+          return path;
+        } else {
+          console.warn(`Non-existent database path removed from recent list: ${path}`);
+          return null;
+        }
+      } catch (e) {
+        console.warn(`Skipping existence check failure for ${path}; keeping in recent list.`, e);
+        return path;
       }
-    } catch (e) {
-      console.warn(`Skipping existence check failure for ${path}; keeping in recent list.`, e);
-      existentPaths.push(path);
-    }
-  }
-  return existentPaths;
+    })
+  );
+  return results.filter((p): p is string => p !== null);
 }
 
 export async function addRecentDatabase(path: string) {

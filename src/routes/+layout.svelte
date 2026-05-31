@@ -8,7 +8,7 @@
   import { settings } from '$lib/stores/appSettings.svelte';
   import { initClipboardService } from '$lib/utils/clipboardService.svelte';
   import SecurityManager from '$lib/components/SecurityManager.svelte';
-  import { Toaster } from '$lib/components/ui/sonner';
+  import { Toaster, toast } from '$lib/components/ui/sonner';
 
   let { children } = $props();
 
@@ -29,7 +29,33 @@
     };
 
     mediaQuery.addEventListener('change', handler);
-    return () => mediaQuery.removeEventListener('change', handler);
+
+    let unlistenAutotypeError: (() => void) | null = null;
+    let unlistenAutotypeInfo: (() => void) | null = null;
+
+    import('@tauri-apps/api/event')
+      .then(({ listen }) => {
+        listen<string>('pulsar:autotype-error', (event) => {
+          toast.error(event.payload);
+        }).then((unlisten) => {
+          unlistenAutotypeError = unlisten;
+        });
+
+        listen<string>('pulsar:autotype-info', (event) => {
+          toast.info(event.payload);
+        }).then((unlisten) => {
+          unlistenAutotypeInfo = unlisten;
+        });
+      })
+      .catch((error) => {
+        console.warn('Tauri event API not available:', error);
+      });
+
+    return () => {
+      mediaQuery.removeEventListener('change', handler);
+      if (unlistenAutotypeError) unlistenAutotypeError();
+      if (unlistenAutotypeInfo) unlistenAutotypeInfo();
+    };
   });
 
   $effect(() => {

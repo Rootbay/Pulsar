@@ -134,6 +134,7 @@ fn main() {
             settings::set_all_settings,
             settings::apply_system_settings,
             settings::simulate_autotype,
+            settings::perform_autotype,
             clipboard::get_clipboard_capabilities,
             clipboard::apply_clipboard_policy,
             clipboard::copy_to_clipboard,
@@ -143,6 +144,13 @@ fn main() {
     let app = builder
         .build(context)
         .expect("error while building tauri application");
+
+    #[cfg(target_os = "windows")]
+    {
+        let app_handle = app.handle().clone();
+        crate::settings::start_global_hotkey_listener(app_handle);
+    }
+
     app.run(|app_handle, event| match event {
         RunEvent::ExitRequested { .. } | RunEvent::Exit => {
             tauri::async_runtime::block_on(async {

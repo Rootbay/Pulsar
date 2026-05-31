@@ -3,10 +3,12 @@
 <script lang="ts">
   import type { PasswordItem } from '$lib/types/password';
   import TagList from './TagList.svelte';
-  import { Ellipsis } from '@lucide/svelte';
+  import { Ellipsis, Keyboard } from '@lucide/svelte';
   import { iconPaths } from '$lib/icons';
   import Favicon from '../ui/Favicon.svelte';
   import { Button } from '$lib/components/ui/button';
+  import { callBackend } from '$lib/utils/backend';
+  import { toast } from '$lib/components/ui/sonner';
 
   interface TagOption {
     id: number;
@@ -76,6 +78,28 @@
   function enterEditMode() {
     onEnterEditMode?.();
   }
+
+  async function handleAutoType() {
+    if (!selectedPasswordItem) return;
+    try {
+      const username = selectedPasswordItem.username;
+      const password = selectedPasswordItem.password;
+
+      toast.info('Auto-Type starting...', {
+        description: 'Focusing target window in 500ms.'
+      });
+
+      await callBackend('perform_autotype', {
+        username: username || null,
+        password: password || null
+      });
+
+      toast.success('Auto-Type complete.');
+    } catch (error) {
+      console.error('Auto-Type failed:', error);
+      toast.error('Auto-Type failed.');
+    }
+  }
 </script>
 
 {#if selectedPasswordItem}
@@ -108,6 +132,18 @@
     <div class="flex items-center gap-2">
       {#if isEditing}
         <Button size="sm" onclick={() => onSave?.()}>Save</Button>
+      {/if}
+
+      {#if !isEditing}
+        <Button 
+          variant="ghost" 
+          size="icon" 
+          class="h-10 w-10 text-muted-foreground hover:text-foreground"
+          onclick={handleAutoType}
+          title="Auto-Type"
+        >
+          <Keyboard class="size-5" />
+        </Button>
       {/if}
       
       <div class="relative">
